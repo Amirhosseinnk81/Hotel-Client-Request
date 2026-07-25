@@ -1,0 +1,28 @@
+hotel-operations-platform/
+
+├── README.md
+
+├── docs/
+│   ├── SRS.md
+│   ├── Architecture.md
+│   ├── Database-Design.md
+│   ├── API-Design.md
+│   ├── Sprint-Plan.md
+│   └── project-context.md
+│
+├── apps/
+│   ├── backend/
+│   ├── web/
+│   └── worker/
+│
+├── packages/
+│
+├── infrastructure/
+│
+├── tests/
+│
+├── .gitignore
+│
+├── docker-compose.yml
+│
+└── LICENSE

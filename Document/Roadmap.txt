@@ -1,0 +1,29 @@
+Phase 0
+│
+├── SRS (Software Requirements Specification)
+├── Software Architecture Document
+├── Database Design
+├── UI/UX Design
+├── API Design
+├── AI Design
+└── Project Planning
+
+↓
+
+Phase 1 (MVP)
+
+↓
+
+Phase 2
+
+↓
+
+Production
+
+↓
+
+Deployment
+
+↓
+
+Scaling

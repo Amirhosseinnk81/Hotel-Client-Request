@@ -1,0 +1,4 @@
+-r base.txt
+
+# Production-specific packages (e.g. a WSGI server) will be added when
+# deployment work begins. Out of scope for the current MVP phase.

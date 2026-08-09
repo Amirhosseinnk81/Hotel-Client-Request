@@ -53,6 +53,8 @@ INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 # AUTH_USER_MODEL will be set to "accounts.User" in Phase 4 (Accounts),
 # once the custom User model exists. Using Django's default User until then.
 
+AUTH_USER_MODEL = "accounts.User"
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",

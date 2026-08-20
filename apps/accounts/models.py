@@ -4,14 +4,10 @@ from django.db import models
 
 class User(AbstractUser):
     """
-    Custom user model. Every account in the system — guest or operator —
-    is a row here, distinguished by `role`.
+    Custom user model.
 
-    Guests authenticate via national ID + phone (see apps.guests, Phase 5)
-    and do not use a password (unusable password is set on creation).
-
-    Operators and admins authenticate via username + password like a
-    normal Django user.
+    Every account in the system — guest, operator, or admin —
+    is represented by this model and distinguished by `role`.
     """
 
     class Role(models.TextChoices):
@@ -19,7 +15,18 @@ class User(AbstractUser):
         OPERATOR = "OPERATOR", "Operator"
         ADMIN = "ADMIN", "Admin"
 
-    role = models.CharField(max_length=20, choices=Role.choices)
+    role = models.CharField(
+        max_length=20,
+        choices=Role.choices,
+    )
+
+    department = models.ForeignKey(
+        "departments.Department",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="operators",
+    )
 
     def __str__(self):
         return f"{self.username} ({self.role})"

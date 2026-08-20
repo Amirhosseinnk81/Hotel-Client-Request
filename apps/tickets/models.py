@@ -31,7 +31,18 @@ class Ticket(models.Model):
         related_name="tickets",
     )
 
-    title = models.CharField(max_length=200)
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_tickets",
+        limit_choices_to={"role": "OPERATOR"},
+    )
+
+    title = models.CharField(
+        max_length=200,
+    )
 
     description = models.TextField()
 
@@ -47,9 +58,13 @@ class Ticket(models.Model):
         default=Priority.NORMAL,
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
 
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
 
     class Meta:
         ordering = ["-created_at"]

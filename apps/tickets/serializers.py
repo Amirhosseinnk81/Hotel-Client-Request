@@ -74,6 +74,21 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
 
+    def validate_status(self, value):
+        if not self.instance:
+            return value
+
+        if value == self.instance.status:
+            return value
+
+        if not self.instance.can_transition_to(value):
+            raise serializers.ValidationError(
+                f"Invalid status transition: "
+                f"{self.instance.status} -> {value}."
+            )
+
+        return value
+
     def validate_assigned_to(self, value):
         if value is not None and value.role != "OPERATOR":
             raise serializers.ValidationError(

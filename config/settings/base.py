@@ -30,6 +30,7 @@ DJANGO_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django_filters",
 ]
 
 THIRD_PARTY_APPS = [
@@ -136,8 +137,13 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 20,
+    "PAGE_SIZE": 10,
     "EXCEPTION_HANDLER": "apps.core.exceptions.custom_exception_handler",
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -165,24 +171,7 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "API for managing hotel guest requests and operator workflows.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
-
     "COMPONENT_SPLIT_REQUEST": True,
-
-    "SECURITY": [
-        {
-            "BearerAuth": [],
-        }
-    ],
-
-    "COMPONENTS": {
-        "securitySchemes": {
-            "BearerAuth": {
-                "type": "http",
-                "scheme": "bearer",
-                "bearerFormat": "JWT",
-            }
-        }
-    },
 }
 
 # ---------------------------------------------------------------------------

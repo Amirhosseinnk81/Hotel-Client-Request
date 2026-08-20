@@ -18,6 +18,25 @@ class Ticket(models.Model):
         NORMAL = "NORMAL", "Normal"
         HIGH = "HIGH", "High"
         URGENT = "URGENT", "Urgent"
+        
+    ALLOWED_STATUS_TRANSITIONS = {
+        Status.OPEN: {
+            Status.IN_PROGRESS,
+            Status.CANCELLED,
+        },
+        Status.IN_PROGRESS: {
+            Status.OPEN,
+            Status.RESOLVED,
+        },
+        Status.RESOLVED: set(),
+        Status.CANCELLED: set(),
+    }
+
+    def can_transition_to(self, new_status):
+        return new_status in self.ALLOWED_STATUS_TRANSITIONS.get(
+            self.status,
+            set(),
+        )
 
     guest = models.ForeignKey(
         Guest,
@@ -31,6 +50,15 @@ class Ticket(models.Model):
         related_name="tickets",
     )
 
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_tickets",
+        limit_choices_to={"role": "OPERATOR"},
+    )   
+    
     assigned_to = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -71,3 +99,52 @@ class Ticket(models.Model):
 
     def __str__(self):
         return f"#{self.pk} - {self.title}"
+    
+    
+class TicketHistory(models.Model):
+
+    class Action(models.TextChoices):
+        CREATED = "CREATED", "Created"
+        UPDATED = "UPDATED", "Updated"
+        ASSIGNED = "ASSIGNED", "Assigned"
+        STATUS_CHANGED = "STATUS_CHANGED", "Status Changed"
+        PRIORITY_CHANGED = "PRIORITY_CHANGED", "Priority Changed"
+
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,
+        related_name="history",
+    )
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ticket_history",
+    )
+
+    action = models.CharField(
+        max_length=30,
+        choices=Action.choices,
+    )
+
+    old_value = models.TextField(
+        null=True,
+        blank=True,
+    )
+
+    new_value = models.TextField(
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Ticket #{self.ticket_id} - {self.action}"

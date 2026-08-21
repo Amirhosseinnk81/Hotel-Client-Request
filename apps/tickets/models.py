@@ -57,15 +57,6 @@ class Ticket(models.Model):
         blank=True,
         related_name="assigned_tickets",
         limit_choices_to={"role": "OPERATOR"},
-    )   
-    
-    assigned_to = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="assigned_tickets",
-        limit_choices_to={"role": "OPERATOR"},
     )
 
     title = models.CharField(

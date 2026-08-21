@@ -5,12 +5,32 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
-from .models import Ticket, TicketHistory
+from apps.core.permissions import IsAdminRole
+
+from .models import Category, Ticket, TicketHistory
 from .permissions import IsOperator
 from .serializers import (
+    CategorySerializer,
     TicketSerializer,
     OperatorTicketSerializer,
 )
+
+
+class CategoryListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /api/v1/categories/  — any authenticated user can browse.
+    POST /api/v1/categories/  — admins only.
+    """
+
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAdminRole]
+
+
+class CategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAdminRole]
 
 
 class GuestTicketListCreateView(generics.ListCreateAPIView):
@@ -26,12 +46,14 @@ class GuestTicketListCreateView(generics.ListCreateAPIView):
             .filter(
                 guest__user=self.request.user
             )
-            .select_related("department")
+            .select_related("department", "category", "room")
         )
 
     def perform_create(self, serializer):
+        guest_profile = self.request.user.guest_profile
         ticket = serializer.save(
-            guest=self.request.user.guest_profile
+            guest=guest_profile,
+            room=guest_profile.room,
         )
 
         TicketHistory.objects.create(
@@ -55,7 +77,7 @@ class GuestTicketDetailView(generics.RetrieveUpdateAPIView):
             .filter(
                 guest__user=self.request.user
             )
-            .select_related("department")
+            .select_related("department", "category", "room")
         )
 
 
@@ -103,6 +125,8 @@ class OperatorTicketListView(generics.ListAPIView):
             .select_related(
                 "guest",
                 "department",
+                "category",
+                "room",
                 "assigned_to",
             )
         )
@@ -124,9 +148,35 @@ class OperatorTicketDetailView(generics.RetrieveUpdateAPIView):
             .select_related(
                 "guest",
                 "department",
+                "category",
+                "room",
                 "assigned_to",
             )
         )
+
+    def perform_update(self, serializer):
+        old_status = serializer.instance.status
+        old_priority = serializer.instance.priority
+
+        ticket = serializer.save()
+
+        if "status" in serializer.validated_data and ticket.status != old_status:
+            TicketHistory.objects.create(
+                ticket=ticket,
+                user=self.request.user,
+                action=TicketHistory.Action.STATUS_CHANGED,
+                old_value=old_status,
+                new_value=ticket.status,
+            )
+
+        if "priority" in serializer.validated_data and ticket.priority != old_priority:
+            TicketHistory.objects.create(
+                ticket=ticket,
+                user=self.request.user,
+                action=TicketHistory.Action.PRIORITY_CHANGED,
+                old_value=old_priority,
+                new_value=ticket.priority,
+            )
 
 
 @extend_schema(
@@ -142,6 +192,8 @@ class OperatorTicketAssignView(APIView):
                 Ticket.objects
                 .select_related(
                     "department",
+                    "category",
+                    "room",
                     "assigned_to",
                 )
                 .get(

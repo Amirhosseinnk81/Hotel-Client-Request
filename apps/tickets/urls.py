@@ -1,6 +1,8 @@
 from django.urls import path
 
 from .views import (
+    CategoryDetailView,
+    CategoryListCreateView,
     GuestTicketDetailView,
     GuestTicketListCreateView,
     OperatorTicketDetailView,
@@ -9,6 +11,16 @@ from .views import (
 )
 
 urlpatterns = [
+    path(
+        "categories/",
+        CategoryListCreateView.as_view(),
+        name="category-list",
+    ),
+    path(
+        "categories/<int:pk>/",
+        CategoryDetailView.as_view(),
+        name="category-detail",
+    ),
     path(
         "tickets/",
         GuestTicketListCreateView.as_view(),

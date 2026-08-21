@@ -3,6 +3,29 @@ from django.db import models
 
 from apps.departments.models import Department
 from apps.guests.models import Guest
+from apps.rooms.models import Room
+
+
+class Category(models.Model):
+    """
+    Ticket category (Housekeeping, Maintenance, IT, Reception, Room
+    Service, Laundry, ...). Chosen by the guest when creating a ticket.
+    Routing to a department is fully manual in this MVP (no AI).
+    """
+
+    name = models.CharField(max_length=100, unique=True)
+    code = models.CharField(max_length=50, unique=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Category"
+        verbose_name_plural = "Categories"
+
+    def __str__(self):
+        return self.name
 
 
 class Ticket(models.Model):
@@ -44,8 +67,21 @@ class Ticket(models.Model):
         related_name="tickets",
     )
 
+    room = models.ForeignKey(
+        Room,
+        on_delete=models.PROTECT,
+        related_name="tickets",
+        help_text="Snapshot of the guest's room at the time the ticket was created.",
+    )
+
     department = models.ForeignKey(
         Department,
+        on_delete=models.PROTECT,
+        related_name="tickets",
+    )
+
+    category = models.ForeignKey(
+        Category,
         on_delete=models.PROTECT,
         related_name="tickets",
     )
@@ -77,12 +113,23 @@ class Ticket(models.Model):
         default=Priority.NORMAL,
     )
 
+    resolution = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Filled in by the operator when resolving the ticket.",
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )
 
     updated_at = models.DateTimeField(
         auto_now=True,
+    )
+
+    resolved_at = models.DateTimeField(
+        null=True,
+        blank=True,
     )
 
     class Meta:

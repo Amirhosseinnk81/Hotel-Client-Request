@@ -1,11 +1,29 @@
+from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Ticket
+from .models import Category, Ticket
+
+
+class CategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name", "code", "is_active", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
 
 class TicketSerializer(serializers.ModelSerializer):
     department_name = serializers.CharField(
         source="department.name",
+        read_only=True,
+    )
+
+    category_name = serializers.CharField(
+        source="category.name",
+        read_only=True,
+    )
+
+    room_number = serializers.CharField(
+        source="room.number",
         read_only=True,
     )
 
@@ -19,14 +37,21 @@ class TicketSerializer(serializers.ModelSerializer):
             "priority",
             "department",
             "department_name",
+            "category",
+            "category_name",
+            "room_number",
+            "resolution",
             "created_at",
             "updated_at",
+            "resolved_at",
         ]
         read_only_fields = [
             "id",
             "status",
+            "resolution",
             "created_at",
             "updated_at",
+            "resolved_at",
         ]
 
     def validate(self, attrs):
@@ -46,6 +71,16 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    category_name = serializers.CharField(
+        source="category.name",
+        read_only=True,
+    )
+
+    room_number = serializers.CharField(
+        source="room.number",
+        read_only=True,
+    )
+
     assigned_to_username = serializers.CharField(
         source="assigned_to.username",
         read_only=True,
@@ -61,17 +96,26 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             "priority",
             "department",
             "department_name",
+            "category",
+            "category_name",
+            "room_number",
             "assigned_to",
             "assigned_to_username",
+            "resolution",
             "created_at",
             "updated_at",
+            "resolved_at",
         ]
         read_only_fields = [
             "id",
             "department",
             "department_name",
+            "category",
+            "category_name",
+            "room_number",
             "created_at",
             "updated_at",
+            "resolved_at",
         ]
 
     def validate_status(self, value):
@@ -105,3 +149,26 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             )
 
         return value
+
+    def validate(self, attrs):
+        new_status = attrs.get("status")
+
+        if new_status == Ticket.Status.RESOLVED:
+            resolution = attrs.get(
+                "resolution",
+                getattr(self.instance, "resolution", None),
+            )
+            if not resolution:
+                raise serializers.ValidationError(
+                    {
+                        "resolution": "A resolution is required before marking a ticket as resolved."
+                    }
+                )
+
+        return attrs
+
+    def update(self, instance, validated_data):
+        if validated_data.get("status") == Ticket.Status.RESOLVED and instance.status != Ticket.Status.RESOLVED:
+            validated_data["resolved_at"] = timezone.now()
+
+        return super().update(instance, validated_data)

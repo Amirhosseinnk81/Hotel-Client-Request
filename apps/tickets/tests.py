@@ -5,7 +5,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.departments.models import Department
 from apps.guests.models import Guest
 from apps.rooms.models import Room
-from .models import Ticket
+from .models import Category, Ticket
 
 User = get_user_model()
 
@@ -36,6 +36,11 @@ class GuestTicketAPITests(APITestCase):
             code="HOUSEKEEPING",
         )
 
+        self.category = Category.objects.create(
+            name="Towels",
+            code="TOWELS",
+        )
+
         self.url = "/api/v1/tickets/"
 
     def authenticate(self):
@@ -62,6 +67,7 @@ class GuestTicketAPITests(APITestCase):
             "title": "Extra Towel",
             "description": "Please send two extra towels.",
             "department": self.department.id,
+            "category": self.category.id,
             "priority": Ticket.Priority.NORMAL,
         }
 
@@ -101,6 +107,8 @@ class GuestTicketAPITests(APITestCase):
         Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="My Ticket",
             description="My request",
         )
@@ -108,6 +116,8 @@ class GuestTicketAPITests(APITestCase):
         Ticket.objects.create(
             guest=other_guest,
             department=self.department,
+            category=self.category,
+            room=other_room,
             title="Other Ticket",
             description="Other request",
         )
@@ -128,6 +138,7 @@ class GuestTicketAPITests(APITestCase):
             "title": "TV Problem",
             "description": "TV is not working.",
             "department": self.department.id,
+            "category": self.category.id,
             "priority": Ticket.Priority.HIGH,
             "status": Ticket.Status.RESOLVED,
         }
@@ -151,6 +162,8 @@ class GuestTicketAPITests(APITestCase):
         ticket = Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="My Ticket",
             description="My request",
         )
@@ -185,6 +198,8 @@ class GuestTicketAPITests(APITestCase):
         ticket = Ticket.objects.create(
             guest=other_guest,
             department=self.department,
+            category=self.category,
+            room=other_room,
             title="Other Ticket",
             description="Other request",
         )
@@ -199,6 +214,8 @@ class GuestTicketAPITests(APITestCase):
         ticket = Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="Old Title",
             description="Old description",
         )
@@ -228,6 +245,8 @@ class GuestTicketAPITests(APITestCase):
         ticket = Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="Test Ticket",
             description="Test description",
         )
@@ -265,6 +284,11 @@ class OperatorTicketAPITests(APITestCase):
             code="MAINTENANCE",
         )
 
+        self.category = Category.objects.create(
+            name="Towels",
+            code="TOWELS",
+        )
+
         self.room = Room.objects.create(
             number="101",
             status=Room.Status.OCCUPIED,
@@ -300,6 +324,8 @@ class OperatorTicketAPITests(APITestCase):
         self.ticket = Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="Extra Towel",
             description="Please send two extra towels.",
             priority=Ticket.Priority.NORMAL,
@@ -308,6 +334,8 @@ class OperatorTicketAPITests(APITestCase):
         self.other_ticket = Ticket.objects.create(
             guest=self.guest,
             department=self.other_department,
+            category=self.category,
+            room=self.room,
             title="TV Problem",
             description="TV is not working.",
             priority=Ticket.Priority.HIGH,
@@ -494,8 +522,9 @@ class OperatorTicketAPITests(APITestCase):
             url,
             {
                 "status": Ticket.Status.RESOLVED,
+                "resolution": "Sent two extra towels to the room.",
             },
-            ormat="json",
+            format="json",
         )
 
         self.assertEqual(response.status_code, 200)
@@ -506,6 +535,7 @@ class OperatorTicketAPITests(APITestCase):
             self.ticket.status,
             Ticket.Status.RESOLVED,
         )
+        self.assertIsNotNone(self.ticket.resolved_at)
 
     def test_operator_can_assign_ticket_to_self(self):
         self.authenticate_operator()
@@ -716,6 +746,8 @@ class OperatorTicketAPITests(APITestCase):
         Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="Resolved Ticket",
             description="Resolved request",
             status=Ticket.Status.RESOLVED,
@@ -739,6 +771,8 @@ class OperatorTicketAPITests(APITestCase):
         Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="Urgent Ticket",
             description="Urgent request",
             priority=Ticket.Priority.URGENT,
@@ -780,6 +814,8 @@ class OperatorTicketAPITests(APITestCase):
         Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="Air Conditioner Problem",
             description="Room AC is not working.",
         )
@@ -802,6 +838,8 @@ class OperatorTicketAPITests(APITestCase):
         Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="Maintenance Request",
             description="The bathroom water heater is broken.",
         )
@@ -824,6 +862,8 @@ class OperatorTicketAPITests(APITestCase):
         older_ticket = Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="Older Ticket",
             description="Older request",
         )
@@ -831,6 +871,8 @@ class OperatorTicketAPITests(APITestCase):
         newer_ticket = Ticket.objects.create(
             guest=self.guest,
             department=self.department,
+            category=self.category,
+            room=self.room,
             title="Newer Ticket",
             description="Newer request",
         )
@@ -863,6 +905,8 @@ class OperatorTicketAPITests(APITestCase):
             Ticket.objects.create(
                 guest=self.guest,
                 department=self.department,
+            category=self.category,
+            room=self.room,
             title=f"Ticket {index}",
                 description=f"Request {index}",
             )
@@ -883,6 +927,8 @@ class OperatorTicketAPITests(APITestCase):
             Ticket.objects.create(
                 guest=self.guest,
                 department=self.department,
+                category=self.category,
+                room=self.room,
                 title=f"Ticket {index}",
                 description=f"Request {index}",
             )

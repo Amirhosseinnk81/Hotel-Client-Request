@@ -1,19 +1,7 @@
-from rest_framework.permissions import BasePermission
+# IsOperator now lives in apps.core.permissions (the single, shared
+# source of truth for role-based permissions across the project).
+# Re-exported here so existing imports (`from .permissions import
+# IsOperator`) keep working without touching every call site.
+from apps.core.permissions import IsOperator
 
-from apps.accounts.models import User
-
-
-class IsOperator(BasePermission):
-    """
-    Allows access only to authenticated users
-    with the OPERATOR role.
-    """
-
-    message = "Only operators are allowed to access this resource."
-
-    def has_permission(self, request, view):
-        return (
-            request.user
-            and request.user.is_authenticated
-            and request.user.role == User.Role.OPERATOR
-        )
+__all__ = ["IsOperator"]

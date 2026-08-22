@@ -1,11 +1,11 @@
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import User
+from apps.core.permissions import IsGuest
 
 from .models import Guest
 from .serializers import (
@@ -53,7 +53,7 @@ class GuestProfileView(APIView):
     Return the authenticated guest's own profile.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsGuest]
 
     @extend_schema(
         responses={
@@ -65,11 +65,6 @@ class GuestProfileView(APIView):
         tags=["Guest"],
     )
     def get(self, request):
-        if request.user.role != User.Role.GUEST:
-            raise PermissionDenied(
-                "This endpoint is for guests only."
-            )
-
         try:
             guest = request.user.guest_profile
         except Guest.DoesNotExist:

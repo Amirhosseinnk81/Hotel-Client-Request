@@ -1,12 +1,43 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 
+class IsGuest(BasePermission):
+    """
+    Allows access only to authenticated users with the GUEST role.
+    """
+
+    message = "This endpoint is for guests only."
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.role == "GUEST"
+        )
+
+
+class IsOperator(BasePermission):
+    """
+    Allows access only to authenticated users with the OPERATOR role.
+    """
+
+    message = "Only operators are allowed to access this resource."
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and request.user.role == "OPERATOR"
+        )
+
+
 class IsAdminRole(BasePermission):
     """
     Full access for users with role=ADMIN (or Django superusers).
     Everyone else gets read-only access if they're authenticated.
 
-    Used for endpoints managed by hotel admins (Department, Category, ...).
+    Used for endpoints managed by hotel admins (Department, Category,
+    Room, ...).
     """
 
     def has_permission(self, request, view):

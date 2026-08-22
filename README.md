@@ -24,26 +24,26 @@ python manage.py runserver
 ## Project layout
 
 ```
-backend/
-├── manage.py
-├── config/
-│   ├── settings/
-│   │   ├── base.py
-│   │   ├── development.py
-│   │   └── production.py
-│   ├── urls.py
-│   ├── wsgi.py
-│   └── asgi.py
-├── apps/
-│   ├── core/
-│   ├── accounts/
-│   ├── guests/
-│   ├── rooms/
-│   ├── departments/
-│   └── tickets/
-├── requirements/
-├── .env.example
-└── .gitignore
+manage.py
+config/
+├── settings/
+│   ├── base.py
+│   ├── development.py
+│   └── production.py
+├── urls.py
+├── wsgi.py
+└── asgi.py
+apps/
+├── core/
+├── accounts/
+├── guests/
+├── rooms/
+├── departments/
+└── tickets/
+requirements/
+tests/
+.env.example
+.gitignore
 ```
 
 Development follows a phased plan — see the project's implementation

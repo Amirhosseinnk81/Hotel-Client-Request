@@ -20,5 +20,8 @@ class Room(models.Model):
         max_length=20, choices=Status.choices, default=Status.AVAILABLE
     )
 
+    class Meta:
+        ordering = ["number"]
+
     def __str__(self):
         return self.number

@@ -198,3 +198,11 @@ export async function createTicket(payload: CreateTicketPayload): Promise<Ticket
     body: JSON.stringify(payload),
   });
 }
+
+export async function getTickets(): Promise<Ticket[]> {
+  return getAllPages<Ticket>("/tickets/");
+}
+
+export async function getTicketDetail(id: number | string): Promise<Ticket> {
+  return apiFetch<Ticket>(`/tickets/${id}/`);
+}

@@ -26,6 +26,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { FormError } from "@/components/form-error";
+import { priorityLabels } from "@/lib/ticket-labels";
 import {
   ApiError,
   createTicket,
@@ -34,12 +35,9 @@ import {
 } from "@/lib/api/client";
 import type { Category, Department, TicketPriority } from "@/lib/api/types";
 
-const priorityOptions: { value: TicketPriority; label: string }[] = [
-  { value: "LOW", label: "کم" },
-  { value: "NORMAL", label: "عادی" },
-  { value: "HIGH", label: "زیاد" },
-  { value: "URGENT", label: "فوری" },
-];
+const priorityOptions: { value: TicketPriority; label: string }[] = (
+  Object.keys(priorityLabels) as TicketPriority[]
+).map((value) => ({ value, label: priorityLabels[value] }));
 
 const newTicketSchema = z.object({
   title: z.string().min(3, "عنوان باید حداقل ۳ حرف باشد"),

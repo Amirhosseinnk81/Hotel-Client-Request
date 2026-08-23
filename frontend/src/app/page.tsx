@@ -1,6 +1,7 @@
 import { CheckCircle2, XCircle } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { AuthStatus } from "@/components/auth-status";
 
 async function checkBackendHealth() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
@@ -43,6 +44,9 @@ export default async function Home() {
                 {apiUrl}
               </span>
             </div>
+          </div>
+          <div className="mt-3">
+            <AuthStatus />
           </div>
         </CardContent>
       </Card>

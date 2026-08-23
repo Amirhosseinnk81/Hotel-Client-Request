@@ -1,5 +1,15 @@
 import { clearTokens, getStoredTokens, isTokenExpired, saveTokens } from "./tokens";
-import type { ApiErrorBody, AuthTokens, RefreshResponse, UserRole } from "./types";
+import type {
+  ApiErrorBody,
+  AuthTokens,
+  Category,
+  CreateTicketPayload,
+  Department,
+  GuestProfile,
+  RefreshResponse,
+  Ticket,
+  UserRole,
+} from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
 
@@ -146,4 +156,45 @@ export async function loginOperator(username: string, password: string): Promise
 
 export function getCurrentRole(): UserRole | null {
   return getStoredTokens()?.role ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Guest endpoints
+// ---------------------------------------------------------------------------
+
+export async function getGuestProfile(): Promise<GuestProfile> {
+  return apiFetch<GuestProfile>("/guest/profile/");
+}
+
+// ---------------------------------------------------------------------------
+// Reference data (read for any authenticated role)
+// ---------------------------------------------------------------------------
+
+interface PaginatedResponse<T> {
+  results?: T[];
+  count?: number;
+}
+
+async function getAllPages<T>(path: string): Promise<T[]> {
+  const data = await apiFetch<T[] | PaginatedResponse<T>>(path);
+  return Array.isArray(data) ? data : (data.results ?? []);
+}
+
+export async function getDepartments(): Promise<Department[]> {
+  return getAllPages<Department>("/departments/");
+}
+
+export async function getCategories(): Promise<Category[]> {
+  return getAllPages<Category>("/categories/");
+}
+
+// ---------------------------------------------------------------------------
+// Tickets (guest side)
+// ---------------------------------------------------------------------------
+
+export async function createTicket(payload: CreateTicketPayload): Promise<Ticket> {
+  return apiFetch<Ticket>("/tickets/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }

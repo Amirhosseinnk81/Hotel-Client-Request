@@ -32,3 +32,53 @@ export interface AccessTokenPayload {
   exp: number;
   user_id: number;
 }
+
+export interface GuestProfile {
+  id: number;
+  full_name: string;
+  national_id: string;
+  phone: string;
+  room_number: string | null;
+}
+
+export interface Department {
+  id: number;
+  name: string;
+  code: string;
+  is_active: boolean;
+}
+
+export interface Category {
+  id: number;
+  name: string;
+  code: string;
+  is_active: boolean;
+}
+
+export type TicketStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
+export type TicketPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
+
+export interface Ticket {
+  id: number;
+  title: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  department: number;
+  department_name: string;
+  category: number;
+  category_name: string;
+  room_number: string;
+  resolution: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}
+
+export interface CreateTicketPayload {
+  title: string;
+  description: string;
+  department: number;
+  category: number;
+  priority: TicketPriority;
+}

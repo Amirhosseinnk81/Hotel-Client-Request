@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -7,8 +8,17 @@ import { useAuth } from "@/contexts/auth-context";
 import { useRequireRole } from "@/hooks/use-require-role";
 
 export default function GuestLayout({ children }: { children: React.ReactNode }) {
-  const canRender = useRequireRole(["GUEST"], "/guest/login");
+  const pathname = usePathname();
+  const isLoginPage = pathname === "/guest/login";
+
+  const canRender = useRequireRole(["GUEST"], "/guest/login", isLoginPage);
   const { logout } = useAuth();
+
+  // صفحه‌ی لاگین نباید نیاز به نقش GUEST داشته باشه (چون کاربر هنوز لاگین نکرده)
+  // و هدر/دکمه‌ی خروج هم روی این صفحه معنا نداره.
+  if (isLoginPage) {
+    return <div className="flex min-h-full flex-1 flex-col">{children}</div>;
+  }
 
   if (!canRender) {
     return (

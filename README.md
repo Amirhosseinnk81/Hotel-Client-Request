@@ -1,50 +1,186 @@
-# Hotel Client Request Platform — Backend
+# Hotel Client Request Platform
 
-Django + Django REST Framework backend for managing hotel guest requests.
+سامانه مدیریت درخواست‌های مهمان هتل (Hotel Client Request Platform) برای ثبت، پیگیری و رسیدگی به درخواست‌های خدماتی و فنی مهمانان.
 
-Runs directly on the host — **no Docker** in this phase.
+> **وضعیت فعلی:** MVP در حال توسعه — Backend با Django/DRF پیاده‌سازی و تست شده است، Guest Portal در Frontend تکمیل شده و Operator Dashboard در حال توسعه است.
 
-## Requirements
+---
 
-- Python 3.13
-- PostgreSQL 16 (installed locally)
+## 📋 فهرست مطالب
 
-## Setup (Windows)
+- [معرفی](#-معرفی)
+- [هدف پروژه](#-هدف-پروژه)
+- [قابلیت‌ها](#-قابلیت‌ها)
+- [نقش‌های کاربری](#-نقشهای-کاربری)
+- [معماری](#-معماری)
+- [Technology Stack](#-technology-stack)
+- [پیش‌نیازها](#-پیشنیازها)
+- [ساختار پروژه](#-ساختار-پروژه)
+- [راه‌اندازی PostgreSQL](#-راهاندازی-postgresql)
+- [راه‌اندازی Backend](#-راهاندازی-backend)
+- [راه‌اندازی Frontend](#-راهاندازی-frontend)
+- [اجرای پروژه](#-اجرای-پروژه)
+- [ایجاد داده‌های اولیه](#-ایجاد-دادههای-اولیه)
+- [آدرس‌های مهم](#-آدرسهای-مهم)
+- [Authentication](#-authentication)
+- [API](#-api)
+- [Ticket Workflow](#-ticket-workflow)
+- [مدل داده](#-مدل-داده)
+- [Permission و Authorization](#-permission-و-authorization)
+- [تست](#-تست)
+- [Django Admin](#-django-admin)
+- [Environment Variables](#-environment-variables)
+- [امنیت](#-امنیت)
+- [عیب‌یابی](#-عیبیابی)
+- [وضعیت توسعه](#-وضعیت-توسعه)
+- [Roadmap](#-roadmap)
+- [تصمیمات معماری](#-تصمیمات-معماری)
 
-```powershell
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-copy .env.example .env
-# edit .env with your local PostgreSQL credentials
-python manage.py migrate
-python manage.py runserver
-```
+---
 
-## Project layout
+# 🏨 معرفی
 
-```
-manage.py
-config/
-├── settings/
-│   ├── base.py
-│   ├── development.py
-│   └── production.py
-├── urls.py
-├── wsgi.py
-└── asgi.py
-apps/
-├── core/
-├── accounts/
-├── guests/
-├── rooms/
-├── departments/
-└── tickets/
-requirements/
-tests/
-.env.example
-.gitignore
-```
+**Hotel Client Request Platform** یک سامانه تحت وب برای مدیریت درخواست‌های مهمانان هتل است.
 
-Development follows a phased plan — see the project's implementation
-plan for what each phase adds.
+در فرآیند سنتی، مهمان برای درخواست خدمات یا اعلام مشکل معمولاً با تلفن با پذیرش یا واحد مربوطه تماس می‌گیرد. این روش باعث ایجاد مشکلاتی مانند:
+
+- تماس‌های زیاد با پذیرش
+- گم شدن یا فراموش شدن درخواست‌ها
+- نبود تاریخچه مناسب
+- عدم مشخص بودن مسئول رسیدگی
+- نبود امکان پیگیری وضعیت درخواست
+- دشواری گزارش‌گیری
+- وابستگی زیاد به تماس تلفنی
+
+این سامانه درخواست مهمان را به شکل یک **Ticket** ثبت می‌کند و آن را در اختیار **Department** مربوطه قرار می‌دهد.
+
+---
+
+# 🎯 هدف پروژه
+
+هدف اصلی پروژه ایجاد یک سیستم متمرکز برای:
+
+1. ثبت درخواست مهمان
+2. دسته‌بندی درخواست
+3. ارسال درخواست به واحد مربوطه
+4. تخصیص درخواست به Operator
+5. پیگیری وضعیت درخواست
+6. ثبت نتیجه رسیدگی
+7. نگهداری تاریخچه تغییرات
+8. ایجاد یک زیرساخت قابل توسعه برای امکانات آینده
+
+---
+
+# 👥 نقش‌های کاربری
+
+سیستم در حال حاضر سه Role اصلی دارد:
+
+| Role | توضیح |
+|---|---|
+| `GUEST` | مهمان هتل |
+| `OPERATOR` | اپراتور یکی از واحدهای هتل |
+| `ADMIN` | مدیر/ادمین سیستم |
+
+### Guest
+
+مهمان می‌تواند:
+
+- وارد سامانه شود
+- پروفایل خود را مشاهده کند
+- درخواست جدید ثبت کند
+- درخواست‌های قبلی خود را مشاهده کند
+- جزئیات درخواست را مشاهده کند
+- نتیجه رسیدگی را مشاهده کند
+
+### Operator
+
+اپراتور می‌تواند:
+
+- Ticketهای Department خود را مشاهده کند
+- Ticket را به خودش Assign کند
+- وضعیت Ticket را تغییر دهد
+- Priority را تغییر دهد
+- Resolution ثبت کند
+
+### Admin
+
+Admin در فاز فعلی از **Django Admin** استفاده می‌کند.
+
+امکانات مدیریتی شامل:
+
+- User Management
+- Guest Management
+- Room Management
+- Department Management
+- Category Management
+- Ticket Management
+- مشاهده Ticket History
+
+---
+
+# 🧩 قابلیت‌ها
+
+## Guest Portal
+
+- Login با National ID + Room Number
+- بررسی وضعیت اتاق
+- مشاهده پروفایل
+- ثبت Ticket
+- انتخاب Department
+- انتخاب Category
+- تعیین Priority
+- مشاهده Ticketهای خود
+- مشاهده جزئیات Ticket
+- مشاهده Resolution
+
+## Operator Backend
+
+Backend مربوط به Operator شامل:
+
+- مشاهده Ticketهای Department
+- مشاهده Ticket Detail
+- Assign کردن Ticket
+- تغییر Status
+- تغییر Priority
+- ثبت Resolution
+- ثبت Ticket History
+
+> Operator Dashboard در Frontend هنوز در حال توسعه است.
+
+## Admin
+
+مدیریت کامل داده‌های اصلی از طریق Django Admin.
+
+---
+
+# 🏗 معماری
+
+پروژه در فاز فعلی یک **Modular Monolith** است.
+
+```text
+                    ┌─────────────────────┐
+                    │       Browser       │
+                    └──────────┬──────────┘
+                               │
+                  ┌────────────┴────────────┐
+                  │                         │
+                  ▼                         ▼
+          ┌───────────────┐         ┌───────────────┐
+          │ Guest Portal  │         │Operator Portal│
+          │   Next.js     │         │   Next.js     │
+          └───────┬───────┘         └───────┬───────┘
+                  │                         │
+                  └────────────┬────────────┘
+                               │
+                            REST API
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   Django + DRF      │
+                    │      Backend        │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   PostgreSQL 16     │
+                    └─────────────────────┘

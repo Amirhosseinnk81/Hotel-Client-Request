@@ -82,3 +82,26 @@ export interface CreateTicketPayload {
   category: number;
   priority: TicketPriority;
 }
+export interface Ticket {
+  id: number;
+  title: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  department: number;
+  department_name: string;
+  category: number;
+  category_name: string;
+  room_number: string;
+  resolution: string | null;
+  assigned_to: number | null;
+  assigned_to_username: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+}
+export interface UpdateOperatorTicketPayload {
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  resolution?: string;
+}

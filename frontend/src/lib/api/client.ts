@@ -8,6 +8,9 @@ import type {
   GuestProfile,
   RefreshResponse,
   Ticket,
+  TicketPriority,
+  TicketStatus,
+  UpdateOperatorTicketPayload,
   UserRole,
 } from "./types";
 
@@ -173,11 +176,41 @@ export async function getGuestProfile(): Promise<GuestProfile> {
 interface PaginatedResponse<T> {
   results?: T[];
   count?: number;
+  next?: string | null;
+  previous?: string | null;
 }
 
+/**
+ * Follows DRF's `next` link across every page and returns the full,
+ * combined list. Without this, any list beyond the backend's default page
+ * size would silently lose items past the first page.
+ */
 async function getAllPages<T>(path: string): Promise<T[]> {
-  const data = await apiFetch<T[] | PaginatedResponse<T>>(path);
-  return Array.isArray(data) ? data : (data.results ?? []);
+  const results: T[] = [];
+  let nextPath: string | null = path;
+
+  while (nextPath) {
+    const data: T[] | PaginatedResponse<T> = await apiFetch<T[] | PaginatedResponse<T>>(nextPath);
+
+    if (Array.isArray(data)) {
+      results.push(...data);
+      break;
+    }
+
+    results.push(...(data.results ?? []));
+
+    if (data.next) {
+      // `next` comes back as an absolute URL (e.g.
+      // http://127.0.0.1:8000/api/v1/tickets/?page=2); apiFetch expects a
+      // path relative to API_URL, so strip the origin and /api/v1 prefix.
+      const nextUrl: URL = new URL(data.next);
+      nextPath = nextUrl.pathname.replace(/^\/api\/v1/, "") + nextUrl.search;
+    } else {
+      nextPath = null;
+    }
+  }
+
+  return results;
 }
 
 export async function getDepartments(): Promise<Department[]> {
@@ -199,10 +232,56 @@ export async function createTicket(payload: CreateTicketPayload): Promise<Ticket
   });
 }
 
-export async function getTickets(): Promise<Ticket[]> {
-  return getAllPages<Ticket>("/tickets/");
+export async function getTickets(search?: string): Promise<Ticket[]> {
+  const query = new URLSearchParams();
+  if (search) query.set("search", search);
+  const qs = query.toString();
+
+  return getAllPages<Ticket>(`/tickets/${qs ? `?${qs}` : ""}`);
 }
 
 export async function getTicketDetail(id: number | string): Promise<Ticket> {
   return apiFetch<Ticket>(`/tickets/${id}/`);
+}
+
+// ---------------------------------------------------------------------------
+// Tickets (operator side)
+// ---------------------------------------------------------------------------
+
+export interface OperatorTicketFilters {
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  search?: string;
+}
+
+export async function getOperatorTickets(
+  filters: OperatorTicketFilters = {}
+): Promise<Ticket[]> {
+  const query = new URLSearchParams();
+  if (filters.status) query.set("status", filters.status);
+  if (filters.priority) query.set("priority", filters.priority);
+  if (filters.search) query.set("search", filters.search);
+  const qs = query.toString();
+
+  return getAllPages<Ticket>(`/operator/tickets/${qs ? `?${qs}` : ""}`);
+}
+
+export async function getOperatorTicketDetail(id: number | string): Promise<Ticket> {
+  return apiFetch<Ticket>(`/operator/tickets/${id}/`);
+}
+
+export async function updateOperatorTicket(
+  id: number | string,
+  payload: UpdateOperatorTicketPayload
+): Promise<Ticket> {
+  return apiFetch<Ticket>(`/operator/tickets/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function assignTicketToSelf(id: number | string): Promise<Ticket> {
+  return apiFetch<Ticket>(`/operator/tickets/${id}/assign/`, {
+    method: "POST",
+  });
 }

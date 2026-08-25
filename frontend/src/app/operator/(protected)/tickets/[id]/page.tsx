@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, UserPlus } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, UserPlus } from "lucide-react";
 
 import {
   Card,
@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormError } from "@/components/form-error";
+import { toast } from "@/hooks/use-toast";
 import {
   assignTicketToSelf,
   getOperatorTicketDetail,
@@ -67,12 +69,10 @@ export default function OperatorTicketDetailPage({
   const [error, setError] = useState<string | null>(null);
 
   const [isAssigning, setIsAssigning] = useState(false);
-  const [assignError, setAssignError] = useState<string | null>(null);
 
   const [targetStatus, setTargetStatus] = useState<TicketStatus | "">("");
   const [resolution, setResolution] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
-  const [updateError, setUpdateError] = useState<string | null>(null);
 
   const currentUserId = decodeAccessToken(getStoredTokens()?.access ?? "")?.user_id ?? null;
 
@@ -102,12 +102,20 @@ export default function OperatorTicketDetailPage({
 
   const handleAssign = async () => {
     setIsAssigning(true);
-    setAssignError(null);
     try {
       const updated = await assignTicketToSelf(id);
       setTicket(updated);
+      toast({
+        title: "اختصاص انجام شد",
+        description: "این درخواست به شما اختصاص داده شد.",
+        variant: "success",
+      });
     } catch (err) {
-      setAssignError(err instanceof ApiError ? err.message : "خطا در اختصاص درخواست.");
+      toast({
+        title: "خطا در اختصاص",
+        description: err instanceof ApiError ? err.message : "خطا در اختصاص درخواست.",
+        variant: "destructive",
+      });
     } finally {
       setIsAssigning(false);
     }
@@ -116,7 +124,6 @@ export default function OperatorTicketDetailPage({
   const handleUpdateStatus = async () => {
     if (!targetStatus) return;
     setIsUpdating(true);
-    setUpdateError(null);
     try {
       const updated = await updateOperatorTicket(id, {
         status: targetStatus,
@@ -125,8 +132,17 @@ export default function OperatorTicketDetailPage({
       setTicket(updated);
       setTargetStatus("");
       setResolution("");
+      toast({
+        title: "وضعیت به‌روزرسانی شد",
+        description: `وضعیت درخواست به «${statusLabels[updated.status]}» تغییر کرد.`,
+        variant: "success",
+      });
     } catch (err) {
-      setUpdateError(err instanceof ApiError ? err.message : "خطا در تغییر وضعیت.");
+      toast({
+        title: "خطا در تغییر وضعیت",
+        description: err instanceof ApiError ? err.message : "خطا در تغییر وضعیت.",
+        variant: "destructive",
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -149,8 +165,23 @@ export default function OperatorTicketDetailPage({
 
       {!ticket && !error && (
         <Card>
-          <CardContent className="pt-6 text-sm text-muted-foreground">
-            در حال بارگذاری…
+          <CardHeader>
+            <div className="flex items-start justify-between gap-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <Skeleton className="h-3.5 w-32" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex gap-2">
+              <Skeleton className="h-5 w-20 rounded-full" />
+              <Skeleton className="h-5 w-24 rounded-full" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
           </CardContent>
         </Card>
       )}
@@ -228,15 +259,14 @@ export default function OperatorTicketDetailPage({
                   disabled={isAssigning}
                   onClick={handleAssign}
                 >
-                  <UserPlus className="size-3.5" />
+                  {isAssigning ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <UserPlus className="size-3.5" />
+                  )}
                   {isAssigning ? "در حال اختصاص…" : "اختصاص به خودم"}
                 </Button>
               </CardContent>
-              {assignError && (
-                <CardContent className="pt-0">
-                  <FormError message={assignError} />
-                </CardContent>
-              )}
             </Card>
           )}
 
@@ -282,13 +312,12 @@ export default function OperatorTicketDetailPage({
                   </div>
                 )}
 
-                <FormError message={updateError} />
-
                 <Button
-                  className="w-fit"
+                  className="w-fit gap-1.5"
                   disabled={!canSubmitStatus || isUpdating}
                   onClick={handleUpdateStatus}
                 >
+                  {isUpdating && <Loader2 className="size-3.5 animate-spin" />}
                   {isUpdating ? "در حال ثبت…" : "ثبت تغییر وضعیت"}
                 </Button>
               </CardContent>

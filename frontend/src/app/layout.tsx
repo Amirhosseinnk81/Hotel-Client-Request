@@ -3,6 +3,7 @@ import "@fontsource-variable/vazirmatn";
 import "./globals.css";
 
 import { AuthProvider } from "@/contexts/auth-context";
+import { Toaster } from "@/components/toaster";
 
 export const metadata: Metadata = {
   title: "پلتفرم درخواست‌های مهمان هتل",
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="fa" dir="rtl" className="h-full antialiased">
       <body className="min-h-full flex flex-col font-sans">
         <AuthProvider>{children}</AuthProvider>
+        <Toaster />
       </body>
     </html>
   );

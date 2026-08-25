@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormError } from "@/components/form-error";
+import { Skeleton } from "@/components/ui/skeleton";
 import { getOperatorTickets, ApiError } from "@/lib/api/client";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { Ticket, TicketPriority, TicketStatus } from "@/lib/api/types";
@@ -136,11 +137,23 @@ export default function OperatorHomePage() {
       </Select>
 
       {!tickets && !error && (
-        <Card>
-          <CardContent className="pt-6 text-sm text-muted-foreground">
-            در حال بارگذاری…
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
+                <div className="flex flex-1 flex-col gap-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </CardHeader>
+              <CardContent className="flex gap-2">
+                <Skeleton className="h-5 w-14" />
+                <Skeleton className="h-5 w-14" />
+                <Skeleton className="h-5 w-20" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
 
       {error && (

@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Send } from "lucide-react";
+import { ArrowRight, Send } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,7 +109,14 @@ export default function NewTicketPage() {
   };
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col">
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4">
+      <Button asChild variant="ghost" size="sm" className="w-fit gap-1.5">
+        <Link href="/guest">
+          <ArrowRight className="size-3.5" />
+          بازگشت
+        </Link>
+      </Button>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">ثبت درخواست جدید</CardTitle>

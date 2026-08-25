@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Inbox } from "lucide-react";
+import { ArrowRight, ChevronLeft, Inbox } from "lucide-react";
 
 import {
   Card,
@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -83,6 +84,13 @@ export default function GuestTicketsPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4">
+      <Button asChild variant="ghost" size="sm" className="w-fit gap-1.5">
+        <Link href="/guest">
+          <ArrowRight className="size-3.5" />
+          بازگشت
+        </Link>
+      </Button>
+
       <div>
         <h1 className="text-xl font-semibold">درخواست‌های من</h1>
         <p className="text-sm text-muted-foreground">

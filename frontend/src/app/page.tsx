@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { AuthStatus } from "@/components/auth-status";
 
+const isDev = process.env.NODE_ENV !== "production";
+
 async function checkBackendHealth() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
 
@@ -24,7 +26,9 @@ async function checkBackendHealth() {
 }
 
 export default async function Home() {
-  const { ok, apiUrl } = await checkBackendHealth();
+  // Skip the health check entirely outside dev — no point paying for the
+  // request (and no point letting the panel render) in production.
+  const health = isDev ? await checkBackendHealth() : null;
 
   return (
     <main className="flex min-h-full flex-1 flex-col items-center justify-center gap-6 p-6">
@@ -50,27 +54,30 @@ export default async function Home() {
         </CardContent>
       </Card>
 
-      {/* Dev-only status panel — connectivity + auth debug info. */}
-      <Card className="w-full max-w-sm">
-        <CardContent className="flex flex-col gap-3 pt-0">
-          <div className="flex items-center gap-2 rounded-lg border bg-secondary/40 p-3">
-            {ok ? (
-              <CheckCircle2 className="text-success size-4" />
-            ) : (
-              <XCircle className="text-destructive size-4" />
-            )}
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">
-                {ok ? "اتصال به بک‌اند برقرار است" : "اتصال به بک‌اند برقرار نیست"}
-              </span>
-              <span className="text-xs text-muted-foreground" dir="ltr">
-                {apiUrl}
-              </span>
+      {/* Dev-only status panel — connectivity + auth debug info.
+          Hidden automatically in production builds (NODE_ENV === "production"). */}
+      {isDev && health && (
+        <Card className="w-full max-w-sm">
+          <CardContent className="flex flex-col gap-3 pt-0">
+            <div className="flex items-center gap-2 rounded-lg border bg-secondary/40 p-3">
+              {health.ok ? (
+                <CheckCircle2 className="text-success size-4" />
+              ) : (
+                <XCircle className="text-destructive size-4" />
+              )}
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">
+                  {health.ok ? "اتصال به بک‌اند برقرار است" : "اتصال به بک‌اند برقرار نیست"}
+                </span>
+                <span className="text-xs text-muted-foreground" dir="ltr">
+                  {health.apiUrl}
+                </span>
+              </div>
             </div>
-          </div>
-          <AuthStatus />
-        </CardContent>
-      </Card>
+            <AuthStatus />
+          </CardContent>
+        </Card>
+      )}
     </main>
   );
 }

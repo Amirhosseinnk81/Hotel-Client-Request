@@ -20,9 +20,15 @@ class CategoryListCreateView(generics.ListCreateAPIView):
     """
     GET  /api/v1/categories/  — any authenticated user can browse.
     POST /api/v1/categories/  — admins only.
+
+    Only active categories are exposed here — this is the endpoint the
+    guest ticket-creation form reads from, so a category the admin has
+    disabled must not remain selectable. Direct admin management (including
+    toggling is_active) still happens through Django Admin, which queries
+    the model directly and is unaffected by this filter.
     """
 
-    queryset = Category.objects.all()
+    queryset = Category.objects.filter(is_active=True)
     serializer_class = CategorySerializer
     permission_classes = [IsAdminRole]
 

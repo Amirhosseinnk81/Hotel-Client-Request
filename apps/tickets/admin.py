@@ -36,3 +36,17 @@ class TicketAdmin(admin.ModelAdmin):
     search_fields = ("title", "description", "guest__full_name", "guest__national_id")
     ordering = ("-created_at",)
     inlines = [TicketHistoryInline]
+
+    # These fields are governed by business rules that only live in
+    # OperatorTicketSerializer (allowed status transitions via
+    # Ticket.can_transition_to(), a mandatory resolution before marking a
+    # ticket RESOLVED, and auto-populating resolved_at). Django's default
+    # ModelAdmin form bypasses all of that, so editing them here directly
+    # could leave a ticket in a state the API — and the frontend built
+    # against it — never expects (e.g. RESOLVED with no resolution text,
+    # or OPEN jumping straight to RESOLVED). Keeping them read-only forces
+    # every real workflow change through the API, where those rules are
+    # enforced; Admin is still fully useful for oversight and for editing
+    # the non-workflow fields (title, description, priority, department,
+    # category).
+    readonly_fields = ("status", "resolution", "resolved_at", "assigned_to")

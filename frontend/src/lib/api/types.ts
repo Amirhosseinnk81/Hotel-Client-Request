@@ -90,4 +90,10 @@ export interface UpdateOperatorTicketPayload {
   status?: TicketStatus;
   priority?: TicketPriority;
   resolution?: string;
+  assigned_to?: number | null;
+}
+
+export interface OperatorColleague {
+  id: number;
+  username: string;
 }

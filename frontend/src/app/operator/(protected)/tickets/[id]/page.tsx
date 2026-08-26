@@ -27,12 +27,13 @@ import { FormError } from "@/components/form-error";
 import { toast } from "@/hooks/use-toast";
 import {
   assignTicketToSelf,
+  getOperatorColleagues,
   getOperatorTicketDetail,
   updateOperatorTicket,
   ApiError,
 } from "@/lib/api/client";
 import { decodeAccessToken, getStoredTokens } from "@/lib/api/tokens";
-import type { Ticket, TicketStatus } from "@/lib/api/types";
+import type { OperatorColleague, Ticket, TicketStatus } from "@/lib/api/types";
 import {
   statusLabels,
   statusBadgeVariant,
@@ -58,6 +59,9 @@ const allowedNextStatuses: Record<TicketStatus, TicketStatus[]> = {
   CANCELLED: [],
 };
 
+/** Sentinel value for the "no one" option — Radix Select rejects an empty string value. */
+const UNASSIGNED_VALUE = "UNASSIGNED";
+
 export default function OperatorTicketDetailPage({
   params,
 }: {
@@ -69,6 +73,10 @@ export default function OperatorTicketDetailPage({
   const [error, setError] = useState<string | null>(null);
 
   const [isAssigning, setIsAssigning] = useState(false);
+
+  const [colleagues, setColleagues] = useState<OperatorColleague[] | null>(null);
+  const [selectedAssignee, setSelectedAssignee] = useState<string>(UNASSIGNED_VALUE);
+  const [isReassigning, setIsReassigning] = useState(false);
 
   const [targetStatus, setTargetStatus] = useState<TicketStatus | "">("");
   const [resolution, setResolution] = useState("");
@@ -83,6 +91,9 @@ export default function OperatorTicketDetailPage({
         setTicket(data);
         setTargetStatus("");
         setResolution("");
+        setSelectedAssignee(
+          data.assigned_to != null ? String(data.assigned_to) : UNASSIGNED_VALUE
+        );
       })
       .catch((err) => {
         setError(
@@ -100,11 +111,27 @@ export default function OperatorTicketDetailPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  useEffect(() => {
+    getOperatorColleagues()
+      .then(setColleagues)
+      .catch(() => {
+        toast({
+          title: "خطا در دریافت لیست اپراتورها",
+          description: "فهرست همکاران واحد بارگذاری نشد؛ اختصاص به شخص دیگر موقتاً در دسترس نیست.",
+          variant: "destructive",
+        });
+        setColleagues([]);
+      });
+  }, []);
+
   const handleAssign = async () => {
     setIsAssigning(true);
     try {
       const updated = await assignTicketToSelf(id);
       setTicket(updated);
+      setSelectedAssignee(
+        updated.assigned_to != null ? String(updated.assigned_to) : UNASSIGNED_VALUE
+      );
       toast({
         title: "اختصاص انجام شد",
         description: "این درخواست به شما اختصاص داده شد.",
@@ -118,6 +145,31 @@ export default function OperatorTicketDetailPage({
       });
     } finally {
       setIsAssigning(false);
+    }
+  };
+
+  const handleReassign = async () => {
+    setIsReassigning(true);
+    try {
+      const updated = await updateOperatorTicket(id, {
+        assigned_to: selectedAssignee === UNASSIGNED_VALUE ? null : Number(selectedAssignee),
+      });
+      setTicket(updated);
+      toast({
+        title: "اختصاص به‌روزرسانی شد",
+        description: updated.assigned_to_username
+          ? `این درخواست به ${updated.assigned_to_username} اختصاص یافت.`
+          : "اختصاص این درخواست برداشته شد.",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "خطا در اختصاص",
+        description: err instanceof ApiError ? err.message : "خطا در به‌روزرسانی اختصاص.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReassigning(false);
     }
   };
 
@@ -149,10 +201,13 @@ export default function OperatorTicketDetailPage({
   };
 
   const options = ticket ? allowedNextStatuses[ticket.status] : [];
+  const isClosed = ticket?.status === "RESOLVED" || ticket?.status === "CANCELLED";
   const isAssignedToMe = ticket?.assigned_to !== null && ticket?.assigned_to === currentUserId;
   const needsResolution = targetStatus === "RESOLVED";
   const canSubmitStatus =
     !!targetStatus && (!needsResolution || resolution.trim().length > 0);
+  const currentAssigneeValue = ticket?.assigned_to != null ? String(ticket.assigned_to) : UNASSIGNED_VALUE;
+  const canSubmitReassign = selectedAssignee !== currentAssigneeValue;
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4">
@@ -247,25 +302,65 @@ export default function OperatorTicketDetailPage({
             </CardContent>
           </Card>
 
-          {!ticket.assigned_to && (
+          {!isClosed && (
             <Card>
-              <CardContent className="flex items-center justify-between gap-3 pt-6">
-                <p className="text-sm text-muted-foreground">
-                  این درخواست هنوز به کسی اختصاص داده نشده.
-                </p>
-                <Button
-                  size="sm"
-                  className="gap-1.5"
-                  disabled={isAssigning}
-                  onClick={handleAssign}
-                >
-                  {isAssigning ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <UserPlus className="size-3.5" />
+              <CardHeader>
+                <CardTitle className="text-base">اختصاص درخواست</CardTitle>
+                <CardDescription>
+                  این درخواست را به خودتان یا یکی دیگر از اپراتورهای واحد اختصاص دهید.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label>اپراتور</Label>
+                  <Select
+                    value={selectedAssignee}
+                    onValueChange={setSelectedAssignee}
+                    disabled={colleagues === null}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="در حال بارگذاری…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={UNASSIGNED_VALUE}>بدون اختصاص</SelectItem>
+                      {colleagues?.map((colleague) => (
+                        <SelectItem key={colleague.id} value={String(colleague.id)}>
+                          {colleague.username}
+                          {colleague.id === currentUserId ? " (خودم)" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    className="w-fit gap-1.5"
+                    disabled={!canSubmitReassign || isReassigning}
+                    onClick={handleReassign}
+                  >
+                    {isReassigning && <Loader2 className="size-3.5 animate-spin" />}
+                    {isReassigning ? "در حال ثبت…" : "ثبت اختصاص"}
+                  </Button>
+
+                  {!isAssignedToMe && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      className="w-fit gap-1.5"
+                      disabled={isAssigning}
+                      onClick={handleAssign}
+                    >
+                      {isAssigning ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <UserPlus className="size-3.5" />
+                      )}
+                      {isAssigning ? "در حال اختصاص…" : "اختصاص به خودم"}
+                    </Button>
                   )}
-                  {isAssigning ? "در حال اختصاص…" : "اختصاص به خودم"}
-                </Button>
+                </div>
               </CardContent>
             </Card>
           )}

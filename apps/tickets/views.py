@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, generics, status
 from rest_framework.permissions import IsAuthenticated
@@ -11,6 +12,7 @@ from .models import Category, Ticket, TicketHistory
 from .permissions import IsOperator
 from .serializers import (
     CategorySerializer,
+    OperatorColleagueSerializer,
     TicketSerializer,
     OperatorTicketSerializer,
 )
@@ -228,4 +230,31 @@ class OperatorTicketAssignView(APIView):
         return Response(
             OperatorTicketSerializer(ticket).data,
             status=status.HTTP_200_OK,
+        )
+
+
+class OperatorColleaguesListView(generics.ListAPIView):
+    """
+    GET /api/v1/operator/colleagues/ — every operator in the current
+    user's department, so a ticket can be assigned (or reassigned) to any
+    of them, not just to yourself. Deliberately unpaginated: department
+    rosters are small, and the frontend just needs the full list to
+    populate a dropdown in one shot.
+    """
+
+    serializer_class = OperatorColleagueSerializer
+    permission_classes = [IsOperator]
+    pagination_class = None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return get_user_model().objects.none()
+
+        return (
+            get_user_model().objects
+            .filter(
+                role="OPERATOR",
+                department=self.request.user.department,
+            )
+            .order_by("username")
         )

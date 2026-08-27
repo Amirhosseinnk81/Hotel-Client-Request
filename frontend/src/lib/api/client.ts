@@ -6,6 +6,7 @@ import type {
   CreateTicketPayload,
   Department,
   GuestProfile,
+  OperatorColleague,
   RefreshResponse,
   Ticket,
   TicketPriority,
@@ -284,4 +285,8 @@ export async function assignTicketToSelf(id: number | string): Promise<Ticket> {
   return apiFetch<Ticket>(`/operator/tickets/${id}/assign/`, {
     method: "POST",
   });
+}
+
+export async function getOperatorColleagues(): Promise<OperatorColleague[]> {
+  return apiFetch<OperatorColleague[]>("/operator/colleagues/");
 }

@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -172,3 +173,15 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             validated_data["resolved_at"] = timezone.now()
 
         return super().update(instance, validated_data)
+
+
+class OperatorColleagueSerializer(serializers.ModelSerializer):
+    """
+    Minimal representation of a fellow operator in the same department —
+    just enough to populate a "reassign this ticket to..." dropdown.
+    """
+
+    class Meta:
+        model = get_user_model()
+        fields = ["id", "username"]
+        read_only_fields = fields

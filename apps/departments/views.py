@@ -12,7 +12,7 @@ class DepartmentListCreateView(generics.ListCreateAPIView):
     POST /api/v1/departments/  — admins only.
     """
 
-    queryset = Department.objects.all()
+    queryset = Department.objects.filter(is_active=True)
     serializer_class = DepartmentSerializer
     permission_classes = [IsAdminRole]
 
@@ -24,6 +24,6 @@ class DepartmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     tickets/operators reference the department, since department FKs use PROTECT).
     """
 
-    queryset = Department.objects.all()
+    queryset = Department.objects.filter(is_active=True)
     serializer_class = DepartmentSerializer
     permission_classes = [IsAdminRole]

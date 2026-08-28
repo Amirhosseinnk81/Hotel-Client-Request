@@ -36,6 +36,7 @@ DJANGO_APPS = [
 THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
     "corsheaders",
 ]
@@ -182,6 +183,20 @@ SPECTACULAR_SETTINGS = {
 # CORS — tightened per environment
 # ---------------------------------------------------------------------------
 CORS_ALLOWED_ORIGINS = config("CORS_ALLOWED_ORIGINS", default="", cast=Csv())
+# Required for the browser to send/receive the httpOnly refresh-token cookie
+# on cross-origin requests (frontend and backend run on different ports/
+# subdomains). CORS_ALLOWED_ORIGINS must stay an explicit list (never "*")
+# for this to be honored by the browser.
+CORS_ALLOW_CREDENTIALS = True
+
+# ---------------------------------------------------------------------------
+# JWT refresh-token cookie (see apps/core/jwt_cookies.py)
+# ---------------------------------------------------------------------------
+# False only makes sense for local HTTP development; must be True (the
+# default) anywhere real, since browsers refuse to store Secure cookies set
+# over plain HTTP anyway — this only ever needs overriding to False in a
+# local .env.
+JWT_COOKIE_SECURE = config("JWT_COOKIE_SECURE", default=not DEBUG, cast=bool)
 
 # ---------------------------------------------------------------------------
 # Logging — INFO/WARNING/ERROR/CRITICAL, no sensitive data (see section 24)

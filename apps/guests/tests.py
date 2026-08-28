@@ -3,6 +3,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from apps.accounts.models import User
+from apps.core.jwt_cookies import REFRESH_COOKIE_NAME
 from apps.rooms.models import Room
 
 from .models import Guest
@@ -46,7 +47,9 @@ class GuestAuthenticationTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
-        self.assertIn("refresh", response.data)
+        self.assertNotIn("refresh", response.data)
+        self.assertIn(REFRESH_COOKIE_NAME, response.cookies)
+        self.assertTrue(response.cookies[REFRESH_COOKIE_NAME]["httponly"])
         self.assertEqual(response.data["role"], User.Role.GUEST)
 
     def test_guest_login_wrong_national_id(self):

@@ -4,6 +4,8 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from apps.core.jwt_cookies import REFRESH_COOKIE_NAME
+
 from .models import User
 
 
@@ -50,7 +52,14 @@ class OperatorLoginTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
-        self.assertIn("refresh", response.data)
+        # Refresh token must NOT be in the JSON body — it's httpOnly-cookie
+        # only (see apps/core/jwt_cookies.py). A regression here would mean
+        # frontend JS can read it again, defeating the whole migration.
+        self.assertNotIn("refresh", response.data)
+        self.assertIn(REFRESH_COOKIE_NAME, response.cookies)
+        cookie = response.cookies[REFRESH_COOKIE_NAME]
+        self.assertTrue(cookie["httponly"])
+        self.assertEqual(cookie["samesite"], "Lax")
         self.assertEqual(response.data["role"], "OPERATOR")
 
     def test_admin_can_login_via_operator_endpoint(self):
@@ -112,22 +121,44 @@ class OperatorLoginTests(APITestCase):
             {"username": "operator_login_test", "password": "Test123456!"},
             format="json",
         )
-        refresh_token = login_response.data["refresh"]
+        # The test client automatically carries cookies set by a previous
+        # response into the next request, same as a browser would.
+        self.assertIn(REFRESH_COOKIE_NAME, login_response.cookies)
 
-        response = self.client.post(
-            self.refresh_url,
-            {"refresh": refresh_token},
-            format="json",
-        )
+        response = self.client.post(self.refresh_url, {}, format="json")
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn("access", response.data)
+        self.assertNotIn("refresh", response.data)
+        # ROTATE_REFRESH_TOKENS=True — a new cookie should be issued too.
+        self.assertIn(REFRESH_COOKIE_NAME, response.cookies)
 
-    def test_token_refresh_rejects_invalid_token(self):
-        response = self.client.post(
-            self.refresh_url,
-            {"refresh": "not-a-real-token"},
+    def test_token_refresh_rejects_missing_cookie(self):
+        response = self.client.post(self.refresh_url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_token_refresh_rejects_invalid_cookie(self):
+        self.client.cookies[REFRESH_COOKIE_NAME] = "not-a-real-token"
+
+        response = self.client.post(self.refresh_url, {}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logout_blacklists_refresh_token_and_clears_cookie(self):
+        login_response = self.client.post(
+            self.login_url,
+            {"username": "operator_login_test", "password": "Test123456!"},
             format="json",
         )
 
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        logout_response = self.client.post(reverse("accounts:logout"))
+        self.assertEqual(logout_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(logout_response.cookies[REFRESH_COOKIE_NAME].value, "")
+
+        # The blacklisted refresh token must no longer work.
+        self.client.cookies[REFRESH_COOKIE_NAME] = login_response.cookies[
+            REFRESH_COOKIE_NAME
+        ].value
+        refresh_after_logout = self.client.post(self.refresh_url, {}, format="json")
+        self.assertEqual(refresh_after_logout.status_code, status.HTTP_401_UNAUTHORIZED)

@@ -1,37 +1,14 @@
 import { jwtDecode } from "jwt-decode";
 
-import type { AccessTokenPayload, AuthTokens } from "./types";
-
-const STORAGE_KEY = "hotel_auth_tokens";
+import type { AccessTokenPayload } from "./types";
 
 /**
- * All token storage lives in localStorage. This is the simple choice for
- * an MVP — it's easier to reason about than httpOnly cookies + CSRF
- * handling, at the cost of being more exposed to XSS. Worth revisiting
- * before a real production deployment.
+ * The refresh token lives only in an httpOnly cookie set by the backend —
+ * this file (and the frontend in general) never sees it, which is the
+ * whole point (see apps/core/jwt_cookies.py on the backend). The access
+ * token is kept in memory only (see client.ts); nothing here touches
+ * localStorage anymore.
  */
-export function saveTokens(tokens: AuthTokens): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(tokens));
-}
-
-export function getStoredTokens(): AuthTokens | null {
-  if (typeof window === "undefined") return null;
-
-  const raw = window.localStorage.getItem(STORAGE_KEY);
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw) as AuthTokens;
-  } catch {
-    return null;
-  }
-}
-
-export function clearTokens(): void {
-  if (typeof window === "undefined") return;
-  window.localStorage.removeItem(STORAGE_KEY);
-}
 
 /** True if the token is missing, malformed, or expired (with a small buffer). */
 export function isTokenExpired(token: string, bufferSeconds = 10): boolean {

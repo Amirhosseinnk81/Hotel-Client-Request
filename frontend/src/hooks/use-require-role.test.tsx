@@ -9,8 +9,9 @@ vi.mock("next/navigation", () => ({
 
 // useRequireRole only reads {isLoading, isAuthenticated, role} off useAuth,
 // so mocking the module directly is simpler and more robust than wrapping
-// every test in a real <AuthProvider> (which reads from localStorage on
-// mount and would need its own set of stubs).
+// every test in a real <AuthProvider> (which calls the refresh endpoint on
+// mount to restore a session from the httpOnly cookie, and would need its
+// own set of stubs for that network call).
 const useAuthMock = vi.fn();
 vi.mock("@/contexts/auth-context", () => ({
   useAuth: () => useAuthMock(),

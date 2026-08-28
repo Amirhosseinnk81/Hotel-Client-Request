@@ -1,13 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import {
-  clearTokens,
-  decodeAccessToken,
-  getStoredTokens,
-  isTokenExpired,
-  saveTokens,
-} from "./tokens";
-import type { AccessTokenPayload, AuthTokens } from "./types";
+import { decodeAccessToken, isTokenExpired } from "./tokens";
+import type { AccessTokenPayload } from "./types";
 
 /**
  * jwt-decode only base64-decodes the payload segment — it never verifies
@@ -70,37 +64,5 @@ describe("decodeAccessToken", () => {
 
   it("returns null for a malformed token instead of throwing", () => {
     expect(decodeAccessToken("garbage")).toBeNull();
-  });
-});
-
-describe("token storage (localStorage)", () => {
-  beforeEach(() => {
-    window.localStorage.clear();
-  });
-
-  const sampleTokens: AuthTokens = {
-    access: "access-token",
-    refresh: "refresh-token",
-    role: "GUEST",
-  };
-
-  it("returns null when nothing has been stored yet", () => {
-    expect(getStoredTokens()).toBeNull();
-  });
-
-  it("round-trips tokens through save and get", () => {
-    saveTokens(sampleTokens);
-    expect(getStoredTokens()).toEqual(sampleTokens);
-  });
-
-  it("removes tokens on clear", () => {
-    saveTokens(sampleTokens);
-    clearTokens();
-    expect(getStoredTokens()).toBeNull();
-  });
-
-  it("returns null instead of throwing when storage holds invalid JSON", () => {
-    window.localStorage.setItem("hotel_auth_tokens", "{not valid json");
-    expect(getStoredTokens()).toBeNull();
   });
 });

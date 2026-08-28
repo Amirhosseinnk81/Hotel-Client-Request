@@ -27,12 +27,13 @@ import { FormError } from "@/components/form-error";
 import { toast } from "@/hooks/use-toast";
 import {
   assignTicketToSelf,
+  getAccessToken,
   getOperatorColleagues,
   getOperatorTicketDetail,
   updateOperatorTicket,
   ApiError,
 } from "@/lib/api/client";
-import { decodeAccessToken, getStoredTokens } from "@/lib/api/tokens";
+import { decodeAccessToken } from "@/lib/api/tokens";
 import type { OperatorColleague, Ticket, TicketStatus } from "@/lib/api/types";
 import {
   statusLabels,
@@ -82,7 +83,7 @@ export default function OperatorTicketDetailPage({
   const [resolution, setResolution] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
 
-  const currentUserId = decodeAccessToken(getStoredTokens()?.access ?? "")?.user_id ?? null;
+  const currentUserId = decodeAccessToken(getAccessToken() ?? "")?.user_id ?? null;
 
   const load = () => {
     setError(null);

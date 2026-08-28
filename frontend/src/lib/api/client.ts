@@ -1,4 +1,4 @@
-import { clearTokens, getStoredTokens, isTokenExpired, saveTokens } from "./tokens";
+import { decodeAccessToken, isTokenExpired } from "./tokens";
 import type {
   ApiErrorBody,
   AuthTokens,
@@ -15,7 +15,7 @@ import type {
   UserRole,
 } from "./types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:8000/api/v1";
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
 export class ApiError extends Error {
   status: number;
@@ -30,9 +30,32 @@ export class ApiError extends Error {
 }
 
 /**
- * Fired whenever the client refreshes tokens on its own (a 401 mid-request
- * triggered a silent refresh), so AuthContext can sync its in-memory state
- * with what just got written to storage.
+ * The access token lives ONLY in memory (this module-level variable) —
+ * never in localStorage, never in a JS-readable cookie. On a hard reload
+ * it's gone and gets re-derived from the httpOnly refresh cookie via
+ * restoreSession() (see AuthProvider). This bounds how long a stolen
+ * token (e.g. via XSS) stays useful to its short lifetime, instead of
+ * however long it happened to sit in localStorage.
+ */
+let currentAccessToken: string | null = null;
+
+export function getAccessToken(): string | null {
+  return currentAccessToken;
+}
+
+function setAccessToken(token: string | null): void {
+  currentAccessToken = token;
+  notifyTokensChanged(token ? { access: token, role: getRoleFromToken(token) } : null);
+}
+
+function getRoleFromToken(token: string): UserRole {
+  return decodeAccessToken(token)?.role ?? "GUEST";
+}
+
+/**
+ * Fired whenever the client changes the access token on its own (a silent
+ * refresh, or a failed refresh clearing the session), so AuthContext can
+ * sync its React state with what's now actually held in memory.
  */
 type TokensListener = (tokens: AuthTokens | null) => void;
 let tokensListener: TokensListener | null = null;
@@ -55,12 +78,16 @@ async function parseErrorBody(response: Response): Promise<ApiErrorBody> {
   return { success: false, message: `Request failed with status ${response.status}` };
 }
 
-/** Raw refresh call — deliberately does not go through apiFetch (no auth header, no retry loop). */
-async function refreshAccessToken(refreshToken: string): Promise<AuthTokens> {
+/**
+ * Raw refresh call — deliberately does not go through apiFetch (no auth
+ * header, no retry loop). Sends no body: the refresh token travels only as
+ * the httpOnly cookie the browser attaches automatically, which is why
+ * `credentials: "include"` is required here.
+ */
+async function refreshAccessToken(): Promise<string> {
   const response = await fetch(`${API_URL}/auth/token/refresh/`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh: refreshToken }),
+    credentials: "include",
   });
 
   if (!response.ok) {
@@ -69,20 +96,24 @@ async function refreshAccessToken(refreshToken: string): Promise<AuthTokens> {
   }
 
   const data = (await response.json()) as RefreshResponse;
-  const stored = getStoredTokens();
+  setAccessToken(data.access);
+  return data.access;
+}
 
-  const newTokens: AuthTokens = {
-    access: data.access,
-    // simplejwt ROTATE_REFRESH_TOKENS means a new refresh token usually
-    // comes back too; fall back to the old one just in case it doesn't.
-    refresh: data.refresh ?? refreshToken,
-    role: stored?.role ?? "GUEST",
-  };
-
-  saveTokens(newTokens);
-  notifyTokensChanged(newTokens);
-
-  return newTokens;
+/**
+ * Called once by AuthProvider on mount to silently restore a session from
+ * the httpOnly refresh cookie (if any). Never throws — a missing/expired
+ * cookie just means "not logged in", which is a normal, expected outcome,
+ * not an error worth surfacing.
+ */
+export async function restoreSession(): Promise<AuthTokens | null> {
+  try {
+    const access = await refreshAccessToken();
+    return { access, role: getRoleFromToken(access) };
+  } catch {
+    setAccessToken(null);
+    return null;
+  }
 }
 
 interface ApiFetchOptions extends RequestInit {
@@ -93,36 +124,34 @@ interface ApiFetchOptions extends RequestInit {
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const { skipAuth = false, headers, ...rest } = options;
 
-  let tokens = getStoredTokens();
+  let token = currentAccessToken;
 
-  if (!skipAuth && tokens && isTokenExpired(tokens.access)) {
+  if (!skipAuth && token && isTokenExpired(token)) {
     try {
-      tokens = await refreshAccessToken(tokens.refresh);
+      token = await refreshAccessToken();
     } catch {
-      clearTokens();
-      notifyTokensChanged(null);
-      tokens = null;
+      setAccessToken(null);
+      token = null;
     }
   }
 
   const requestHeaders = new Headers(headers);
   requestHeaders.set("Content-Type", "application/json");
-  if (!skipAuth && tokens) {
-    requestHeaders.set("Authorization", `Bearer ${tokens.access}`);
+  if (!skipAuth && token) {
+    requestHeaders.set("Authorization", `Bearer ${token}`);
   }
 
   let response = await fetch(`${API_URL}${path}`, { ...rest, headers: requestHeaders });
 
   // One retry after a silent refresh, in case the token expired mid-flight
   // (clock skew, a long-running request, etc).
-  if (response.status === 401 && !skipAuth && tokens) {
+  if (response.status === 401 && !skipAuth && token) {
     try {
-      const refreshed = await refreshAccessToken(tokens.refresh);
-      requestHeaders.set("Authorization", `Bearer ${refreshed.access}`);
+      const refreshed = await refreshAccessToken();
+      requestHeaders.set("Authorization", `Bearer ${refreshed}`);
       response = await fetch(`${API_URL}${path}`, { ...rest, headers: requestHeaders });
     } catch {
-      clearTokens();
-      notifyTokensChanged(null);
+      setAccessToken(null);
     }
   }
 
@@ -143,23 +172,58 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
 // ---------------------------------------------------------------------------
 
 export async function loginGuest(nationalId: string, roomNumber: string): Promise<AuthTokens> {
-  return apiFetch<AuthTokens>("/auth/guest/login/", {
+  const response = await fetch(`${API_URL}/auth/guest/login/`, {
     method: "POST",
-    skipAuth: true,
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ national_id: nationalId, room_number: roomNumber }),
   });
+
+  if (!response.ok) {
+    const body = await parseErrorBody(response);
+    throw new ApiError(response.status, body.message, body.errors);
+  }
+
+  const data = (await response.json()) as AuthTokens;
+  setAccessToken(data.access);
+  return data;
 }
 
 export async function loginOperator(username: string, password: string): Promise<AuthTokens> {
-  return apiFetch<AuthTokens>("/auth/operator/login/", {
+  const response = await fetch(`${API_URL}/auth/operator/login/`, {
     method: "POST",
-    skipAuth: true,
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password }),
   });
+
+  if (!response.ok) {
+    const body = await parseErrorBody(response);
+    throw new ApiError(response.status, body.message, body.errors);
+  }
+
+  const data = (await response.json()) as AuthTokens;
+  setAccessToken(data.access);
+  return data;
+}
+
+/** Blacklists the refresh cookie server-side and clears it, then drops the in-memory access token. */
+export async function logout(): Promise<void> {
+  try {
+    await fetch(`${API_URL}/auth/logout/`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } finally {
+    // Always clear the local session, even if the network call failed
+    // (offline, server hiccup, etc) — the user still expects to be logged
+    // out of this tab.
+    setAccessToken(null);
+  }
 }
 
 export function getCurrentRole(): UserRole | null {
-  return getStoredTokens()?.role ?? null;
+  return currentAccessToken ? getRoleFromToken(currentAccessToken) : null;
 }
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.core.jwt_cookies import set_refresh_cookie
 from apps.core.permissions import IsGuest
 
 from .models import Guest
@@ -19,8 +20,10 @@ class GuestLoginView(APIView):
     """
     POST /api/v1/auth/guest/login/
 
-    Guest login using national_id + room_number.
-    No password required.
+    Guest login using national_id + room_number. No password required.
+
+    The refresh token is set as an httpOnly cookie rather than returned in
+    the response body — see apps/core/jwt_cookies.py.
     """
 
     permission_classes = [AllowAny]
@@ -39,11 +42,14 @@ class GuestLoginView(APIView):
     def post(self, request):
         serializer = GuestLoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+        tokens = serializer.get_tokens()
 
-        return Response(
-            serializer.get_tokens(),
+        response = Response(
+            {"access": tokens["access"], "role": tokens["role"]},
             status=status.HTTP_200_OK,
         )
+        set_refresh_cookie(response, tokens["refresh"])
+        return response
 
 
 class GuestProfileView(APIView):

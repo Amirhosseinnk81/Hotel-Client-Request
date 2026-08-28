@@ -6,22 +6,28 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 
-import { loginGuest, loginOperator, onTokensChanged } from "@/lib/api/client";
-import { clearTokens, getStoredTokens, saveTokens } from "@/lib/api/tokens";
+import {
+  loginGuest,
+  loginOperator,
+  logout as logoutApi,
+  onTokensChanged,
+  restoreSession,
+} from "@/lib/api/client";
 import type { AuthTokens, UserRole } from "@/lib/api/types";
 
 interface AuthContextValue {
   role: UserRole | null;
   isAuthenticated: boolean;
-  /** True until the initial read from localStorage has happened (avoids a login-page flash). */
+  /** True until the initial silent-refresh attempt (from the httpOnly cookie) has resolved. */
   isLoading: boolean;
   loginAsGuest: (nationalId: string, roomNumber: string) => Promise<void>;
   loginAsOperator: (username: string, password: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -29,34 +35,41 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [tokens, setTokens] = useState<AuthTokens | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const hasRestored = useRef(false);
 
   useEffect(() => {
-    // Reading localStorage must happen post-mount (it doesn't exist during
-    // SSR) to avoid a hydration mismatch — this is the standard pattern for
-    // syncing initial client-only state, not a case the lint rule intends.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setTokens(getStoredTokens());
-    setIsLoading(false);
+    // Guards against React StrictMode's double-invoke in development,
+    // which would otherwise fire two concurrent refresh calls on mount.
+    if (hasRestored.current) return;
+    hasRestored.current = true;
 
-    // Keep in-memory state in sync when the API client silently refreshes
-    // (or clears) tokens on its own, mid-request.
+    // No access token is ever persisted (not localStorage, not a
+    // JS-readable cookie) — on every fresh load we must ask the backend to
+    // mint a new one from the httpOnly refresh cookie. A rejection here
+    // just means "no active session", not an error.
+    restoreSession().then((restored) => {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTokens(restored);
+      setIsLoading(false);
+    });
+
+    // Keep React state in sync when the API client silently refreshes (or
+    // clears) the access token on its own, mid-request.
     onTokensChanged(setTokens);
   }, []);
 
   const loginAsGuest = useCallback(async (nationalId: string, roomNumber: string) => {
     const newTokens = await loginGuest(nationalId, roomNumber);
-    saveTokens(newTokens);
     setTokens(newTokens);
   }, []);
 
   const loginAsOperator = useCallback(async (username: string, password: string) => {
     const newTokens = await loginOperator(username, password);
-    saveTokens(newTokens);
     setTokens(newTokens);
   }, []);
 
-  const logout = useCallback(() => {
-    clearTokens();
+  const logout = useCallback(async () => {
+    await logoutApi();
     setTokens(null);
   }, []);
 

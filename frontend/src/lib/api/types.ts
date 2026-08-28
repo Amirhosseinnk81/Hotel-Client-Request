@@ -11,13 +11,11 @@ export type UserRole = "GUEST" | "OPERATOR" | "ADMIN";
 
 export interface AuthTokens {
   access: string;
-  refresh: string;
   role: UserRole;
 }
 
 export interface RefreshResponse {
   access: string;
-  refresh?: string;
 }
 
 export interface ApiErrorBody {

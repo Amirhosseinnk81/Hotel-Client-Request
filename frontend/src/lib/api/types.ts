@@ -95,3 +95,32 @@ export interface OperatorColleague {
   id: number;
   username: string;
 }
+
+export type TicketHistoryAction =
+  | "CREATED"
+  | "UPDATED"
+  | "ASSIGNED"
+  | "STATUS_CHANGED"
+  | "PRIORITY_CHANGED";
+
+export interface TicketHistoryEntry {
+  entry_type: "history";
+  id: number;
+  action: TicketHistoryAction;
+  action_display: string;
+  old_value: string | null;
+  new_value: string | null;
+  user_username: string | null;
+  created_at: string;
+}
+
+export interface TicketNoteEntry {
+  entry_type: "note";
+  id: number;
+  text: string;
+  author_username: string | null;
+  created_at: string;
+}
+
+/** A single row in the merged ticket timeline, already sorted chronologically by the backend. */
+export type TicketTimelineEntry = TicketHistoryEntry | TicketNoteEntry;

@@ -5,7 +5,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.departments.models import Department
 from apps.guests.models import Guest
 from apps.rooms.models import Room
-from .models import Category, Ticket
+from .models import Category, Ticket, TicketHistory, TicketNote
 
 User = get_user_model()
 
@@ -558,6 +558,74 @@ class OperatorTicketAPITests(APITestCase):
             Ticket.Status.IN_PROGRESS,
         )
 
+    def test_self_assign_logs_ticket_history(self):
+        """Stage 2.6 bug fix: self-assign must log both ASSIGNED and
+        STATUS_CHANGED entries so the Stage 2.1 timeline is accurate."""
+        self.authenticate_operator()
+
+        url = f"{self.list_url}{self.ticket.id}/assign/"
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, 200)
+
+        entries = TicketHistory.objects.filter(ticket=self.ticket).order_by("id")
+
+        assigned_entries = [e for e in entries if e.action == TicketHistory.Action.ASSIGNED]
+        self.assertEqual(len(assigned_entries), 1)
+        self.assertIsNone(assigned_entries[0].old_value)
+        self.assertEqual(assigned_entries[0].new_value, self.operator_user.username)
+
+        status_entries = [
+            e for e in entries if e.action == TicketHistory.Action.STATUS_CHANGED
+        ]
+        self.assertEqual(len(status_entries), 1)
+        self.assertEqual(status_entries[0].old_value, Ticket.Status.OPEN)
+        self.assertEqual(status_entries[0].new_value, Ticket.Status.IN_PROGRESS)
+
+    def test_reassign_via_patch_logs_ticket_history(self):
+        """Stage 2.6 bug fix: reassigning to a colleague through the PATCH
+        detail endpoint (not just self-assign) must log an ASSIGNED entry."""
+        self.ticket.assigned_to = self.operator_user
+        self.ticket.status = Ticket.Status.IN_PROGRESS
+        self.ticket.save(update_fields=["assigned_to", "status"])
+
+        other_operator_same_dept = User.objects.create_user(
+            username="operator103",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.department,
+        )
+
+        self.authenticate_operator()
+        url = f"{self.list_url}{self.ticket.id}/"
+
+        response = self.client.patch(
+            url, {"assigned_to": other_operator_same_dept.id}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+        assigned_entries = TicketHistory.objects.filter(
+            ticket=self.ticket, action=TicketHistory.Action.ASSIGNED
+        )
+        self.assertEqual(assigned_entries.count(), 1)
+        self.assertEqual(assigned_entries[0].old_value, self.operator_user.username)
+        self.assertEqual(assigned_entries[0].new_value, other_operator_same_dept.username)
+
+    def test_updating_unrelated_field_does_not_log_assigned_history(self):
+        """No assigned_to in the payload → no spurious ASSIGNED entry."""
+        self.authenticate_operator()
+        url = f"{self.list_url}{self.ticket.id}/"
+
+        response = self.client.patch(url, {"priority": Ticket.Priority.HIGH}, format="json")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(
+            TicketHistory.objects.filter(
+                ticket=self.ticket, action=TicketHistory.Action.ASSIGNED
+            ).exists()
+        )
+
     def test_operator_cannot_assign_other_department_ticket(self):
         self.authenticate_operator()
 
@@ -944,3 +1012,155 @@ class OperatorTicketAPITests(APITestCase):
         self.assertEqual(response.data["count"], 13)
         self.assertIsNotNone(response.data["previous"])
         self.assertEqual(len(response.data["results"]), 3)
+
+
+class TicketTimelineAPITests(APITestCase):
+    """Stage 2.1: merged history + notes timeline for a ticket."""
+
+    def setUp(self):
+        self.department = Department.objects.create(
+            name="Housekeeping",
+            code="HOUSEKEEPING",
+        )
+
+        self.other_department = Department.objects.create(
+            name="Maintenance",
+            code="MAINTENANCE",
+        )
+
+        self.category = Category.objects.create(
+            name="Towels",
+            code="TOWELS",
+        )
+
+        self.room = Room.objects.create(
+            number="101",
+            status=Room.Status.OCCUPIED,
+        )
+
+        self.guest_user = User.objects.create_user(
+            username="guest101",
+            role=User.Role.GUEST,
+        )
+
+        self.guest = Guest.objects.create(
+            user=self.guest_user,
+            full_name="Test Guest",
+            national_id="0012345678",
+            phone="09120000000",
+            room=self.room,
+        )
+
+        self.operator_user = User.objects.create_user(
+            username="operator101",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.department,
+        )
+
+        self.ticket = Ticket.objects.create(
+            guest=self.guest,
+            department=self.department,
+            category=self.category,
+            room=self.room,
+            title="Extra Towel",
+            description="Please send two extra towels.",
+            priority=Ticket.Priority.NORMAL,
+        )
+
+        self.other_ticket = Ticket.objects.create(
+            guest=self.guest,
+            department=self.other_department,
+            category=self.category,
+            room=self.room,
+            title="TV Problem",
+            description="TV is not working.",
+            priority=Ticket.Priority.HIGH,
+        )
+
+        self.list_url = "/api/v1/operator/tickets/"
+        self.history_url = f"{self.list_url}{self.ticket.id}/history/"
+        self.notes_url = f"{self.list_url}{self.ticket.id}/notes/"
+
+    def authenticate_operator(self):
+        self.client.force_authenticate(self.operator_user)
+
+    def test_guest_cannot_access_timeline(self):
+        self.client.force_authenticate(self.guest_user)
+
+        response = self.client.get(self.history_url)
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_operator_cannot_view_timeline_of_other_department_ticket(self):
+        self.authenticate_operator()
+
+        url = f"{self.list_url}{self.other_ticket.id}/history/"
+        response = self.client.get(url)
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_operator_can_add_note(self):
+        self.authenticate_operator()
+
+        response = self.client.post(
+            self.notes_url, {"text": "Guest called again, still waiting."}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(response.data["entry_type"], "note")
+        self.assertEqual(response.data["author_username"], self.operator_user.username)
+
+        note = TicketNote.objects.get(ticket=self.ticket)
+        self.assertEqual(note.text, "Guest called again, still waiting.")
+        self.assertEqual(note.author, self.operator_user)
+
+    def test_empty_note_is_rejected(self):
+        self.authenticate_operator()
+
+        response = self.client.post(self.notes_url, {"text": "   "}, format="json")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_operator_cannot_add_note_to_other_department_ticket(self):
+        self.authenticate_operator()
+
+        url = f"{self.list_url}{self.other_ticket.id}/notes/"
+        response = self.client.post(url, {"text": "Should not work."}, format="json")
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_timeline_merges_history_and_notes_chronologically(self):
+        # The ticket already has a CREATED history entry from setUp
+        # (created via ORM directly, not the API, so no CREATED entry
+        # actually exists here — assign + note are enough to prove merging
+        # and ordering work).
+        self.authenticate_operator()
+
+        assign_response = self.client.post(f"{self.list_url}{self.ticket.id}/assign/")
+        self.assertEqual(assign_response.status_code, 200)
+
+        note_response = self.client.post(
+            self.notes_url, {"text": "Checked on the guest, sending towels now."}, format="json"
+        )
+        self.assertEqual(note_response.status_code, 201)
+
+        response = self.client.get(self.history_url)
+
+        self.assertEqual(response.status_code, 200)
+        entry_types = [entry["entry_type"] for entry in response.data]
+
+        # Both an ASSIGNED and a STATUS_CHANGED history entry, plus the note.
+        self.assertIn("history", entry_types)
+        self.assertIn("note", entry_types)
+        self.assertEqual(entry_types.count("note"), 1)
+
+        # Chronological order: created_at must be non-decreasing.
+        created_ats = [entry["created_at"] for entry in response.data]
+        self.assertEqual(created_ats, sorted(created_ats))
+
+        # The note itself should be the last entry (posted after assign).
+        self.assertEqual(response.data[-1]["entry_type"], "note")
+        self.assertEqual(
+            response.data[-1]["text"], "Checked on the guest, sending towels now."
+        )

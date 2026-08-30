@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Category, Ticket
+from .models import Category, Ticket, TicketHistory, TicketNote
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -185,3 +185,70 @@ class OperatorColleagueSerializer(serializers.ModelSerializer):
         model = get_user_model()
         fields = ["id", "username"]
         read_only_fields = fields
+
+
+class TicketHistorySerializer(serializers.ModelSerializer):
+    """
+    A single system-generated audit entry (assignment, status/priority
+    change). Rendered as one kind of row in the merged ticket timeline.
+    """
+
+    entry_type = serializers.SerializerMethodField()
+    action_display = serializers.CharField(source="get_action_display", read_only=True)
+    user_username = serializers.CharField(
+        source="user.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = TicketHistory
+        fields = [
+            "entry_type",
+            "id",
+            "action",
+            "action_display",
+            "old_value",
+            "new_value",
+            "user_username",
+            "created_at",
+        ]
+        read_only_fields = fields
+
+    def get_entry_type(self, obj) -> str:
+        return "history"
+
+
+class TicketNoteSerializer(serializers.ModelSerializer):
+    """
+    An internal note authored by an operator/admin. Rendered as the other
+    kind of row in the merged ticket timeline. `text` is the only
+    writable field on create — `ticket`/`author` are set by the view.
+    """
+
+    entry_type = serializers.SerializerMethodField()
+    author_username = serializers.CharField(
+        source="author.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = TicketNote
+        fields = [
+            "entry_type",
+            "id",
+            "text",
+            "author_username",
+            "created_at",
+        ]
+        read_only_fields = [
+            "entry_type",
+            "id",
+            "author_username",
+            "created_at",
+        ]
+
+    def get_entry_type(self, obj) -> str:
+        return "note"
+
+    def validate_text(self, value):
+        if not value.strip():
+            raise serializers.ValidationError("Note text cannot be empty.")
+        return value

@@ -145,6 +145,11 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
+    "DEFAULT_THROTTLE_RATES": {
+        # Guest login has no password, so this is the only real brake on
+        # repeated national_id/room_number guessing. Tunable via env.
+        "guest_login": config("GUEST_LOGIN_THROTTLE_RATE", default="10/min"),
+    },
 }
 
 # ---------------------------------------------------------------------------

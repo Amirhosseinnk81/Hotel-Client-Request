@@ -57,7 +57,12 @@ export default function GuestTicketsPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setError(null);
+    // Deferred (not called synchronously in the effect body) to satisfy
+    // react-hooks/set-state-in-effect — see operator/tickets/[id]/page.tsx
+    // for the full rationale.
+    queueMicrotask(() => {
+      if (!cancelled) setError(null);
+    });
 
     getTickets(debouncedSearch || undefined)
       .then((data) => {

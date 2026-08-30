@@ -11,6 +11,7 @@ import type {
   Ticket,
   TicketPriority,
   TicketStatus,
+  TicketTimelineEntry,
   UpdateOperatorTicketPayload,
   UserRole,
 } from "./types";
@@ -353,4 +354,21 @@ export async function assignTicketToSelf(id: number | string): Promise<Ticket> {
 
 export async function getOperatorColleagues(): Promise<OperatorColleague[]> {
   return apiFetch<OperatorColleague[]>("/operator/colleagues/");
+}
+
+/** Merged, chronologically-sorted history + notes timeline for a ticket. */
+export async function getOperatorTicketHistory(
+  id: number | string
+): Promise<TicketTimelineEntry[]> {
+  return apiFetch<TicketTimelineEntry[]>(`/operator/tickets/${id}/history/`);
+}
+
+export async function addOperatorTicketNote(
+  id: number | string,
+  text: string
+): Promise<TicketTimelineEntry> {
+  return apiFetch<TicketTimelineEntry>(`/operator/tickets/${id}/notes/`, {
+    method: "POST",
+    body: JSON.stringify({ text }),
+  });
 }

@@ -105,6 +105,7 @@ class Ticket(models.Model):
         max_length=20,
         choices=Status.choices,
         default=Status.OPEN,
+        db_index=True,
     )
 
     priority = models.CharField(
@@ -186,3 +187,44 @@ class TicketHistory(models.Model):
 
     def __str__(self):
         return f"Ticket #{self.ticket_id} - {self.action}"
+
+
+class TicketNote(models.Model):
+    """
+    An internal note left by an operator/admin on a ticket.
+
+    Kept as a separate model from TicketHistory (rather than an
+    action=NOTE entry) because notes carry free-form text authored by a
+    person, while TicketHistory rows are short system-generated audit
+    entries (old_value -> new_value). The two are merged into a single
+    chronological timeline at the API layer.
+
+    Guests must never see these — enforced at the view/permission layer,
+    not here.
+    """
+
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,
+        related_name="notes",
+    )
+
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ticket_notes",
+    )
+
+    text = models.TextField()
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Note on Ticket #{self.ticket_id} by {self.author}"

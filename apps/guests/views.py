@@ -7,6 +7,7 @@ from rest_framework.views import APIView
 
 from apps.core.jwt_cookies import set_refresh_cookie
 from apps.core.permissions import IsGuest
+from apps.core.throttling import GuestLoginRateThrottle
 
 from .models import Guest
 from .serializers import (
@@ -27,6 +28,7 @@ class GuestLoginView(APIView):
     """
 
     permission_classes = [AllowAny]
+    throttle_classes = [GuestLoginRateThrottle]
 
     @extend_schema(
         request=GuestLoginSerializer,

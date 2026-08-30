@@ -9,6 +9,8 @@ from .views import (
     OperatorTicketDetailView,
     OperatorTicketListView,
     OperatorTicketAssignView,
+    TicketHistoryView,
+    TicketNoteCreateView,
 )
 
 urlpatterns = [
@@ -46,6 +48,16 @@ urlpatterns = [
         "operator/tickets/<int:pk>/assign/",
         OperatorTicketAssignView.as_view(),
         name="operator-ticket-assign",
+    ),
+    path(
+        "operator/tickets/<int:pk>/history/",
+        TicketHistoryView.as_view(),
+        name="operator-ticket-history",
+    ),
+    path(
+        "operator/tickets/<int:pk>/notes/",
+        TicketNoteCreateView.as_view(),
+        name="operator-ticket-notes",
     ),
     path(
         "operator/colleagues/",

@@ -2,7 +2,14 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Loader2, UserPlus } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  Loader2,
+  MessageSquarePlus,
+  UserPlus,
+} from "lucide-react";
 
 import {
   Card,
@@ -26,15 +33,23 @@ import {
 import { FormError } from "@/components/form-error";
 import { toast } from "@/hooks/use-toast";
 import {
+  addOperatorTicketNote,
   assignTicketToSelf,
   getAccessToken,
   getOperatorColleagues,
   getOperatorTicketDetail,
+  getOperatorTicketHistory,
   updateOperatorTicket,
   ApiError,
 } from "@/lib/api/client";
 import { decodeAccessToken } from "@/lib/api/tokens";
-import type { OperatorColleague, Ticket, TicketStatus } from "@/lib/api/types";
+import type {
+  OperatorColleague,
+  Ticket,
+  TicketHistoryEntry,
+  TicketStatus,
+  TicketTimelineEntry,
+} from "@/lib/api/types";
 import {
   statusLabels,
   statusBadgeVariant,
@@ -50,6 +65,29 @@ function formatDate(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(iso));
+}
+
+/** Turns one TicketHistory entry into a single human-readable Persian line. */
+function describeHistoryEntry(entry: TicketHistoryEntry): string {
+  const statusLabel = (value: string | null) =>
+    value && value in statusLabels ? statusLabels[value as TicketStatus] : value;
+  const priorityLabel = (value: string | null) =>
+    value && value in priorityLabels ? priorityLabels[value as keyof typeof priorityLabels] : value;
+
+  switch (entry.action) {
+    case "CREATED":
+      return "درخواست ثبت شد.";
+    case "ASSIGNED":
+      return entry.old_value
+        ? `اختصاص از ${entry.old_value} به ${entry.new_value ?? "—"} تغییر کرد.`
+        : `به ${entry.new_value ?? "—"} اختصاص یافت.`;
+    case "STATUS_CHANGED":
+      return `وضعیت از «${statusLabel(entry.old_value)}» به «${statusLabel(entry.new_value)}» تغییر کرد.`;
+    case "PRIORITY_CHANGED":
+      return `اولویت از «${priorityLabel(entry.old_value)}» به «${priorityLabel(entry.new_value)}» تغییر کرد.`;
+    default:
+      return entry.action_display;
+  }
 }
 
 /** Business rule: OPEN → IN_PROGRESS → RESOLVED, or OPEN/IN_PROGRESS → CANCELLED. */
@@ -83,10 +121,29 @@ export default function OperatorTicketDetailPage({
   const [resolution, setResolution] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
 
+  const [timeline, setTimeline] = useState<TicketTimelineEntry[] | null>(null);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [isAddingNote, setIsAddingNote] = useState(false);
+
   const currentUserId = decodeAccessToken(getAccessToken() ?? "")?.user_id ?? null;
 
+  const loadTimeline = () => {
+    queueMicrotask(() => setTimelineError(null));
+    getOperatorTicketHistory(id)
+      .then(setTimeline)
+      .catch((err) => {
+        setTimelineError(
+          err instanceof ApiError ? err.message : "خطا در دریافت تاریخچهٔ درخواست."
+        );
+      });
+  };
+
   const load = () => {
-    setError(null);
+    // Deferred (not synchronous) so calling load() directly from a
+    // useEffect body doesn't trip react-hooks/set-state-in-effect — this
+    // function is also called from an effect on mount/id-change.
+    queueMicrotask(() => setError(null));
     getOperatorTicketDetail(id)
       .then((data) => {
         setTicket(data);
@@ -109,6 +166,7 @@ export default function OperatorTicketDetailPage({
 
   useEffect(() => {
     load();
+    loadTimeline();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -133,6 +191,7 @@ export default function OperatorTicketDetailPage({
       setSelectedAssignee(
         updated.assigned_to != null ? String(updated.assigned_to) : UNASSIGNED_VALUE
       );
+      loadTimeline();
       toast({
         title: "اختصاص انجام شد",
         description: "این درخواست به شما اختصاص داده شد.",
@@ -156,6 +215,7 @@ export default function OperatorTicketDetailPage({
         assigned_to: selectedAssignee === UNASSIGNED_VALUE ? null : Number(selectedAssignee),
       });
       setTicket(updated);
+      loadTimeline();
       toast({
         title: "اختصاص به‌روزرسانی شد",
         description: updated.assigned_to_username
@@ -185,6 +245,7 @@ export default function OperatorTicketDetailPage({
       setTicket(updated);
       setTargetStatus("");
       setResolution("");
+      loadTimeline();
       toast({
         title: "وضعیت به‌روزرسانی شد",
         description: `وضعیت درخواست به «${statusLabels[updated.status]}» تغییر کرد.`,
@@ -198,6 +259,28 @@ export default function OperatorTicketDetailPage({
       });
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handleAddNote = async () => {
+    if (!noteText.trim()) return;
+    setIsAddingNote(true);
+    try {
+      await addOperatorTicketNote(id, noteText.trim());
+      setNoteText("");
+      loadTimeline();
+      toast({
+        title: "یادداشت ثبت شد",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "خطا در ثبت یادداشت",
+        description: err instanceof ApiError ? err.message : "خطا در ثبت یادداشت.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAddingNote(false);
     }
   };
 
@@ -419,6 +502,83 @@ export default function OperatorTicketDetailPage({
               </CardContent>
             </Card>
           )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-1.5 text-base">
+                <Clock className="size-4" />
+                تایم‌لاین
+              </CardTitle>
+              <CardDescription>
+                تاریخچهٔ رویدادها و یادداشت‌های داخلی این درخواست، به‌ترتیب زمانی.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              {timelineError && <FormError message={timelineError} />}
+
+              {!timeline && !timelineError && (
+                <div className="flex flex-col gap-3">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-3/4" />
+                </div>
+              )}
+
+              {timeline && timeline.length === 0 && (
+                <p className="text-sm text-muted-foreground">
+                  هنوز رویدادی برای این درخواست ثبت نشده.
+                </p>
+              )}
+
+              {timeline && timeline.length > 0 && (
+                <ol className="flex flex-col gap-3 border-e-2 border-border pe-4">
+                  {timeline.map((entry) => (
+                    <li key={`${entry.entry_type}-${entry.id}`} className="relative">
+                      <span className="absolute top-1 -end-[21px] size-2 rounded-full bg-primary" />
+                      {entry.entry_type === "history" ? (
+                        <div className="flex flex-col gap-0.5">
+                          <p className="text-sm">{describeHistoryEntry(entry)}</p>
+                          <span className="text-xs text-muted-foreground">
+                            {entry.user_username ?? "سامانه"} · {formatDate(entry.created_at)}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-0.5 rounded-lg border bg-muted/40 p-2.5">
+                          <p className="text-sm">{entry.text}</p>
+                          <span className="text-xs text-muted-foreground">
+                            یادداشت {entry.author_username ?? "—"} · {formatDate(entry.created_at)}
+                          </span>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+
+              <div className="flex flex-col gap-1.5 border-t pt-4">
+                <Label htmlFor="note">افزودن یادداشت داخلی</Label>
+                <Textarea
+                  id="note"
+                  placeholder="یادداشتی برای همکاران (فقط برای اپراتور/ادمین قابل مشاهده است)…"
+                  value={noteText}
+                  onChange={(e) => setNoteText(e.target.value)}
+                />
+                <Button
+                  size="sm"
+                  className="w-fit gap-1.5"
+                  disabled={!noteText.trim() || isAddingNote}
+                  onClick={handleAddNote}
+                >
+                  {isAddingNote ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <MessageSquarePlus className="size-3.5" />
+                  )}
+                  {isAddingNote ? "در حال ثبت…" : "ثبت یادداشت"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
     </main>

@@ -66,7 +66,12 @@ export default function OperatorHomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    setError(null);
+    // Deferred (not called synchronously in the effect body) to satisfy
+    // react-hooks/set-state-in-effect — see the identical fix in
+    // operator/tickets/[id]/page.tsx for the full rationale.
+    queueMicrotask(() => {
+      if (!cancelled) setError(null);
+    });
 
     getOperatorTickets({
       status: statusFilter === "ALL" ? undefined : statusFilter,

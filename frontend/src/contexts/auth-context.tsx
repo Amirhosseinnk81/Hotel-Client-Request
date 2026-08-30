@@ -48,7 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // mint a new one from the httpOnly refresh cookie. A rejection here
     // just means "no active session", not an error.
     restoreSession().then((restored) => {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTokens(restored);
       setIsLoading(false);
     });

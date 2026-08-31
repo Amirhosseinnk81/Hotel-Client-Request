@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.utils import timezone
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -1164,3 +1165,127 @@ class TicketTimelineAPITests(APITestCase):
         self.assertEqual(
             response.data[-1]["text"], "Checked on the guest, sending towels now."
         )
+
+
+class OperatorProductivityAPITests(APITestCase):
+    """Stage 2.2: colleague availability exposure + new-ticket polling."""
+
+    def setUp(self):
+        self.department = Department.objects.create(
+            name="Housekeeping",
+            code="HOUSEKEEPING",
+        )
+
+        self.category = Category.objects.create(
+            name="Towels",
+            code="TOWELS",
+        )
+
+        self.room = Room.objects.create(
+            number="101",
+            status=Room.Status.OCCUPIED,
+        )
+
+        self.guest_user = User.objects.create_user(
+            username="guest201",
+            role=User.Role.GUEST,
+        )
+
+        self.guest = Guest.objects.create(
+            user=self.guest_user,
+            full_name="Test Guest",
+            national_id="0099999999",
+            phone="09121111111",
+            room=self.room,
+        )
+
+        self.operator_user = User.objects.create_user(
+            username="operator201",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.department,
+        )
+
+        self.busy_colleague = User.objects.create_user(
+            username="operator202",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.department,
+            is_available=False,
+        )
+
+        self.colleagues_url = "/api/v1/operator/colleagues/"
+        self.new_count_url = "/api/v1/operator/tickets/new-count/"
+
+    def authenticate_operator(self):
+        self.client.force_authenticate(self.operator_user)
+
+    def test_colleagues_list_exposes_is_available(self):
+        self.authenticate_operator()
+
+        response = self.client.get(self.colleagues_url)
+
+        self.assertEqual(response.status_code, 200)
+        by_username = {c["username"]: c for c in response.data}
+        self.assertTrue(by_username["operator201"]["is_available"])
+        self.assertFalse(by_username["operator202"]["is_available"])
+
+    def test_new_count_is_zero_with_no_new_tickets(self):
+        self.authenticate_operator()
+
+        since = timezone.now().isoformat()
+        response = self.client.get(self.new_count_url, {"since": since})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 0)
+
+    def test_new_count_reflects_tickets_created_after_since(self):
+        self.authenticate_operator()
+        since = timezone.now()
+
+        Ticket.objects.create(
+            guest=self.guest,
+            department=self.department,
+            category=self.category,
+            room=self.room,
+            title="Fresh towels please",
+            description="Just arrived, no towels in the room.",
+        )
+
+        response = self.client.get(
+            self.new_count_url, {"since": since.isoformat()}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+
+    def test_new_count_ignores_tickets_from_other_departments(self):
+        other_department = Department.objects.create(
+            name="Maintenance",
+            code="MAINTENANCE2",
+        )
+        since = timezone.now()
+
+        Ticket.objects.create(
+            guest=self.guest,
+            department=other_department,
+            category=self.category,
+            room=self.room,
+            title="TV broken",
+            description="No signal.",
+        )
+
+        self.authenticate_operator()
+        response = self.client.get(
+            self.new_count_url, {"since": since.isoformat()}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 0)
+
+    def test_new_count_requires_authentication(self):
+        response = self.client.get(
+            self.new_count_url, {"since": timezone.now().isoformat()}
+        )
+
+        self.assertEqual(response.status_code, 401)

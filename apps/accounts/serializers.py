@@ -14,6 +14,7 @@ class OperatorTokenObtainPairSerializer(TokenObtainPairSerializer):
     def get_token(cls, user):
         token = super().get_token(user)
         token["role"] = user.role
+        token["username"] = user.username
         return token
 
     def validate(self, attrs):
@@ -26,3 +27,11 @@ class OperatorTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         data["role"] = self.user.role
         return data
+
+
+class OperatorAvailabilitySerializer(serializers.ModelSerializer):
+    """PATCH /api/v1/operator/me/status/ — an operator toggling their own availability."""
+
+    class Meta:
+        model = User
+        fields = ["is_available"]

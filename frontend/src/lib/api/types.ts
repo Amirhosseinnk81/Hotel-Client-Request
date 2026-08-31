@@ -29,6 +29,8 @@ export interface AccessTokenPayload {
   role: UserRole;
   exp: number;
   user_id: number;
+  /** Only present on operator/admin tokens — guest tokens don't carry this claim. */
+  username?: string;
 }
 
 export interface GuestProfile {
@@ -94,6 +96,7 @@ export interface UpdateOperatorTicketPayload {
 export interface OperatorColleague {
   id: number;
   username: string;
+  is_available: boolean;
 }
 
 export type TicketHistoryAction =
@@ -124,3 +127,7 @@ export interface TicketNoteEntry {
 
 /** A single row in the merged ticket timeline, already sorted chronologically by the backend. */
 export type TicketTimelineEntry = TicketHistoryEntry | TicketNoteEntry;
+
+export interface OperatorAvailability {
+  is_available: boolean;
+}

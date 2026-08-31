@@ -409,8 +409,17 @@ export default function OperatorTicketDetailPage({
                       <SelectItem value={UNASSIGNED_VALUE}>بدون اختصاص</SelectItem>
                       {colleagues?.map((colleague) => (
                         <SelectItem key={colleague.id} value={String(colleague.id)}>
-                          {colleague.username}
-                          {colleague.id === currentUserId ? " (خودم)" : ""}
+                          <span className="flex items-center gap-1.5">
+                            <span
+                              aria-hidden
+                              className={`size-2 rounded-full ${
+                                colleague.is_available ? "bg-emerald-500" : "bg-muted-foreground/40"
+                              }`}
+                              title={colleague.is_available ? "در دسترس" : "مشغول"}
+                            />
+                            {colleague.username}
+                            {colleague.id === currentUserId ? " (خودم)" : ""}
+                          </span>
                         </SelectItem>
                       ))}
                     </SelectContent>

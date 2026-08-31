@@ -1,5 +1,5 @@
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,8 +13,9 @@ from apps.core.jwt_cookies import (
     clear_refresh_cookie,
     set_refresh_cookie,
 )
+from apps.core.permissions import IsOperator
 
-from .serializers import OperatorTokenObtainPairSerializer
+from .serializers import OperatorAvailabilitySerializer, OperatorTokenObtainPairSerializer
 
 
 class OperatorLoginView(TokenObtainPairView):
@@ -115,3 +116,17 @@ class LogoutView(APIView):
         response = Response(status=status.HTTP_204_NO_CONTENT)
         clear_refresh_cookie(response)
         return response
+
+
+class OperatorAvailabilityView(generics.UpdateAPIView):
+    """
+    PATCH /api/v1/operator/me/status/ — the logged-in operator toggles
+    their own 'available / busy' status. Deliberately scoped to "me": an
+    operator cannot flip a colleague's availability through this endpoint.
+    """
+
+    serializer_class = OperatorAvailabilitySerializer
+    permission_classes = [IsOperator]
+
+    def get_object(self):
+        return self.request.user

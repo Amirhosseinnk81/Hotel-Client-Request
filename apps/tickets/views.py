@@ -1,11 +1,15 @@
 from django.contrib.auth import get_user_model
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from drf_spectacular.types import OpenApiTypes
+from rest_framework import serializers as drf_serializers
 
 from apps.core.permissions import IsAdminRole
 
@@ -141,6 +145,59 @@ class OperatorTicketListView(generics.ListAPIView):
                 "assigned_to",
             )
         )
+
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter(
+            name="since",
+            type=OpenApiTypes.DATETIME,
+            location=OpenApiParameter.QUERY,
+            required=False,
+            description=(
+                "ISO 8601 timestamp of the last time the client checked. "
+                "Defaults to now (i.e. zero new tickets) if omitted or invalid."
+            ),
+        ),
+    ],
+    responses=inline_serializer(
+        name="OperatorNewTicketCount",
+        fields={"count": drf_serializers.IntegerField()},
+    ),
+)
+class OperatorNewTicketCountView(APIView):
+    """
+    GET /api/v1/operator/tickets/new-count/?since=<ISO 8601 timestamp>
+
+    Lightweight polling endpoint for the notification bell (Stage 2.2):
+    the frontend calls this every 30-60s with the timestamp of the last
+    check and gets back how many new OPEN tickets have landed in the
+    operator's department since then. Deliberately simple — real-time
+    push (Stage 3.2, Django Channels/SSE) replaces this polling loop
+    later, so there's no need for a server-side "last seen" model now.
+    """
+
+    permission_classes = [IsOperator]
+
+    def get(self, request):
+        since_param = request.query_params.get("since")
+        since = parse_datetime(since_param) if since_param else None
+
+        if since is None:
+            # No/invalid `since` — nothing has "just" arrived from the
+            # caller's point of view, so report zero rather than guessing
+            # a lookback window.
+            since = timezone.now()
+        elif timezone.is_naive(since):
+            since = timezone.make_aware(since)
+
+        count = Ticket.objects.filter(
+            department=request.user.department,
+            status=Ticket.Status.OPEN,
+            created_at__gt=since,
+        ).count()
+
+        return Response({"count": count})
 
 
 class OperatorTicketDetailView(generics.RetrieveUpdateAPIView):

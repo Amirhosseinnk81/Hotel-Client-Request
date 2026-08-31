@@ -6,6 +6,7 @@ import type {
   CreateTicketPayload,
   Department,
   GuestProfile,
+  OperatorAvailability,
   OperatorColleague,
   RefreshResponse,
   Ticket,
@@ -371,4 +372,26 @@ export async function addOperatorTicketNote(
     method: "POST",
     body: JSON.stringify({ text }),
   });
+}
+
+/** Toggles the logged-in operator's own available/busy status. */
+export async function updateOperatorAvailability(
+  isAvailable: boolean
+): Promise<OperatorAvailability> {
+  return apiFetch<OperatorAvailability>("/operator/me/status/", {
+    method: "PATCH",
+    body: JSON.stringify({ is_available: isAvailable }),
+  });
+}
+
+/**
+ * Polling-based check for new OPEN tickets in the operator's department
+ * since the given ISO timestamp — feeds the notification bell (Stage 2.2).
+ * Real-time push replaces this in Stage 3.2.
+ */
+export async function getNewTicketCount(sinceIso: string): Promise<number> {
+  const { count } = await apiFetch<{ count: number }>(
+    `/operator/tickets/new-count/?since=${encodeURIComponent(sinceIso)}`
+  );
+  return count;
 }

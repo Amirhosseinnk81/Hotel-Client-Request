@@ -28,5 +28,14 @@ class User(AbstractUser):
         related_name="operators",
     )
 
+    is_available = models.BooleanField(
+        default=True,
+        help_text=(
+            "Operator's own 'available / busy' toggle, shown in the "
+            "reassignment dropdown so a colleague can be picked with the "
+            "current workload in mind. Meaningless for GUEST/ADMIN roles."
+        ),
+    )
+
     def __str__(self):
         return f"{self.username} ({self.role})"

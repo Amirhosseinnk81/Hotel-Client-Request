@@ -1,0 +1,1899 @@
+openapi: 3.0.3
+info:
+  title: Hotel Client Request Platform API
+  version: 1.0.0
+  description: API for managing hotel guest requests and operator workflows.
+paths:
+  /api/v1/auth/guest/login/:
+    post:
+      operationId: v1_auth_guest_login_create
+      description: |-
+        POST /api/v1/auth/guest/login/
+
+        Guest login using national_id + room_number. No password required.
+
+        The refresh token is set as an httpOnly cookie rather than returned in
+        the response body — see apps/core/jwt_cookies.py.
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GuestLoginRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GuestLoginRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GuestLoginRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuestLoginResponse'
+          description: Guest authenticated successfully.
+  /api/v1/auth/logout/:
+    post:
+      operationId: v1_auth_logout_create
+      description: |-
+        POST /api/v1/auth/logout/
+
+        Blacklists the current refresh token (so a copy of the cookie can't be
+        replayed after logout) and clears the cookie. Works for both guest and
+        operator sessions — logout isn't role-specific.
+      tags:
+      - Authentication
+      responses:
+        '204':
+          description: Logged out.
+  /api/v1/auth/operator/login/:
+    post:
+      operationId: v1_auth_operator_login_create
+      description: |-
+        POST /api/v1/auth/operator/login/ — username + password login for
+        operators/admins.
+
+        The refresh token is set as an httpOnly cookie rather than returned in
+        the response body — see apps/core/jwt_cookies.py.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatorTokenObtainPairRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperatorTokenObtainPairRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperatorTokenObtainPairRequest'
+        required: true
+      responses:
+        '200':
+          description: No response body
+  /api/v1/auth/token/refresh/:
+    post:
+      operationId: v1_auth_token_refresh_create
+      description: |-
+        POST /api/v1/auth/token/refresh/
+
+        Reads the refresh token from the httpOnly cookie (never from the
+        request body) and returns a fresh access token. Because
+        ROTATE_REFRESH_TOKENS=True, the old refresh token is blacklisted and a
+        new one is written back to the cookie.
+      tags:
+      - Authentication
+      responses:
+        '200':
+          description: New access token issued.
+        '401':
+          description: Missing, invalid, or expired refresh cookie.
+  /api/v1/categories/:
+    get:
+      operationId: v1_categories_list
+      description: |-
+        GET  /api/v1/categories/  — any authenticated user can browse.
+        POST /api/v1/categories/  — admins only.
+
+        Only active categories are exposed here — this is the endpoint the
+        guest ticket-creation form reads from, so a category the admin has
+        disabled must not remain selectable. Direct admin management (including
+        toggling is_active) still happens through Django Admin, which queries
+        the model directly and is unaffected by this filter.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCategoryList'
+          description: ''
+    post:
+      operationId: v1_categories_create
+      description: |-
+        GET  /api/v1/categories/  — any authenticated user can browse.
+        POST /api/v1/categories/  — admins only.
+
+        Only active categories are exposed here — this is the endpoint the
+        guest ticket-creation form reads from, so a category the admin has
+        disabled must not remain selectable. Direct admin management (including
+        toggling is_active) still happens through Django Admin, which queries
+        the model directly and is unaffected by this filter.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+  /api/v1/categories/{id}/:
+    get:
+      operationId: v1_categories_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    put:
+      operationId: v1_categories_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CategoryRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    patch:
+      operationId: v1_categories_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCategoryRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    delete:
+      operationId: v1_categories_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/departments/:
+    get:
+      operationId: v1_departments_list
+      description: |-
+        GET  /api/v1/departments/  — any authenticated user (guest/operator/admin) can browse.
+        POST /api/v1/departments/  — admins only.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedDepartmentList'
+          description: ''
+    post:
+      operationId: v1_departments_create
+      description: |-
+        GET  /api/v1/departments/  — any authenticated user (guest/operator/admin) can browse.
+        POST /api/v1/departments/  — admins only.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepartmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DepartmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DepartmentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+          description: ''
+  /api/v1/departments/{id}/:
+    get:
+      operationId: v1_departments_retrieve
+      description: |-
+        GET/PATCH/PUT — read for anyone authenticated, write for admins only.
+        DELETE is admin-only too (blocked at the DB level anyway while
+        tickets/operators reference the department, since department FKs use PROTECT).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+          description: ''
+    put:
+      operationId: v1_departments_update
+      description: |-
+        GET/PATCH/PUT — read for anyone authenticated, write for admins only.
+        DELETE is admin-only too (blocked at the DB level anyway while
+        tickets/operators reference the department, since department FKs use PROTECT).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DepartmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/DepartmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DepartmentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+          description: ''
+    patch:
+      operationId: v1_departments_partial_update
+      description: |-
+        GET/PATCH/PUT — read for anyone authenticated, write for admins only.
+        DELETE is admin-only too (blocked at the DB level anyway while
+        tickets/operators reference the department, since department FKs use PROTECT).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedDepartmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedDepartmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedDepartmentRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Department'
+          description: ''
+    delete:
+      operationId: v1_departments_destroy
+      description: |-
+        GET/PATCH/PUT — read for anyone authenticated, write for admins only.
+        DELETE is admin-only too (blocked at the DB level anyway while
+        tickets/operators reference the department, since department FKs use PROTECT).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/guest/profile/:
+    get:
+      operationId: v1_guest_profile_retrieve
+      description: |-
+        GET /api/v1/guest/profile/
+
+        Return the authenticated guest's own profile.
+      tags:
+      - Guest
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuestProfile'
+          description: ''
+        '403':
+          description: User is not a guest or has no guest profile.
+  /api/v1/health/:
+    get:
+      operationId: v1_health_retrieve
+      description: |-
+        Simple liveness endpoint — confirms the project boots and DRF routing
+        works, independent of the database or any app-specific logic.
+      tags:
+      - System
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  status:
+                    type: string
+                required:
+                - success
+                - status
+          description: ''
+  /api/v1/operator/colleagues/:
+    get:
+      operationId: v1_operator_colleagues_list
+      description: |-
+        GET /api/v1/operator/colleagues/ — every operator in the current
+        user's department, so a ticket can be assigned (or reassigned) to any
+        of them, not just to yourself. Deliberately unpaginated: department
+        rosters are small, and the frontend just needs the full list to
+        populate a dropdown in one shot.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperatorColleague'
+          description: ''
+  /api/v1/operator/me/status/:
+    put:
+      operationId: v1_operator_me_status_update
+      description: |-
+        PATCH /api/v1/operator/me/status/ — the logged-in operator toggles
+        their own 'available / busy' status. Deliberately scoped to "me": an
+        operator cannot flip a colleague's availability through this endpoint.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatorAvailabilityRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperatorAvailabilityRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperatorAvailabilityRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorAvailability'
+          description: ''
+    patch:
+      operationId: v1_operator_me_status_partial_update
+      description: |-
+        PATCH /api/v1/operator/me/status/ — the logged-in operator toggles
+        their own 'available / busy' status. Deliberately scoped to "me": an
+        operator cannot flip a colleague's availability through this endpoint.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOperatorAvailabilityRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOperatorAvailabilityRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOperatorAvailabilityRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorAvailability'
+          description: ''
+  /api/v1/operator/tickets/:
+    get:
+      operationId: v1_operator_tickets_list
+      parameters:
+      - in: query
+        name: assigned_to
+        schema:
+          type: integer
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: priority
+        schema:
+          type: string
+          enum:
+          - HIGH
+          - LOW
+          - NORMAL
+          - URGENT
+        description: |-
+          * `LOW` - Low
+          * `NORMAL` - Normal
+          * `HIGH` - High
+          * `URGENT` - Urgent
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - CANCELLED
+          - IN_PROGRESS
+          - OPEN
+          - RESOLVED
+        description: |-
+          * `OPEN` - Open
+          * `IN_PROGRESS` - In Progress
+          * `RESOLVED` - Resolved
+          * `CANCELLED` - Cancelled
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOperatorTicketList'
+          description: ''
+  /api/v1/operator/tickets/{id}/:
+    get:
+      operationId: v1_operator_tickets_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorTicket'
+          description: ''
+    put:
+      operationId: v1_operator_tickets_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatorTicketRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OperatorTicketRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OperatorTicketRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorTicket'
+          description: ''
+    patch:
+      operationId: v1_operator_tickets_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedOperatorTicketRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedOperatorTicketRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedOperatorTicketRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorTicket'
+          description: ''
+  /api/v1/operator/tickets/{id}/assign/:
+    post:
+      operationId: v1_operator_tickets_assign_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorTicket'
+          description: ''
+  /api/v1/operator/tickets/{id}/history/:
+    get:
+      operationId: v1_operator_tickets_history_list
+      description: |-
+        GET /api/v1/operator/tickets/{id}/history/
+
+        Returns the ticket's full timeline: TicketHistory entries (created,
+        assigned, status/priority changes) merged with TicketNote entries
+        (free-form operator notes), sorted chronologically. Guests never hit
+        this endpoint — IsOperator enforces that internal notes stay internal.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TicketHistory'
+          description: ''
+  /api/v1/operator/tickets/{id}/notes/:
+    post:
+      operationId: v1_operator_tickets_notes_create
+      description: |-
+        POST /api/v1/operator/tickets/{id}/notes/
+
+        Adds an internal note to a ticket. Only operators in the ticket's own
+        department can post — same scoping as the rest of the operator API.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketNoteRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketNoteRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketNoteRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketNote'
+          description: ''
+  /api/v1/operator/tickets/new-count/:
+    get:
+      operationId: v1_operator_tickets_new_count_retrieve
+      description: |-
+        GET /api/v1/operator/tickets/new-count/?since=<ISO 8601 timestamp>
+
+        Lightweight polling endpoint for the notification bell (Stage 2.2):
+        the frontend calls this every 30-60s with the timestamp of the last
+        check and gets back how many new OPEN tickets have landed in the
+        operator's department since then. Deliberately simple — real-time
+        push (Stage 3.2, Django Channels/SSE) replaces this polling loop
+        later, so there's no need for a server-side "last seen" model now.
+      parameters:
+      - in: query
+        name: since
+        schema:
+          type: string
+          format: date-time
+        description: ISO 8601 timestamp of the last time the client checked. Defaults
+          to now (i.e. zero new tickets) if omitted or invalid.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorNewTicketCount'
+          description: ''
+  /api/v1/rooms/:
+    get:
+      operationId: v1_rooms_list
+      description: |-
+        GET  /api/v1/rooms/  — any authenticated user can browse.
+        POST /api/v1/rooms/  — admins only.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRoomList'
+          description: ''
+    post:
+      operationId: v1_rooms_create
+      description: |-
+        GET  /api/v1/rooms/  — any authenticated user can browse.
+        POST /api/v1/rooms/  — admins only.
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RoomRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RoomRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+          description: ''
+  /api/v1/rooms/{id}/:
+    get:
+      operationId: v1_rooms_retrieve
+      description: |-
+        GET               — read for anyone authenticated.
+        PATCH/PUT/DELETE  — admins only (e.g. marking a room under MAINTENANCE).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+          description: ''
+    put:
+      operationId: v1_rooms_update
+      description: |-
+        GET               — read for anyone authenticated.
+        PATCH/PUT/DELETE  — admins only (e.g. marking a room under MAINTENANCE).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RoomRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RoomRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+          description: ''
+    patch:
+      operationId: v1_rooms_partial_update
+      description: |-
+        GET               — read for anyone authenticated.
+        PATCH/PUT/DELETE  — admins only (e.g. marking a room under MAINTENANCE).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedRoomRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedRoomRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedRoomRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Room'
+          description: ''
+    delete:
+      operationId: v1_rooms_destroy
+      description: |-
+        GET               — read for anyone authenticated.
+        PATCH/PUT/DELETE  — admins only (e.g. marking a room under MAINTENANCE).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/tickets/:
+    get:
+      operationId: v1_tickets_list
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTicketList'
+          description: ''
+    post:
+      operationId: v1_tickets_create
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+          description: ''
+  /api/v1/tickets/{id}/:
+    get:
+      operationId: v1_tickets_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+          description: ''
+    put:
+      operationId: v1_tickets_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+          description: ''
+    patch:
+      operationId: v1_tickets_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTicketRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTicketRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTicketRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+          description: ''
+components:
+  schemas:
+    ActionEnum:
+      enum:
+      - CREATED
+      - UPDATED
+      - ASSIGNED
+      - STATUS_CHANGED
+      - PRIORITY_CHANGED
+      type: string
+      description: |-
+        * `CREATED` - Created
+        * `UPDATED` - Updated
+        * `ASSIGNED` - Assigned
+        * `STATUS_CHANGED` - Status Changed
+        * `PRIORITY_CHANGED` - Priority Changed
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 50
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - name
+      - updated_at
+    CategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          maxLength: 50
+        is_active:
+          type: boolean
+      required:
+      - code
+      - name
+    Department:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        code:
+          type: string
+          maxLength: 50
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - code
+      - created_at
+      - id
+      - name
+      - updated_at
+    DepartmentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          maxLength: 50
+        is_active:
+          type: boolean
+      required:
+      - code
+      - name
+    GuestLoginRequest:
+      type: object
+      description: Guest login by national_id + room number (no password).
+      properties:
+        national_id:
+          type: string
+          minLength: 1
+        room_number:
+          type: string
+          minLength: 1
+      required:
+      - national_id
+      - room_number
+    GuestLoginResponse:
+      type: object
+      properties:
+        refresh:
+          type: string
+        access:
+          type: string
+        role:
+          type: string
+      required:
+      - access
+      - refresh
+      - role
+    GuestProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        full_name:
+          type: string
+          readOnly: true
+        national_id:
+          type: string
+          readOnly: true
+        phone:
+          type: string
+          readOnly: true
+        room_number:
+          type: string
+          readOnly: true
+      required:
+      - full_name
+      - id
+      - national_id
+      - phone
+      - room_number
+    OperatorAvailability:
+      type: object
+      description: PATCH /api/v1/operator/me/status/ — an operator toggling their
+        own availability.
+      properties:
+        is_available:
+          type: boolean
+          description: Operator's own 'available / busy' toggle, shown in the reassignment
+            dropdown so a colleague can be picked with the current workload in mind.
+            Meaningless for GUEST/ADMIN roles.
+    OperatorAvailabilityRequest:
+      type: object
+      description: PATCH /api/v1/operator/me/status/ — an operator toggling their
+        own availability.
+      properties:
+        is_available:
+          type: boolean
+          description: Operator's own 'available / busy' toggle, shown in the reassignment
+            dropdown so a colleague can be picked with the current workload in mind.
+            Meaningless for GUEST/ADMIN roles.
+    OperatorColleague:
+      type: object
+      description: |-
+        Minimal representation of a fellow operator in the same department —
+        just enough to populate a "reassign this ticket to..." dropdown.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+        is_available:
+          type: boolean
+          readOnly: true
+          description: Operator's own 'available / busy' toggle, shown in the reassignment
+            dropdown so a colleague can be picked with the current workload in mind.
+            Meaningless for GUEST/ADMIN roles.
+      required:
+      - id
+      - is_available
+      - username
+    OperatorNewTicketCount:
+      type: object
+      properties:
+        count:
+          type: integer
+      required:
+      - count
+    OperatorTicket:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/TicketStatusEnum'
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        department:
+          type: integer
+          readOnly: true
+        department_name:
+          type: string
+          readOnly: true
+        category:
+          type: integer
+          readOnly: true
+        category_name:
+          type: string
+          readOnly: true
+        room_number:
+          type: string
+          readOnly: true
+        assigned_to:
+          type: integer
+          nullable: true
+        assigned_to_username:
+          type: string
+          readOnly: true
+        resolution:
+          type: string
+          nullable: true
+          description: Filled in by the operator when resolving the ticket.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - assigned_to_username
+      - category
+      - category_name
+      - created_at
+      - department
+      - department_name
+      - description
+      - id
+      - resolved_at
+      - room_number
+      - title
+      - updated_at
+    OperatorTicketRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/TicketStatusEnum'
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        assigned_to:
+          type: integer
+          nullable: true
+        resolution:
+          type: string
+          nullable: true
+          description: Filled in by the operator when resolving the ticket.
+      required:
+      - description
+      - title
+    OperatorTokenObtainPairRequest:
+      type: object
+      description: |-
+        Operator login: standard username + password, but only accounts with
+        role OPERATOR or ADMIN are allowed to obtain a token here.
+      properties:
+        username:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - password
+      - username
+    PaginatedCategoryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+    PaginatedDepartmentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Department'
+    PaginatedOperatorTicketList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OperatorTicket'
+    PaginatedRoomList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Room'
+    PaginatedTicketList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ticket'
+    PatchedCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          maxLength: 50
+        is_active:
+          type: boolean
+    PatchedDepartmentRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        code:
+          type: string
+          minLength: 1
+          maxLength: 50
+        is_active:
+          type: boolean
+    PatchedOperatorAvailabilityRequest:
+      type: object
+      description: PATCH /api/v1/operator/me/status/ — an operator toggling their
+        own availability.
+      properties:
+        is_available:
+          type: boolean
+          description: Operator's own 'available / busy' toggle, shown in the reassignment
+            dropdown so a colleague can be picked with the current workload in mind.
+            Meaningless for GUEST/ADMIN roles.
+    PatchedOperatorTicketRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          minLength: 1
+        status:
+          $ref: '#/components/schemas/TicketStatusEnum'
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        assigned_to:
+          type: integer
+          nullable: true
+        resolution:
+          type: string
+          nullable: true
+          description: Filled in by the operator when resolving the ticket.
+    PatchedRoomRequest:
+      type: object
+      properties:
+        number:
+          type: string
+          minLength: 1
+          maxLength: 20
+        floor:
+          type: string
+          maxLength: 20
+        status:
+          $ref: '#/components/schemas/RoomStatusEnum'
+    PatchedTicketRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          minLength: 1
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        department:
+          type: integer
+        category:
+          type: integer
+    PriorityEnum:
+      enum:
+      - LOW
+      - NORMAL
+      - HIGH
+      - URGENT
+      type: string
+      description: |-
+        * `LOW` - Low
+        * `NORMAL` - Normal
+        * `HIGH` - High
+        * `URGENT` - Urgent
+    Room:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        number:
+          type: string
+          maxLength: 20
+        floor:
+          type: string
+          maxLength: 20
+        status:
+          $ref: '#/components/schemas/RoomStatusEnum'
+      required:
+      - id
+      - number
+    RoomRequest:
+      type: object
+      properties:
+        number:
+          type: string
+          minLength: 1
+          maxLength: 20
+        floor:
+          type: string
+          maxLength: 20
+        status:
+          $ref: '#/components/schemas/RoomStatusEnum'
+      required:
+      - number
+    RoomStatusEnum:
+      enum:
+      - AVAILABLE
+      - OCCUPIED
+      - MAINTENANCE
+      type: string
+      description: |-
+        * `AVAILABLE` - Available
+        * `OCCUPIED` - Occupied
+        * `MAINTENANCE` - Maintenance
+    Ticket:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TicketStatusEnum'
+          readOnly: true
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        department:
+          type: integer
+        department_name:
+          type: string
+          readOnly: true
+        category:
+          type: integer
+        category_name:
+          type: string
+          readOnly: true
+        room_number:
+          type: string
+          readOnly: true
+        resolution:
+          type: string
+          readOnly: true
+          nullable: true
+          description: Filled in by the operator when resolving the ticket.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+      required:
+      - category
+      - category_name
+      - created_at
+      - department
+      - department_name
+      - description
+      - id
+      - resolution
+      - resolved_at
+      - room_number
+      - status
+      - title
+      - updated_at
+    TicketHistory:
+      type: object
+      description: |-
+        A single system-generated audit entry (assignment, status/priority
+        change). Rendered as one kind of row in the merged ticket timeline.
+      properties:
+        entry_type:
+          type: string
+          readOnly: true
+        id:
+          type: integer
+          readOnly: true
+        action:
+          allOf:
+          - $ref: '#/components/schemas/ActionEnum'
+          readOnly: true
+        action_display:
+          type: string
+          readOnly: true
+        old_value:
+          type: string
+          readOnly: true
+          nullable: true
+        new_value:
+          type: string
+          readOnly: true
+          nullable: true
+        user_username:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - action
+      - action_display
+      - created_at
+      - entry_type
+      - id
+      - new_value
+      - old_value
+      - user_username
+    TicketNote:
+      type: object
+      description: |-
+        An internal note authored by an operator/admin. Rendered as the other
+        kind of row in the merged ticket timeline. `text` is the only
+        writable field on create — `ticket`/`author` are set by the view.
+      properties:
+        entry_type:
+          type: string
+          readOnly: true
+        id:
+          type: integer
+          readOnly: true
+        text:
+          type: string
+        author_username:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - author_username
+      - created_at
+      - entry_type
+      - id
+      - text
+    TicketNoteRequest:
+      type: object
+      description: |-
+        An internal note authored by an operator/admin. Rendered as the other
+        kind of row in the merged ticket timeline. `text` is the only
+        writable field on create — `ticket`/`author` are set by the view.
+      properties:
+        text:
+          type: string
+          minLength: 1
+      required:
+      - text
+    TicketRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          type: string
+          minLength: 1
+        priority:
+          $ref: '#/components/schemas/PriorityEnum'
+        department:
+          type: integer
+        category:
+          type: integer
+      required:
+      - category
+      - department
+      - description
+      - title
+    TicketStatusEnum:
+      enum:
+      - OPEN
+      - IN_PROGRESS
+      - RESOLVED
+      - CANCELLED
+      type: string
+      description: |-
+        * `OPEN` - Open
+        * `IN_PROGRESS` - In Progress
+        * `RESOLVED` - Resolved
+        * `CANCELLED` - Cancelled
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

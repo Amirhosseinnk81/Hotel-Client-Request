@@ -358,6 +358,43 @@ class OperatorColleaguesListView(generics.ListAPIView):
         )
 
 
+@extend_schema(
+    responses=inline_serializer(
+        name="OperatorOverdueCount",
+        fields={"count": drf_serializers.IntegerField()},
+    ),
+)
+class OperatorOverdueTicketCountView(APIView):
+    """
+    GET /api/v1/operator/tickets/overdue-count/
+
+    Count of currently-overdue tickets (Stage 2.9 SLA) in the operator's
+    own department. is_overdue is a Python property, not a DB column (it
+    depends on category.sla_minutes and "now"), so this can't be a plain
+    .filter().count() — at this project's scale, loading the small set of
+    still-open tickets for one department and filtering in Python is fine
+    and keeps the overdue rule defined in exactly one place (Ticket model)
+    instead of duplicating it as a queryset annotation. Feeds the admin
+    stats view (Stage 2.4) and is available for an in-app supervisor
+    warning; an actual push alert is out of scope until Stage 3.2.
+    """
+
+    permission_classes = [IsOperator]
+
+    def get(self, request):
+        open_tickets = (
+            Ticket.objects
+            .filter(
+                department=request.user.department,
+                status__in=[Ticket.Status.OPEN, Ticket.Status.IN_PROGRESS],
+            )
+            .select_related("category")
+        )
+        count = sum(1 for ticket in open_tickets if ticket.is_overdue)
+
+        return Response({"count": count})
+
+
 def _get_department_ticket_or_404(request, pk):
     """
     Shared lookup for the timeline endpoints: an operator may only see the

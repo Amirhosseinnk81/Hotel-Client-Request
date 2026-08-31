@@ -8,7 +8,7 @@ from .models import Category, Ticket, TicketHistory, TicketNote
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ["id", "name", "code", "is_active", "created_at", "updated_at"]
+        fields = ["id", "name", "code", "is_active", "sla_minutes", "created_at", "updated_at"]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -87,6 +87,9 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    is_overdue = serializers.BooleanField(read_only=True)
+    overdue_since = serializers.DateTimeField(read_only=True)
+
     class Meta:
         model = Ticket
         fields = [
@@ -103,6 +106,8 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             "assigned_to",
             "assigned_to_username",
             "resolution",
+            "is_overdue",
+            "overdue_since",
             "created_at",
             "updated_at",
             "resolved_at",
@@ -114,6 +119,8 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             "category",
             "category_name",
             "room_number",
+            "is_overdue",
+            "overdue_since",
             "created_at",
             "updated_at",
             "resolved_at",

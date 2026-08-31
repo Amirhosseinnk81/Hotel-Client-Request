@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework.test import APITestCase
@@ -1287,5 +1289,142 @@ class OperatorProductivityAPITests(APITestCase):
         response = self.client.get(
             self.new_count_url, {"since": timezone.now().isoformat()}
         )
+
+        self.assertEqual(response.status_code, 401)
+
+class TicketSlaTests(APITestCase):
+    """Stage 2.9: sla_minutes-driven overdue detection."""
+
+    def setUp(self):
+        self.department = Department.objects.create(
+            name="Housekeeping",
+            code="HOUSEKEEPING_SLA",
+        )
+
+        self.category = Category.objects.create(
+            name="Towels",
+            code="TOWELS_SLA",
+            sla_minutes=15,
+        )
+
+        self.room = Room.objects.create(
+            number="301",
+            status=Room.Status.OCCUPIED,
+        )
+
+        guest_user = User.objects.create_user(
+            username="guest301",
+            role=User.Role.GUEST,
+        )
+        self.guest = Guest.objects.create(
+            user=guest_user,
+            full_name="Test Guest",
+            national_id="0088888888",
+            phone="09122222222",
+            room=self.room,
+        )
+
+        self.operator_user = User.objects.create_user(
+            username="operator301",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.department,
+        )
+
+    def make_ticket(self, minutes_ago, status=Ticket.Status.OPEN):
+        ticket = Ticket.objects.create(
+            guest=self.guest,
+            department=self.department,
+            category=self.category,
+            room=self.room,
+            title="Need towels",
+            description="No towels left.",
+            status=status,
+        )
+        # created_at is auto_now_add — backdate it directly, same approach
+        # as the rest of this file uses for time-dependent assertions.
+        Ticket.objects.filter(pk=ticket.pk).update(
+            created_at=timezone.now() - timedelta(minutes=minutes_ago)
+        )
+        ticket.refresh_from_db()
+        return ticket
+
+    def test_ticket_within_sla_is_not_overdue(self):
+        ticket = self.make_ticket(minutes_ago=5)  # sla_minutes=15
+        self.assertFalse(ticket.is_overdue)
+        self.assertIsNone(ticket.overdue_since)
+
+    def test_ticket_past_sla_is_overdue(self):
+        ticket = self.make_ticket(minutes_ago=20)  # sla_minutes=15
+        self.assertTrue(ticket.is_overdue)
+        self.assertIsNotNone(ticket.overdue_since)
+
+    def test_resolved_ticket_is_never_overdue(self):
+        ticket = self.make_ticket(minutes_ago=999, status=Ticket.Status.RESOLVED)
+        self.assertFalse(ticket.is_overdue)
+
+    def test_cancelled_ticket_is_never_overdue(self):
+        ticket = self.make_ticket(minutes_ago=999, status=Ticket.Status.CANCELLED)
+        self.assertFalse(ticket.is_overdue)
+
+    def test_changing_sla_minutes_immediately_changes_overdue_status(self):
+        ticket = self.make_ticket(minutes_ago=20)
+        self.assertTrue(ticket.is_overdue)  # 20 > 15
+
+        self.category.sla_minutes = 30
+        self.category.save(update_fields=["sla_minutes"])
+        ticket.refresh_from_db()
+
+        self.assertFalse(ticket.is_overdue)  # 20 <= 30 now
+
+    def test_operator_ticket_list_exposes_is_overdue(self):
+        self.make_ticket(minutes_ago=20)
+        self.client.force_authenticate(self.operator_user)
+
+        response = self.client.get("/api/v1/operator/tickets/")
+
+        self.assertEqual(response.status_code, 200)
+        results = response.data.get("results", response.data)
+        self.assertTrue(results[0]["is_overdue"])
+        self.assertIsNotNone(results[0]["overdue_since"])
+
+    def test_category_list_exposes_sla_minutes_for_guest(self):
+        guest_user = self.guest.user
+        self.client.force_authenticate(guest_user)
+
+        response = self.client.get("/api/v1/categories/")
+
+        self.assertEqual(response.status_code, 200)
+        by_code = {c["code"]: c for c in response.data}
+        self.assertEqual(by_code["TOWELS_SLA"]["sla_minutes"], 15)
+
+    def test_overdue_count_counts_only_own_department(self):
+        self.make_ticket(minutes_ago=20)  # overdue, own department
+        self.make_ticket(minutes_ago=5)  # not overdue, own department
+
+        other_department = Department.objects.create(
+            name="Maintenance",
+            code="MAINTENANCE_SLA",
+        )
+        other_ticket = Ticket.objects.create(
+            guest=self.guest,
+            department=other_department,
+            category=self.category,
+            room=self.room,
+            title="AC broken",
+            description="Not cooling.",
+        )
+        Ticket.objects.filter(pk=other_ticket.pk).update(
+            created_at=timezone.now() - timedelta(minutes=999)
+        )
+
+        self.client.force_authenticate(self.operator_user)
+        response = self.client.get("/api/v1/operator/tickets/overdue-count/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 1)
+
+    def test_overdue_count_requires_authentication(self):
+        response = self.client.get("/api/v1/operator/tickets/overdue-count/")
 
         self.assertEqual(response.status_code, 401)

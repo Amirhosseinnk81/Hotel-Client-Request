@@ -395,3 +395,9 @@ export async function getNewTicketCount(sinceIso: string): Promise<number> {
   );
   return count;
 }
+
+/** Count of currently-overdue tickets in the operator's department (Stage 2.9). */
+export async function getOverdueTicketCount(): Promise<number> {
+  const { count } = await apiFetch<{ count: number }>("/operator/tickets/overdue-count/");
+  return count;
+}

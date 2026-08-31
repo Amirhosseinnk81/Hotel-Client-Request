@@ -53,6 +53,8 @@ export interface Category {
   name: string;
   code: string;
   is_active: boolean;
+  /** Expected response time in minutes for tickets in this category (Stage 2.9). */
+  sla_minutes: number;
 }
 
 export type TicketStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
@@ -73,6 +75,9 @@ export interface Ticket {
   /** Present on tickets returned by operator endpoints; absent on guest-facing reads. */
   assigned_to?: number | null;
   assigned_to_username?: string | null;
+  /** Operator endpoints only (Stage 2.9) — past category.sla_minutes and still OPEN/IN_PROGRESS. */
+  is_overdue?: boolean;
+  overdue_since?: string | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;

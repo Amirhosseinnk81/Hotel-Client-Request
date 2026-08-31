@@ -7,6 +7,7 @@ from .views import (
     GuestTicketListCreateView,
     OperatorColleaguesListView,
     OperatorNewTicketCountView,
+    OperatorOverdueTicketCountView,
     OperatorTicketDetailView,
     OperatorTicketListView,
     OperatorTicketAssignView,
@@ -44,6 +45,11 @@ urlpatterns = [
         "operator/tickets/new-count/",
         OperatorNewTicketCountView.as_view(),
         name="operator-ticket-new-count",
+    ),
+    path(
+        "operator/tickets/overdue-count/",
+        OperatorOverdueTicketCountView.as_view(),
+        name="operator-ticket-overdue-count",
     ),
     path(
         "operator/tickets/<int:pk>/",

@@ -40,6 +40,21 @@ const priorityOptions: { value: TicketPriority; label: string }[] = (
   Object.keys(priorityLabels) as TicketPriority[]
 ).map((value) => ({ value, label: priorityLabels[value] }));
 
+/** e.g. 15 -> "۱۵ دقیقه", 90 -> "۱ ساعت و ۳۰ دقیقه" (Stage 2.9). */
+function formatEstimatedResponse(minutes: number): string {
+  const fa = (n: number) => new Intl.NumberFormat("fa-IR").format(n);
+
+  if (minutes < 60) {
+    return `${fa(minutes)} دقیقه`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder === 0
+    ? `${fa(hours)} ساعت`
+    : `${fa(hours)} ساعت و ${fa(remainder)} دقیقه`;
+}
+
 const newTicketSchema = z.object({
   title: z.string().min(3, "عنوان باید حداقل ۳ حرف باشد"),
   description: z.string().min(5, "توضیحات باید حداقل ۵ حرف باشد"),
@@ -62,11 +77,16 @@ export default function NewTicketPage() {
     register,
     control,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<NewTicketForm>({
     resolver: zodResolver(newTicketSchema),
     defaultValues: { title: "", description: "", department: "", category: "", priority: "NORMAL" },
   });
+
+  const selectedCategory = categories.find(
+    (cat) => String(cat.id) === watch("category")
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -222,6 +242,11 @@ export default function NewTicketPage() {
                   {errors.category && (
                     <span className="text-xs text-destructive">
                       {errors.category.message}
+                    </span>
+                  )}
+                  {selectedCategory && (
+                    <span className="text-xs text-muted-foreground">
+                      زمان تقریبی پاسخ: {formatEstimatedResponse(selectedCategory.sla_minutes)}
                     </span>
                   )}
                 </div>

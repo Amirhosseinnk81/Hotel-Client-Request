@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ChevronLeft, Inbox, UserCheck2 } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Inbox, UserCheck2 } from "lucide-react";
 
 import {
   Card,
@@ -182,7 +182,13 @@ export default function OperatorHomePage() {
         <div className="flex flex-col gap-3">
           {tickets.map((ticket) => (
             <Link key={ticket.id} href={`/operator/tickets/${ticket.id}`}>
-              <Card className="transition-colors hover:bg-secondary/40">
+              <Card
+                className={
+                  ticket.is_overdue
+                    ? "border-destructive/60 bg-destructive/5 transition-colors hover:bg-destructive/10"
+                    : "transition-colors hover:bg-secondary/40"
+                }
+              >
                 <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
                   <div className="flex flex-col gap-1">
                     <CardTitle className="text-base">{ticket.title}</CardTitle>
@@ -200,6 +206,12 @@ export default function OperatorHomePage() {
                   <Badge variant={priorityBadgeVariant[ticket.priority]}>
                     {priorityLabels[ticket.priority]}
                   </Badge>
+                  {ticket.is_overdue && (
+                    <Badge variant="destructive" className="gap-1">
+                      <AlertTriangle className="size-3" />
+                      معوق
+                    </Badge>
+                  )}
                   <span className="flex items-center gap-1 text-xs text-muted-foreground">
                     <UserCheck2 className="size-3.5" />
                     {ticket.assigned_to_username ?? "اختصاص‌نیافته"}

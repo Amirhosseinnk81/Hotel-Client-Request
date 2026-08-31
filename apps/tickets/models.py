@@ -1,5 +1,8 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from apps.departments.models import Department
 from apps.guests.models import Guest
@@ -16,6 +19,16 @@ class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
     code = models.CharField(max_length=50, unique=True)
     is_active = models.BooleanField(default=True)
+    sla_minutes = models.PositiveIntegerField(
+        default=60,
+        help_text=(
+            "Expected response time for a ticket in this category, in "
+            "minutes (e.g. towels: 15, power outage: 10). Drives both the "
+            "guest-facing \"estimated response time\" and the operator "
+            "overdue highlight — there is deliberately only one number to "
+            "configure, not a separate one for each."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -60,6 +73,29 @@ class Ticket(models.Model):
             self.status,
             set(),
         )
+
+    # --- SLA (Stage 2.9) ----------------------------------------------
+    # A ticket is "overdue" once it's been open longer than its category's
+    # configured sla_minutes, and only while it's still actionable (a
+    # RESOLVED/CANCELLED ticket is never overdue, no matter how long ago
+    # it closed — there's nothing left to breach). Deliberately a single
+    # sla_minutes-per-category knob, not a separate per-priority table:
+    # it's also what the guest-facing "estimated response time" reads, so
+    # there's exactly one number to keep in sync, not two.
+
+    @property
+    def sla_deadline(self):
+        return self.created_at + timedelta(minutes=self.category.sla_minutes)
+
+    @property
+    def is_overdue(self):
+        if self.status not in (self.Status.OPEN, self.Status.IN_PROGRESS):
+            return False
+        return timezone.now() > self.sla_deadline
+
+    @property
+    def overdue_since(self):
+        return self.sla_deadline if self.is_overdue else None
 
     guest = models.ForeignKey(
         Guest,

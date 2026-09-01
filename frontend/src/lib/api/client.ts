@@ -8,6 +8,7 @@ import type {
   GuestProfile,
   OperatorAvailability,
   OperatorColleague,
+  QuickRequestTemplate,
   RefreshResponse,
   Ticket,
   TicketPriority,
@@ -309,6 +310,28 @@ export async function getTickets(search?: string): Promise<Ticket[]> {
 
 export async function getTicketDetail(id: number | string): Promise<Ticket> {
   return apiFetch<Ticket>(`/tickets/${id}/`);
+}
+
+/** Stage 2.3 — rate a RESOLVED ticket, once. */
+export async function rateTicket(
+  id: number | string,
+  rating: number,
+  feedback?: string
+): Promise<Ticket> {
+  return apiFetch<Ticket>(`/tickets/${id}/rate/`, {
+    method: "POST",
+    body: JSON.stringify({ rating, feedback: feedback ?? "" }),
+  });
+}
+
+/** Stage 2.3 — reopen a RESOLVED ticket (within 48h, once ever — see Ticket.can_reopen). */
+export async function reopenTicket(id: number | string): Promise<Ticket> {
+  return apiFetch<Ticket>(`/tickets/${id}/reopen/`, { method: "POST" });
+}
+
+/** Stage 2.3 — one-click shortcuts for common requests, shown on the new-ticket form. */
+export async function getQuickTemplates(): Promise<QuickRequestTemplate[]> {
+  return apiFetch<QuickRequestTemplate[]>("/quick-templates/");
 }
 
 // ---------------------------------------------------------------------------

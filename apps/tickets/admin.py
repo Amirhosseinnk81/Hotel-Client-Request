@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Category, Ticket, TicketHistory, TicketNote
+from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
 
 
 @admin.register(Category)
@@ -60,5 +60,26 @@ class TicketAdmin(admin.ModelAdmin):
     # every real workflow change through the API, where those rules are
     # enforced; Admin is still fully useful for oversight and for editing
     # the non-workflow fields (title, description, priority, department,
-    # category).
-    readonly_fields = ("status", "resolution", "resolved_at", "assigned_to")
+    # category). guest_rating/guest_feedback/reopened_at are the same
+    # story from the guest side — reopened_at in particular is what
+    # enforces the one-reopen-ever rule (Stage 2.3), so it must not be
+    # editable here either.
+    readonly_fields = (
+        "status",
+        "resolution",
+        "resolved_at",
+        "assigned_to",
+        "guest_rating",
+        "guest_feedback",
+        "reopened_at",
+    )
+
+
+@admin.register(QuickRequestTemplate)
+class QuickRequestTemplateAdmin(admin.ModelAdmin):
+    list_display = ("title", "icon", "department", "category", "order", "is_active")
+    list_display_links = ("title",)
+    list_editable = ("order", "is_active")
+    list_filter = ("department", "is_active")
+    search_fields = ("title",)
+    ordering = ("order", "title")

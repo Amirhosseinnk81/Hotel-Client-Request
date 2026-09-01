@@ -1,6 +1,7 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -169,11 +170,54 @@ class Ticket(models.Model):
         blank=True,
     )
 
+    # --- Guest experience (Stage 2.3) ----------------------------------
+
+    guest_rating = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="1-5 stars, set once by the guest after the ticket is RESOLVED.",
+    )
+
+    guest_feedback = models.TextField(
+        blank=True,
+        default="",
+    )
+
+    reopened_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Set the one time (if ever) a guest reopens this ticket. "
+            "Presence of a value — not just the current status — is what "
+            "blocks a second reopen, so the limit holds even if the "
+            "ticket gets resolved again afterwards."
+        ),
+    )
+
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
         return f"#{self.pk} - {self.title}"
+
+    # --- Guest reopen (Stage 2.3) ---------------------------------------
+    # Deliberately NOT part of ALLOWED_STATUS_TRANSITIONS / can_transition_to
+    # above: those govern the general operator-facing PATCH endpoint, and
+    # RESOLVED must stay terminal there. Reopening is a narrower, guest-only
+    # action with its own time limit and one-time-only rule, enforced here
+    # and only reachable through the dedicated reopen endpoint.
+    REOPEN_WINDOW = timedelta(hours=48)
+
+    @property
+    def can_guest_reopen(self):
+        if self.status != self.Status.RESOLVED:
+            return False
+        if self.reopened_at is not None:
+            return False
+        if self.resolved_at is None:
+            return False
+        return timezone.now() <= self.resolved_at + self.REOPEN_WINDOW
     
     
 class TicketHistory(models.Model):
@@ -264,3 +308,48 @@ class TicketNote(models.Model):
 
     def __str__(self):
         return f"Note on Ticket #{self.ticket_id} by {self.author}"
+
+class QuickRequestTemplate(models.Model):
+    """
+    A one-click shortcut on the guest's "new ticket" form (Stage 2.3) —
+    e.g. "Towels", "Extra pillow", "Room service menu". Picking one
+    pre-fills title/department/category on the form; the guest can still
+    edit everything before submitting. Managed entirely from Django Admin
+    — there's no guest-facing create/edit, only GET /quick-templates/.
+    """
+
+    title = models.CharField(max_length=100)
+
+    icon = models.CharField(
+        max_length=50,
+        help_text=(
+            "A lucide-react icon name (e.g. 'Droplet', 'Shirt', 'Bell') — "
+            "the frontend renders this icon on the card. Not validated "
+            "here; an unknown name just falls back to a generic icon."
+        ),
+    )
+
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name="quick_templates",
+    )
+
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.CASCADE,
+        related_name="quick_templates",
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    order = models.PositiveIntegerField(
+        default=0,
+        help_text="Lower numbers show first on the guest form.",
+    )
+
+    class Meta:
+        ordering = ["order", "title"]
+
+    def __str__(self):
+        return self.title

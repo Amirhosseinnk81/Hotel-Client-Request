@@ -5,12 +5,15 @@ from .views import (
     CategoryListCreateView,
     GuestTicketDetailView,
     GuestTicketListCreateView,
+    GuestTicketRateView,
+    GuestTicketReopenView,
     OperatorColleaguesListView,
     OperatorNewTicketCountView,
     OperatorOverdueTicketCountView,
     OperatorTicketDetailView,
     OperatorTicketListView,
     OperatorTicketAssignView,
+    QuickRequestTemplateListView,
     TicketHistoryView,
     TicketNoteCreateView,
 )
@@ -27,6 +30,11 @@ urlpatterns = [
         name="category-detail",
     ),
     path(
+        "quick-templates/",
+        QuickRequestTemplateListView.as_view(),
+        name="quick-template-list",
+    ),
+    path(
         "tickets/",
         GuestTicketListCreateView.as_view(),
         name="guest-ticket-list-create",
@@ -35,6 +43,16 @@ urlpatterns = [
         "tickets/<int:pk>/",
         GuestTicketDetailView.as_view(),
         name="guest-ticket-detail",
+    ),
+    path(
+        "tickets/<int:pk>/rate/",
+        GuestTicketRateView.as_view(),
+        name="guest-ticket-rate",
+    ),
+    path(
+        "tickets/<int:pk>/reopen/",
+        GuestTicketReopenView.as_view(),
+        name="guest-ticket-reopen",
     ),
     path(
         "operator/tickets/",

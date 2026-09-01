@@ -78,9 +78,24 @@ export interface Ticket {
   /** Operator endpoints only (Stage 2.9) — past category.sla_minutes and still OPEN/IN_PROGRESS. */
   is_overdue?: boolean;
   overdue_since?: string | null;
+  /** Guest-facing fields (Stage 2.3). */
+  guest_rating?: number | null;
+  guest_feedback?: string;
+  reopened_at?: string | null;
+  can_reopen?: boolean;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
+}
+
+export interface QuickRequestTemplate {
+  id: number;
+  title: string;
+  /** lucide-react icon name. */
+  icon: string;
+  department: number;
+  category: number;
+  order: number;
 }
 
 export interface CreateTicketPayload {

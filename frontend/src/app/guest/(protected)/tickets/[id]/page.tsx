@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, RotateCcw, Star } from "lucide-react";
 
 import {
   Card,
@@ -13,8 +13,20 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { FormError } from "@/components/form-error";
-import { getTicketDetail, ApiError } from "@/lib/api/client";
+import { toast } from "@/hooks/use-toast";
+import { getTicketDetail, rateTicket, reopenTicket, ApiError } from "@/lib/api/client";
 import type { Ticket } from "@/lib/api/types";
 import {
   statusLabels,
@@ -33,6 +45,53 @@ function formatDate(iso: string) {
   }).format(new Date(iso));
 }
 
+/** Interactive 1-5 star picker, used before a rating has been submitted. */
+function StarPicker({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  return (
+    <div className="flex gap-1" dir="ltr">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onChange(n)}
+          className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label={`${n} ستاره`}
+        >
+          <Star
+            className={
+              n <= value
+                ? "size-6 fill-warning text-warning"
+                : "size-6 text-muted-foreground"
+            }
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Read-only star display, used once a rating already exists. */
+function StarDisplay({ value }: { value: number }) {
+  return (
+    <div className="flex gap-1" dir="ltr">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <Star
+          key={n}
+          className={
+            n <= value ? "size-5 fill-warning text-warning" : "size-5 text-muted-foreground"
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function GuestTicketDetailPage({
   params,
 }: {
@@ -42,29 +101,76 @@ export default function GuestTicketDetailPage({
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
+  const [ratingValue, setRatingValue] = useState(0);
+  const [feedback, setFeedback] = useState("");
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
 
+  const [isReopening, setIsReopening] = useState(false);
+  const [isReopenDialogOpen, setIsReopenDialogOpen] = useState(false);
+
+  const load = () => {
+    setError(null);
     getTicketDetail(id)
-      .then((data) => {
-        if (!cancelled) setTicket(data);
-      })
+      .then(setTicket)
       .catch((err) => {
-        if (!cancelled) {
-          setError(
-            err instanceof ApiError && err.status === 404
-              ? "چنین درخواستی یافت نشد."
-              : err instanceof ApiError
-                ? err.message
-                : "خطا در دریافت جزئیات درخواست."
-          );
-        }
+        setError(
+          err instanceof ApiError && err.status === 404
+            ? "چنین درخواستی یافت نشد."
+            : err instanceof ApiError
+              ? err.message
+              : "خطا در دریافت جزئیات درخواست."
+        );
       });
+  };
 
-    return () => {
-      cancelled = true;
-    };
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const handleSubmitRating = async () => {
+    if (ratingValue === 0) return;
+    setIsSubmittingRating(true);
+    try {
+      const updated = await rateTicket(id, ratingValue, feedback.trim());
+      setTicket(updated);
+      toast({
+        title: "متشکریم!",
+        description: "نظر شما ثبت شد.",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "خطا در ثبت نظر",
+        description: err instanceof ApiError ? err.message : "لطفاً دوباره تلاش کنید.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
+
+  const handleReopen = async () => {
+    setIsReopening(true);
+    try {
+      const updated = await reopenTicket(id);
+      setTicket(updated);
+      setIsReopenDialogOpen(false);
+      toast({
+        title: "درخواست دوباره باز شد",
+        description: "همکاران ما دوباره پیگیری می‌کنند.",
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "خطا در بازکردن درخواست",
+        description: err instanceof ApiError ? err.message : "لطفاً دوباره تلاش کنید.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsReopening(false);
+    }
+  };
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4">
@@ -133,6 +239,89 @@ export default function GuestTicketDetailPage({
                     زمان حل: {formatDate(ticket.resolved_at)}
                   </span>
                 )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stage 2.3 — rating + reopen, only once the ticket is RESOLVED */}
+      {ticket && ticket.status === "RESOLVED" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              {ticket.guest_rating ? "نظر شما" : "رضایت شما از این خدمت چقدر بود؟"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {ticket.guest_rating ? (
+              <div className="flex flex-col gap-1.5">
+                <StarDisplay value={ticket.guest_rating} />
+                {ticket.guest_feedback && (
+                  <p className="text-sm text-muted-foreground">{ticket.guest_feedback}</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <StarPicker value={ratingValue} onChange={setRatingValue} />
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="feedback">نظر شما (اختیاری)</Label>
+                  <Textarea
+                    id="feedback"
+                    value={feedback}
+                    onChange={(e) => setFeedback(e.target.value)}
+                    placeholder="اگر نکته‌ای هست، همین‌جا بنویسید…"
+                    rows={3}
+                  />
+                </div>
+                <Button
+                  className="w-fit gap-1.5"
+                  disabled={ratingValue === 0 || isSubmittingRating}
+                  onClick={handleSubmitRating}
+                >
+                  {isSubmittingRating && <Loader2 className="size-3.5 animate-spin" />}
+                  {isSubmittingRating ? "در حال ثبت…" : "ثبت نظر"}
+                </Button>
+              </div>
+            )}
+
+            {ticket.can_reopen && (
+              <div className="border-t pt-3">
+                <Dialog open={isReopenDialogOpen} onOpenChange={setIsReopenDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="w-fit gap-1.5">
+                      <RotateCcw className="size-3.5" />
+                      مشکل حل نشد، دوباره باز کن
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>بازکردن دوبارهٔ درخواست</DialogTitle>
+                      <DialogDescription>
+                        این درخواست دوباره به وضعیت «باز» برمی‌گردد و همکاران واحد
+                        مربوطه دوباره پیگیری می‌کنند. این کار فقط یک‌بار برای هر
+                        درخواست ممکن است.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <Button
+                        variant="outline"
+                        onClick={() => setIsReopenDialogOpen(false)}
+                        disabled={isReopening}
+                      >
+                        انصراف
+                      </Button>
+                      <Button
+                        className="gap-1.5"
+                        onClick={handleReopen}
+                        disabled={isReopening}
+                      >
+                        {isReopening && <Loader2 className="size-3.5 animate-spin" />}
+                        {isReopening ? "در حال بازکردن…" : "بله، دوباره باز کن"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               </div>
             )}
           </CardContent>

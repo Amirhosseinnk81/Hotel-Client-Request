@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowRight, Send } from "lucide-react";
+import { ArrowRight, Send, Sparkles } from "lucide-react";
+import * as LucideIcons from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,8 +35,14 @@ import {
   createTicket,
   getCategories,
   getDepartments,
+  getQuickTemplates,
 } from "@/lib/api/client";
-import type { Category, Department, TicketPriority } from "@/lib/api/types";
+import type {
+  Category,
+  Department,
+  QuickRequestTemplate,
+  TicketPriority,
+} from "@/lib/api/types";
 
 const priorityOptions: { value: TicketPriority; label: string }[] = (
   Object.keys(priorityLabels) as TicketPriority[]
@@ -65,10 +73,20 @@ const newTicketSchema = z.object({
 
 type NewTicketForm = z.infer<typeof newTicketSchema>;
 
+/** Renders a QuickRequestTemplate.icon (a lucide-react name) with a safe fallback. */
+function QuickTemplateIcon({ name }: { name: string }) {
+  const Icon = (LucideIcons as unknown as Record<string, ComponentType<{ className?: string }>>)[
+    name
+  ];
+  const Resolved = Icon ?? Sparkles;
+  return <Resolved className="size-5" />;
+}
+
 export default function NewTicketPage() {
   const router = useRouter();
   const [departments, setDepartments] = useState<Department[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [quickTemplates, setQuickTemplates] = useState<QuickRequestTemplate[]>([]);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [optionsError, setOptionsError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -78,6 +96,7 @@ export default function NewTicketPage() {
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<NewTicketForm>({
     resolver: zodResolver(newTicketSchema),
@@ -107,6 +126,16 @@ export default function NewTicketPage() {
         if (!cancelled) setIsLoadingOptions(false);
       });
 
+    // Non-essential — a failure here shouldn't block the form itself,
+    // it just means the quick-request shortcuts row doesn't show.
+    getQuickTemplates()
+      .then((templates) => {
+        if (!cancelled) setQuickTemplates(templates);
+      })
+      .catch(() => {
+        /* silently degrade to no shortcuts */
+      });
+
     return () => {
       cancelled = true;
     };
@@ -128,6 +157,12 @@ export default function NewTicketPage() {
     }
   };
 
+  const applyQuickTemplate = (template: QuickRequestTemplate) => {
+    setValue("title", template.title, { shouldValidate: true });
+    setValue("department", String(template.department), { shouldValidate: true });
+    setValue("category", String(template.category), { shouldValidate: true });
+  };
+
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4">
       <Button asChild variant="ghost" size="sm" className="w-fit gap-1.5">
@@ -143,6 +178,25 @@ export default function NewTicketPage() {
           <CardDescription>درخواست خود را برای هتل ثبت کنید.</CardDescription>
         </CardHeader>
         <CardContent>
+          {quickTemplates.length > 0 && (
+            <div className="mb-4 flex flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">درخواست سریع</span>
+              <div className="flex flex-wrap gap-2">
+                {quickTemplates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => applyQuickTemplate(template)}
+                    className="flex flex-col items-center gap-1.5 rounded-lg border bg-card px-3 py-2.5 text-xs transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <QuickTemplateIcon name={template.icon} />
+                    {template.title}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {isLoadingOptions && (
             <p className="text-sm text-muted-foreground">در حال بارگذاری…</p>
           )}

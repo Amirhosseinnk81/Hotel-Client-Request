@@ -13,13 +13,15 @@ from rest_framework import serializers as drf_serializers
 
 from apps.core.permissions import IsAdminRole
 
-from .models import Category, Ticket, TicketHistory, TicketNote
+from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
 from .permissions import IsOperator
 from .serializers import (
     CategorySerializer,
     OperatorColleagueSerializer,
+    QuickRequestTemplateSerializer,
     TicketHistorySerializer,
     TicketNoteSerializer,
+    TicketRateSerializer,
     TicketSerializer,
     OperatorTicketSerializer,
 )
@@ -94,6 +96,112 @@ class GuestTicketDetailView(generics.RetrieveUpdateAPIView):
             )
             .select_related("department", "category", "room")
         )
+
+
+class GuestTicketRateView(APIView):
+    """
+    POST /api/v1/tickets/{id}/rate/
+
+    A guest rates their own RESOLVED ticket, once. Not available on any
+    other status, and not re-editable once set — if a second attempt
+    should be allowed later, that's a deliberate future change, not an
+    oversight.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=TicketRateSerializer, responses=TicketSerializer)
+    def post(self, request, pk):
+        ticket = get_object_or_404(
+            Ticket.objects.select_related("department", "category", "room"),
+            pk=pk,
+            guest__user=request.user,
+        )
+
+        if ticket.status != Ticket.Status.RESOLVED:
+            return Response(
+                {"detail": "Only a resolved ticket can be rated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if ticket.guest_rating is not None:
+            return Response(
+                {"detail": "This ticket has already been rated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        input_serializer = TicketRateSerializer(data=request.data)
+        input_serializer.is_valid(raise_exception=True)
+
+        ticket.guest_rating = input_serializer.validated_data["rating"]
+        ticket.guest_feedback = input_serializer.validated_data.get("feedback", "")
+        ticket.save(update_fields=["guest_rating", "guest_feedback"])
+
+        return Response(TicketSerializer(ticket).data)
+
+
+class GuestTicketReopenView(APIView):
+    """
+    POST /api/v1/tickets/{id}/reopen/
+
+    See Ticket.can_guest_reopen for the actual rule (RESOLVED, within 48h
+    of resolved_at, never reopened before). Deliberately a separate action
+    from the operator PATCH endpoint — RESOLVED stays a terminal state in
+    ALLOWED_STATUS_TRANSITIONS, this is the one narrow, guest-only door
+    back to OPEN.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=None, responses=TicketSerializer)
+    def post(self, request, pk):
+        ticket = get_object_or_404(
+            Ticket.objects.select_related("department", "category", "room"),
+            pk=pk,
+            guest__user=request.user,
+        )
+
+        if not ticket.can_guest_reopen:
+            return Response(
+                {
+                    "detail": (
+                        "This ticket can't be reopened — it's either not "
+                        "resolved, past the 48-hour reopen window, or has "
+                        "already been reopened once."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        previous_status = ticket.status
+        ticket.status = Ticket.Status.OPEN
+        ticket.reopened_at = timezone.now()
+        ticket.save(update_fields=["status", "reopened_at", "updated_at"])
+
+        TicketHistory.objects.create(
+            ticket=ticket,
+            user=request.user,
+            action=TicketHistory.Action.STATUS_CHANGED,
+            old_value=previous_status,
+            new_value=Ticket.Status.OPEN,
+        )
+
+        return Response(TicketSerializer(ticket).data)
+
+
+class QuickRequestTemplateListView(generics.ListAPIView):
+    """
+    GET /api/v1/quick-templates/ — the one-click shortcuts shown on the
+    guest's "new ticket" form (Stage 2.3). Management is Django-Admin-only;
+    guests only ever read this list.
+    """
+
+    queryset = QuickRequestTemplate.objects.filter(is_active=True).select_related(
+        "department", "category"
+    )
+    serializer_class = QuickRequestTemplateSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = None
 
 
 class OperatorTicketListView(generics.ListAPIView):

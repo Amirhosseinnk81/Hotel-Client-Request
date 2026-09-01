@@ -8,7 +8,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from apps.departments.models import Department
 from apps.guests.models import Guest
 from apps.rooms.models import Room
-from .models import Category, Ticket, TicketHistory, TicketNote
+from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
 
 User = get_user_model()
 
@@ -1395,7 +1395,8 @@ class TicketSlaTests(APITestCase):
         response = self.client.get("/api/v1/categories/")
 
         self.assertEqual(response.status_code, 200)
-        by_code = {c["code"]: c for c in response.data}
+        results = response.data.get("results", response.data)
+        by_code = {c["code"]: c for c in results}
         self.assertEqual(by_code["TOWELS_SLA"]["sla_minutes"], 15)
 
     def test_overdue_count_counts_only_own_department(self):
@@ -1426,5 +1427,230 @@ class TicketSlaTests(APITestCase):
 
     def test_overdue_count_requires_authentication(self):
         response = self.client.get("/api/v1/operator/tickets/overdue-count/")
+
+        self.assertEqual(response.status_code, 401)
+
+
+class TicketGuestExperienceTests(APITestCase):
+    """Stage 2.3: guest rating, reopen, and quick-request templates."""
+
+    def setUp(self):
+        self.room = Room.objects.create(
+            number="401",
+            status=Room.Status.OCCUPIED,
+        )
+
+        self.user = User.objects.create_user(
+            username="guest401",
+            role=User.Role.GUEST,
+        )
+
+        self.guest = Guest.objects.create(
+            user=self.user,
+            full_name="Test Guest",
+            national_id="0055555555",
+            phone="09123334444",
+            room=self.room,
+        )
+
+        self.department = Department.objects.create(
+            name="Housekeeping",
+            code="HOUSEKEEPING_GX",
+        )
+
+        self.category = Category.objects.create(
+            name="Towels",
+            code="TOWELS_GX",
+        )
+
+        self.other_user = User.objects.create_user(
+            username="guest401_other",
+            role=User.Role.GUEST,
+        )
+        other_room = Room.objects.create(number="402", status=Room.Status.OCCUPIED)
+        self.other_guest = Guest.objects.create(
+            user=self.other_user,
+            full_name="Other Guest",
+            national_id="0066666666",
+            phone="09125556666",
+            room=other_room,
+        )
+
+    def authenticate(self, user=None):
+        refresh = RefreshToken.for_user(user or self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
+
+    def make_ticket(self, status=Ticket.Status.OPEN, resolved_minutes_ago=None, guest=None):
+        ticket = Ticket.objects.create(
+            guest=guest or self.guest,
+            department=self.department,
+            category=self.category,
+            room=(guest or self.guest).room,
+            title="Need towels",
+            description="No towels left.",
+            status=status,
+            resolution="Delivered fresh towels." if status == Ticket.Status.RESOLVED else None,
+        )
+        if resolved_minutes_ago is not None:
+            Ticket.objects.filter(pk=ticket.pk).update(
+                resolved_at=timezone.now() - timedelta(minutes=resolved_minutes_ago)
+            )
+        ticket.refresh_from_db()
+        return ticket
+
+    # --- Rating -----------------------------------------------------
+
+    def test_guest_can_rate_a_resolved_ticket(self):
+        ticket = self.make_ticket(status=Ticket.Status.RESOLVED, resolved_minutes_ago=10)
+        self.authenticate()
+
+        response = self.client.post(
+            f"/api/v1/tickets/{ticket.pk}/rate/",
+            {"rating": 5, "feedback": "Great, fast service!"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.guest_rating, 5)
+        self.assertEqual(ticket.guest_feedback, "Great, fast service!")
+
+    def test_cannot_rate_a_non_resolved_ticket(self):
+        ticket = self.make_ticket(status=Ticket.Status.OPEN)
+        self.authenticate()
+
+        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/rate/", {"rating": 4})
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_cannot_rate_a_ticket_twice(self):
+        ticket = self.make_ticket(status=Ticket.Status.RESOLVED, resolved_minutes_ago=10)
+        ticket.guest_rating = 3
+        ticket.save(update_fields=["guest_rating"])
+        self.authenticate()
+
+        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/rate/", {"rating": 5})
+
+        self.assertEqual(response.status_code, 400)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.guest_rating, 3)  # unchanged
+
+    def test_rating_out_of_range_is_rejected(self):
+        ticket = self.make_ticket(status=Ticket.Status.RESOLVED, resolved_minutes_ago=10)
+        self.authenticate()
+
+        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/rate/", {"rating": 6})
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_guest_cannot_rate_someone_elses_ticket(self):
+        ticket = self.make_ticket(
+            status=Ticket.Status.RESOLVED,
+            resolved_minutes_ago=10,
+            guest=self.other_guest,
+        )
+        self.authenticate()  # authenticated as self.user, not the ticket's owner
+
+        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/rate/", {"rating": 5})
+
+        self.assertEqual(response.status_code, 404)
+
+    # --- Reopen -------------------------------------------------------
+
+    def test_guest_can_reopen_within_window(self):
+        ticket = self.make_ticket(status=Ticket.Status.RESOLVED, resolved_minutes_ago=60)
+        self.authenticate()
+
+        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/reopen/")
+
+        self.assertEqual(response.status_code, 200)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, Ticket.Status.OPEN)
+        self.assertIsNotNone(ticket.reopened_at)
+        self.assertTrue(
+            ticket.history.filter(
+                action=TicketHistory.Action.STATUS_CHANGED,
+                new_value=Ticket.Status.OPEN,
+            ).exists()
+        )
+
+    def test_cannot_reopen_past_48_hours(self):
+        ticket = self.make_ticket(
+            status=Ticket.Status.RESOLVED,
+            resolved_minutes_ago=48 * 60 + 1,
+        )
+        self.authenticate()
+
+        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/reopen/")
+
+        self.assertEqual(response.status_code, 400)
+        ticket.refresh_from_db()
+        self.assertEqual(ticket.status, Ticket.Status.RESOLVED)
+
+    def test_cannot_reopen_twice(self):
+        ticket = self.make_ticket(status=Ticket.Status.RESOLVED, resolved_minutes_ago=10)
+        self.authenticate()
+        first = self.client.post(f"/api/v1/tickets/{ticket.pk}/reopen/")
+        self.assertEqual(first.status_code, 200)
+
+        # Resolve it again, then try to reopen a second time.
+        ticket.refresh_from_db()
+        ticket.status = Ticket.Status.RESOLVED
+        ticket.resolved_at = timezone.now()
+        ticket.save(update_fields=["status", "resolved_at"])
+
+        second = self.client.post(f"/api/v1/tickets/{ticket.pk}/reopen/")
+        self.assertEqual(second.status_code, 400)
+
+    def test_cannot_reopen_a_non_resolved_ticket(self):
+        ticket = self.make_ticket(status=Ticket.Status.OPEN)
+        self.authenticate()
+
+        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/reopen/")
+
+        self.assertEqual(response.status_code, 400)
+
+    def test_ticket_detail_exposes_can_reopen(self):
+        ticket = self.make_ticket(status=Ticket.Status.RESOLVED, resolved_minutes_ago=10)
+        self.authenticate()
+
+        response = self.client.get(f"/api/v1/tickets/{ticket.pk}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.data["can_reopen"])
+
+    # --- Quick request templates ---------------------------------------
+
+    def test_guest_can_list_active_quick_templates_in_order(self):
+        QuickRequestTemplate.objects.create(
+            title="Towels",
+            icon="Droplet",
+            department=self.department,
+            category=self.category,
+            order=2,
+        )
+        QuickRequestTemplate.objects.create(
+            title="Extra pillow",
+            icon="Bed",
+            department=self.department,
+            category=self.category,
+            order=1,
+        )
+        QuickRequestTemplate.objects.create(
+            title="Retired template",
+            icon="Bell",
+            department=self.department,
+            category=self.category,
+            is_active=False,
+        )
+        self.authenticate()
+
+        response = self.client.get("/api/v1/quick-templates/")
+
+        self.assertEqual(response.status_code, 200)
+        titles = [item["title"] for item in response.data]
+        self.assertEqual(titles, ["Extra pillow", "Towels"])
+
+    def test_quick_templates_require_authentication(self):
+        response = self.client.get("/api/v1/quick-templates/")
 
         self.assertEqual(response.status_code, 401)

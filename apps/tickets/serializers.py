@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Category, Ticket, TicketHistory, TicketNote
+from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -28,6 +28,8 @@ class TicketSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    can_reopen = serializers.BooleanField(source="can_guest_reopen", read_only=True)
+
     class Meta:
         model = Ticket
         fields = [
@@ -42,6 +44,10 @@ class TicketSerializer(serializers.ModelSerializer):
             "category_name",
             "room_number",
             "resolution",
+            "guest_rating",
+            "guest_feedback",
+            "reopened_at",
+            "can_reopen",
             "created_at",
             "updated_at",
             "resolved_at",
@@ -50,6 +56,10 @@ class TicketSerializer(serializers.ModelSerializer):
             "id",
             "status",
             "resolution",
+            "guest_rating",
+            "guest_feedback",
+            "reopened_at",
+            "can_reopen",
             "created_at",
             "updated_at",
             "resolved_at",
@@ -259,3 +269,16 @@ class TicketNoteSerializer(serializers.ModelSerializer):
         if not value.strip():
             raise serializers.ValidationError("Note text cannot be empty.")
         return value
+
+class TicketRateSerializer(serializers.Serializer):
+    """POST /tickets/{id}/rate/ — write-only input, the view returns a TicketSerializer."""
+
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+    feedback = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class QuickRequestTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QuickRequestTemplate
+        fields = ["id", "title", "icon", "department", "category", "order"]
+        read_only_fields = fields

@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
+from .models import (
+    Category,
+    QuickRequestTemplate,
+    Ticket,
+    TicketAttachment,
+    TicketHistory,
+    TicketNote,
+)
 
 
 @admin.register(Category)
@@ -30,6 +37,13 @@ class TicketNoteInline(admin.TabularInline):
     can_delete = False
 
 
+class TicketAttachmentInline(admin.TabularInline):
+    model = TicketAttachment
+    extra = 0
+    readonly_fields = ("image", "uploaded_by", "created_at")
+    can_delete = False
+
+
 @admin.register(Ticket)
 class TicketAdmin(admin.ModelAdmin):
     list_display = (
@@ -47,7 +61,7 @@ class TicketAdmin(admin.ModelAdmin):
     list_filter = ("status", "priority", "department", "category")
     search_fields = ("title", "description", "guest__full_name", "guest__national_id")
     ordering = ("-created_at",)
-    inlines = [TicketHistoryInline, TicketNoteInline]
+    inlines = [TicketHistoryInline, TicketNoteInline, TicketAttachmentInline]
 
     # These fields are governed by business rules that only live in
     # OperatorTicketSerializer (allowed status transitions via

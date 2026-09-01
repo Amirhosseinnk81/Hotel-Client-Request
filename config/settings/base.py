@@ -124,6 +124,12 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+
+# Stage 2.8: local-disk ticket attachments — no S3/MinIO in this phase.
+MAX_ATTACHMENT_SIZE_MB = config("MAX_ATTACHMENT_SIZE_MB", default=5, cast=int)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # ---------------------------------------------------------------------------

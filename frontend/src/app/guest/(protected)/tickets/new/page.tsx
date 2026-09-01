@@ -4,10 +4,10 @@ import { useEffect, useState } from "react";
 import type { ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowRight, Send, Sparkles } from "lucide-react";
+import { ArrowRight, ImagePlus, Send, Sparkles } from "lucide-react";
 import * as LucideIcons from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -29,9 +29,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { FormError } from "@/components/form-error";
+import { toast } from "@/hooks/use-toast";
 import { priorityLabels } from "@/lib/ticket-labels";
 import {
   ApiError,
+  addGuestTicketAttachment,
   createTicket,
   getCategories,
   getDepartments,
@@ -90,12 +92,13 @@ export default function NewTicketPage() {
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [optionsError, setOptionsError] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   const {
     register,
     control,
     handleSubmit,
-    watch,
     setValue,
     formState: { errors, isSubmitting },
   } = useForm<NewTicketForm>({
@@ -103,8 +106,9 @@ export default function NewTicketPage() {
     defaultValues: { title: "", description: "", department: "", category: "", priority: "NORMAL" },
   });
 
+  const selectedCategoryId = useWatch({ control, name: "category" });
   const selectedCategory = categories.find(
-    (cat) => String(cat.id) === watch("category")
+    (cat) => String(cat.id) === selectedCategoryId
   );
 
   useEffect(() => {
@@ -143,14 +147,33 @@ export default function NewTicketPage() {
 
   const onSubmit = async (data: NewTicketForm) => {
     setApiError(null);
+    setAttachmentError(null);
     try {
-      await createTicket({
+      const ticket = await createTicket({
         title: data.title,
         description: data.description,
         department: Number(data.department),
         category: Number(data.category),
         priority: data.priority,
       });
+
+      if (attachmentFile) {
+        try {
+          await addGuestTicketAttachment(ticket.id, attachmentFile);
+        } catch (attachmentErr) {
+          // The ticket itself was created successfully — don't block the
+          // guest on a photo failure, just let them know it didn't attach.
+          toast({
+            title: "درخواست ثبت شد، ولی عکس پیوست نشد",
+            description:
+              attachmentErr instanceof ApiError
+                ? attachmentErr.message
+                : "خطا در آپلود تصویر.",
+            variant: "destructive",
+          });
+        }
+      }
+
       router.push("/guest/tickets");
     } catch (error) {
       setApiError(error instanceof ApiError ? error.message : "خطایی رخ داد. لطفاً دوباره تلاش کنید.");
@@ -326,6 +349,30 @@ export default function NewTicketPage() {
                     </Select>
                   )}
                 />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="attachment">عکس خرابی (اختیاری)</Label>
+                <label
+                  htmlFor="attachment"
+                  className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/40"
+                >
+                  <ImagePlus className="size-4 shrink-0" />
+                  {attachmentFile ? attachmentFile.name : "انتخاب تصویر…"}
+                </label>
+                <input
+                  id="attachment"
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  onChange={(e) => {
+                    setAttachmentError(null);
+                    setAttachmentFile(e.target.files?.[0] ?? null);
+                  }}
+                />
+                {attachmentError && (
+                  <span className="text-xs text-destructive">{attachmentError}</span>
+                )}
               </div>
 
               <FormError message={apiError} />

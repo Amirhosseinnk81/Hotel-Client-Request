@@ -19,6 +19,7 @@ from .serializers import (
     CategorySerializer,
     OperatorColleagueSerializer,
     QuickRequestTemplateSerializer,
+    TicketAttachmentSerializer,
     TicketHistorySerializer,
     TicketNoteSerializer,
     TicketRateSerializer,
@@ -64,6 +65,7 @@ class GuestTicketListCreateView(generics.ListCreateAPIView):
                 guest__user=self.request.user
             )
             .select_related("department", "category", "room")
+            .prefetch_related("attachments")
         )
 
     def perform_create(self, serializer):
@@ -95,6 +97,7 @@ class GuestTicketDetailView(generics.RetrieveUpdateAPIView):
                 guest__user=self.request.user
             )
             .select_related("department", "category", "room")
+            .prefetch_related("attachments")
         )
 
 
@@ -113,7 +116,7 @@ class GuestTicketRateView(APIView):
     @extend_schema(request=TicketRateSerializer, responses=TicketSerializer)
     def post(self, request, pk):
         ticket = get_object_or_404(
-            Ticket.objects.select_related("department", "category", "room"),
+            Ticket.objects.select_related("department", "category", "room").prefetch_related("attachments"),
             pk=pk,
             guest__user=request.user,
         )
@@ -156,7 +159,7 @@ class GuestTicketReopenView(APIView):
     @extend_schema(request=None, responses=TicketSerializer)
     def post(self, request, pk):
         ticket = get_object_or_404(
-            Ticket.objects.select_related("department", "category", "room"),
+            Ticket.objects.select_related("department", "category", "room").prefetch_related("attachments"),
             pk=pk,
             guest__user=request.user,
         )
@@ -187,6 +190,29 @@ class GuestTicketReopenView(APIView):
         )
 
         return Response(TicketSerializer(ticket).data)
+
+
+class GuestTicketAttachmentCreateView(generics.CreateAPIView):
+    """
+    POST /api/v1/tickets/{id}/attachments/
+
+    A guest attaches a photo to their own ticket — either right after
+    creating it, or later while it's still being worked on. No status
+    restriction: unlike the operator side (which is scoped to "before
+    resolving"), a guest might reasonably want to add another photo at
+    any point.
+    """
+
+    serializer_class = TicketAttachmentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        ticket = get_object_or_404(
+            Ticket,
+            pk=self.kwargs["pk"],
+            guest__user=self.request.user,
+        )
+        serializer.save(ticket=ticket, uploaded_by=self.request.user)
 
 
 class QuickRequestTemplateListView(generics.ListAPIView):
@@ -252,6 +278,7 @@ class OperatorTicketListView(generics.ListAPIView):
                 "room",
                 "assigned_to",
             )
+            .prefetch_related("attachments")
         )
 
 
@@ -328,6 +355,7 @@ class OperatorTicketDetailView(generics.RetrieveUpdateAPIView):
                 "room",
                 "assigned_to",
             )
+            .prefetch_related("attachments")
         )
 
     def perform_update(self, serializer):
@@ -388,6 +416,7 @@ class OperatorTicketAssignView(APIView):
                     "room",
                     "assigned_to",
                 )
+                .prefetch_related("attachments")
                 .get(
                     pk=pk,
                     department=request.user.department,
@@ -558,3 +587,25 @@ class TicketNoteCreateView(generics.CreateAPIView):
     def perform_create(self, serializer):
         ticket = _get_department_ticket_or_404(self.request, self.kwargs["pk"])
         serializer.save(ticket=ticket, author=self.request.user)
+
+
+class OperatorTicketAttachmentCreateView(generics.CreateAPIView):
+    """
+    POST /api/v1/operator/tickets/{id}/attachments/
+
+    An operator attaches a "proof of fix" photo, typically right before
+    resolving. Deliberately stricter than the guest side: only the
+    operator the ticket is *currently assigned to* may attach — being in
+    the same department isn't enough, per the Stage 2.8 spec.
+    """
+
+    serializer_class = TicketAttachmentSerializer
+    permission_classes = [IsOperator]
+
+    def perform_create(self, serializer):
+        ticket = get_object_or_404(
+            Ticket,
+            pk=self.kwargs["pk"],
+            assigned_to=self.request.user,
+        )
+        serializer.save(ticket=ticket, uploaded_by=self.request.user)

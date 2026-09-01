@@ -11,6 +11,7 @@ import type {
   QuickRequestTemplate,
   RefreshResponse,
   Ticket,
+  TicketAttachment,
   TicketPriority,
   TicketStatus,
   TicketTimelineEntry,
@@ -139,7 +140,12 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   }
 
   const requestHeaders = new Headers(headers);
-  requestHeaders.set("Content-Type", "application/json");
+  // FormData (file uploads) must NOT get an explicit Content-Type — the
+  // browser sets it itself, including the multipart boundary. Setting it
+  // manually here would silently break every attachment upload.
+  if (!(rest.body instanceof FormData)) {
+    requestHeaders.set("Content-Type", "application/json");
+  }
   if (!skipAuth && token) {
     requestHeaders.set("Authorization", `Bearer ${token}`);
   }
@@ -394,6 +400,32 @@ export async function addOperatorTicketNote(
   return apiFetch<TicketTimelineEntry>(`/operator/tickets/${id}/notes/`, {
     method: "POST",
     body: JSON.stringify({ text }),
+  });
+}
+
+/** Guest attaches a photo to their own ticket — at creation or later, any status. */
+export async function addGuestTicketAttachment(
+  ticketId: number | string,
+  file: File
+): Promise<TicketAttachment> {
+  const formData = new FormData();
+  formData.append("image", file);
+  return apiFetch<TicketAttachment>(`/tickets/${ticketId}/attachments/`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+/** Operator attaches a "proof of fix" photo — only the assigned operator may. */
+export async function addOperatorTicketAttachment(
+  ticketId: number | string,
+  file: File
+): Promise<TicketAttachment> {
+  const formData = new FormData();
+  formData.append("image", file);
+  return apiFetch<TicketAttachment>(`/operator/tickets/${ticketId}/attachments/`, {
+    method: "POST",
+    body: formData,
   });
 }
 

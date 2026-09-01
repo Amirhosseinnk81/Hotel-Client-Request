@@ -2,7 +2,32 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
+from .models import (
+    Category,
+    QuickRequestTemplate,
+    Ticket,
+    TicketAttachment,
+    TicketHistory,
+    TicketNote,
+)
+
+
+class TicketAttachmentSerializer(serializers.ModelSerializer):
+    """
+    A single image attached to a ticket (Stage 2.8). `image` is the one
+    writable field — the dedicated upload endpoints (guest/operator) set
+    `ticket`/`uploaded_by` themselves via serializer.save(), so those two
+    never need to come from the request body.
+    """
+
+    uploaded_by_username = serializers.CharField(
+        source="uploaded_by.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = TicketAttachment
+        fields = ["id", "image", "uploaded_by_username", "created_at"]
+        read_only_fields = ["id", "uploaded_by_username", "created_at"]
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -30,6 +55,8 @@ class TicketSerializer(serializers.ModelSerializer):
 
     can_reopen = serializers.BooleanField(source="can_guest_reopen", read_only=True)
 
+    attachments = TicketAttachmentSerializer(many=True, read_only=True)
+
     class Meta:
         model = Ticket
         fields = [
@@ -48,6 +75,7 @@ class TicketSerializer(serializers.ModelSerializer):
             "guest_feedback",
             "reopened_at",
             "can_reopen",
+            "attachments",
             "created_at",
             "updated_at",
             "resolved_at",
@@ -100,6 +128,8 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
     is_overdue = serializers.BooleanField(read_only=True)
     overdue_since = serializers.DateTimeField(read_only=True)
 
+    attachments = TicketAttachmentSerializer(many=True, read_only=True)
+
     class Meta:
         model = Ticket
         fields = [
@@ -118,6 +148,7 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             "resolution",
             "is_overdue",
             "overdue_since",
+            "attachments",
             "created_at",
             "updated_at",
             "resolved_at",

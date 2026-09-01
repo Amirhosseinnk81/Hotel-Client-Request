@@ -741,6 +741,45 @@ paths:
               schema:
                 $ref: '#/components/schemas/OperatorTicket'
           description: ''
+  /api/v1/operator/tickets/{id}/attachments/:
+    post:
+      operationId: v1_operator_tickets_attachments_create
+      description: |-
+        POST /api/v1/operator/tickets/{id}/attachments/
+
+        An operator attaches a "proof of fix" photo, typically right before
+        resolving. Deliberately stricter than the guest side: only the
+        operator the ticket is *currently assigned to* may attach — being in
+        the same department isn't enough, per the Stage 2.8 spec.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketAttachmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketAttachmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketAttachmentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketAttachment'
+          description: ''
   /api/v1/operator/tickets/{id}/history/:
     get:
       operationId: v1_operator_tickets_history_list
@@ -837,6 +876,65 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperatorNewTicketCount'
+          description: ''
+  /api/v1/operator/tickets/overdue-count/:
+    get:
+      operationId: v1_operator_tickets_overdue_count_retrieve
+      description: |-
+        GET /api/v1/operator/tickets/overdue-count/
+
+        Count of currently-overdue tickets (Stage 2.9 SLA) in the operator's
+        own department. is_overdue is a Python property, not a DB column (it
+        depends on category.sla_minutes and "now"), so this can't be a plain
+        .filter().count() — at this project's scale, loading the small set of
+        still-open tickets for one department and filtering in Python is fine
+        and keeps the overdue rule defined in exactly one place (Ticket model)
+        instead of duplicating it as a queryset annotation. Feeds the admin
+        stats view (Stage 2.4) and is available for an in-app supervisor
+        warning; an actual push alert is out of scope until Stage 3.2.
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorOverdueCount'
+          description: ''
+  /api/v1/quick-templates/:
+    get:
+      operationId: v1_quick_templates_list
+      description: |-
+        GET /api/v1/quick-templates/ — the one-click shortcuts shown on the
+        guest's "new ticket" form (Stage 2.3). Management is Django-Admin-only;
+        guests only ever read this list.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/QuickRequestTemplate'
           description: ''
   /api/v1/rooms/:
     get:
@@ -1149,6 +1247,113 @@ paths:
               schema:
                 $ref: '#/components/schemas/Ticket'
           description: ''
+  /api/v1/tickets/{id}/attachments/:
+    post:
+      operationId: v1_tickets_attachments_create
+      description: |-
+        POST /api/v1/tickets/{id}/attachments/
+
+        A guest attaches a photo to their own ticket — either right after
+        creating it, or later while it's still being worked on. No status
+        restriction: unlike the operator side (which is scoped to "before
+        resolving"), a guest might reasonably want to add another photo at
+        any point.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketAttachmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketAttachmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketAttachmentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TicketAttachment'
+          description: ''
+  /api/v1/tickets/{id}/rate/:
+    post:
+      operationId: v1_tickets_rate_create
+      description: |-
+        POST /api/v1/tickets/{id}/rate/
+
+        A guest rates their own RESOLVED ticket, once. Not available on any
+        other status, and not re-editable once set — if a second attempt
+        should be allowed later, that's a deliberate future change, not an
+        oversight.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketRateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketRateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketRateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+          description: ''
+  /api/v1/tickets/{id}/reopen/:
+    post:
+      operationId: v1_tickets_reopen_create
+      description: |-
+        POST /api/v1/tickets/{id}/reopen/
+
+        See Ticket.can_guest_reopen for the actual rule (RESOLVED, within 48h
+        of resolved_at, never reopened before). Deliberately a separate action
+        from the operator PATCH endpoint — RESOLVED stays a terminal state in
+        ALLOWED_STATUS_TRANSITIONS, this is the one narrow, guest-only door
+        back to OPEN.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - v1
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ticket'
+          description: ''
 components:
   schemas:
     ActionEnum:
@@ -1179,6 +1384,14 @@ components:
           maxLength: 50
         is_active:
           type: boolean
+        sla_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: 'Expected response time for a ticket in this category, in minutes
+            (e.g. towels: 15, power outage: 10). Drives both the guest-facing "estimated
+            response time" and the operator overdue highlight — there is deliberately
+            only one number to configure, not a separate one for each.'
         created_at:
           type: string
           format: date-time
@@ -1206,6 +1419,14 @@ components:
           maxLength: 50
         is_active:
           type: boolean
+        sla_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: 'Expected response time for a ticket in this category, in minutes
+            (e.g. towels: 15, power outage: 10). Drives both the guest-facing "estimated
+            response time" and the operator overdue highlight — there is deliberately
+            only one number to configure, not a separate one for each.'
       required:
       - code
       - name
@@ -1354,6 +1575,13 @@ components:
           type: integer
       required:
       - count
+    OperatorOverdueCount:
+      type: object
+      properties:
+        count:
+          type: integer
+      required:
+      - count
     OperatorTicket:
       type: object
       properties:
@@ -1394,6 +1622,18 @@ components:
           type: string
           nullable: true
           description: Filled in by the operator when resolving the ticket.
+        is_overdue:
+          type: boolean
+          readOnly: true
+        overdue_since:
+          type: string
+          format: date-time
+          readOnly: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TicketAttachment'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -1409,6 +1649,7 @@ components:
           nullable: true
       required:
       - assigned_to_username
+      - attachments
       - category
       - category_name
       - created_at
@@ -1416,6 +1657,8 @@ components:
       - department_name
       - description
       - id
+      - is_overdue
+      - overdue_since
       - resolved_at
       - room_number
       - title
@@ -1589,6 +1832,14 @@ components:
           maxLength: 50
         is_active:
           type: boolean
+        sla_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: 'Expected response time for a ticket in this category, in minutes
+            (e.g. towels: 15, power outage: 10). Drives both the guest-facing "estimated
+            response time" and the operator overdue highlight — there is deliberately
+            only one number to configure, not a separate one for each.'
     PatchedDepartmentRequest:
       type: object
       properties:
@@ -1673,6 +1924,38 @@ components:
         * `NORMAL` - Normal
         * `HIGH` - High
         * `URGENT` - Urgent
+    QuickRequestTemplate:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        icon:
+          type: string
+          readOnly: true
+          description: A lucide-react icon name (e.g. 'Droplet', 'Shirt', 'Bell')
+            — the frontend renders this icon on the card. Not validated here; an unknown
+            name just falls back to a generic icon.
+        department:
+          type: integer
+          readOnly: true
+        category:
+          type: integer
+          readOnly: true
+        order:
+          type: integer
+          readOnly: true
+          description: Lower numbers show first on the guest form.
+      required:
+      - category
+      - department
+      - icon
+      - id
+      - order
+      - title
     Room:
       type: object
       properties:
@@ -1749,6 +2032,30 @@ components:
           readOnly: true
           nullable: true
           description: Filled in by the operator when resolving the ticket.
+        guest_rating:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: 1-5 stars, set once by the guest after the ticket is RESOLVED.
+        guest_feedback:
+          type: string
+          readOnly: true
+        reopened_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Set the one time (if ever) a guest reopens this ticket. Presence
+            of a value — not just the current status — is what blocks a second reopen,
+            so the limit holds even if the ticket gets resolved again afterwards.
+        can_reopen:
+          type: boolean
+          readOnly: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/TicketAttachment'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -1763,19 +2070,67 @@ components:
           readOnly: true
           nullable: true
       required:
+      - attachments
+      - can_reopen
       - category
       - category_name
       - created_at
       - department
       - department_name
       - description
+      - guest_feedback
+      - guest_rating
       - id
+      - reopened_at
       - resolution
       - resolved_at
       - room_number
       - status
       - title
       - updated_at
+    TicketAttachment:
+      type: object
+      description: |-
+        A single image attached to a ticket (Stage 2.8). `image` is the one
+        writable field — the dedicated upload endpoints (guest/operator) set
+        `ticket`/`uploaded_by` themselves via serializer.save(), so those two
+        never need to come from the request body.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        image:
+          type: string
+          format: uri
+          description: Image only (jpg/jpeg/png/webp/gif), max MAX_ATTACHMENT_SIZE_MB.
+          pattern: (?:jpg|jpeg|png|webp|gif)$
+        uploaded_by_username:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - image
+      - uploaded_by_username
+    TicketAttachmentRequest:
+      type: object
+      description: |-
+        A single image attached to a ticket (Stage 2.8). `image` is the one
+        writable field — the dedicated upload endpoints (guest/operator) set
+        `ticket`/`uploaded_by` themselves via serializer.save(), so those two
+        never need to come from the request body.
+      properties:
+        image:
+          type: string
+          format: binary
+          description: Image only (jpg/jpeg/png/webp/gif), max MAX_ATTACHMENT_SIZE_MB.
+          pattern: (?:jpg|jpeg|png|webp|gif)$
+      required:
+      - image
     TicketHistory:
       type: object
       description: |-
@@ -1859,6 +2214,20 @@ components:
           minLength: 1
       required:
       - text
+    TicketRateRequest:
+      type: object
+      description: POST /tickets/{id}/rate/ — write-only input, the view returns a
+        TicketSerializer.
+      properties:
+        rating:
+          type: integer
+          maximum: 5
+          minimum: 1
+        feedback:
+          type: string
+          default: ''
+      required:
+      - rating
     TicketRequest:
       type: object
       properties:

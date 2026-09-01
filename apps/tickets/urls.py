@@ -3,6 +3,7 @@ from django.urls import path
 from .views import (
     CategoryDetailView,
     CategoryListCreateView,
+    GuestTicketAttachmentCreateView,
     GuestTicketDetailView,
     GuestTicketListCreateView,
     GuestTicketRateView,
@@ -10,6 +11,7 @@ from .views import (
     OperatorColleaguesListView,
     OperatorNewTicketCountView,
     OperatorOverdueTicketCountView,
+    OperatorTicketAttachmentCreateView,
     OperatorTicketDetailView,
     OperatorTicketListView,
     OperatorTicketAssignView,
@@ -55,6 +57,11 @@ urlpatterns = [
         name="guest-ticket-reopen",
     ),
     path(
+        "tickets/<int:pk>/attachments/",
+        GuestTicketAttachmentCreateView.as_view(),
+        name="guest-ticket-attachment-create",
+    ),
+    path(
         "operator/tickets/",
         OperatorTicketListView.as_view(),
         name="operator-ticket-list",
@@ -88,6 +95,11 @@ urlpatterns = [
         "operator/tickets/<int:pk>/notes/",
         TicketNoteCreateView.as_view(),
         name="operator-ticket-notes",
+    ),
+    path(
+        "operator/tickets/<int:pk>/attachments/",
+        OperatorTicketAttachmentCreateView.as_view(),
+        name="operator-ticket-attachment-create",
     ),
     path(
         "operator/colleagues/",

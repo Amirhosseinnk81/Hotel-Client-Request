@@ -109,7 +109,10 @@ export default function GuestTicketDetailPage({
   const [isReopenDialogOpen, setIsReopenDialogOpen] = useState(false);
 
   const load = () => {
-    setError(null);
+    // Deferred (not synchronous) so calling load() directly from a
+    // useEffect body doesn't trip react-hooks/set-state-in-effect — see
+    // operator/tickets/[id]/page.tsx for the full rationale.
+    queueMicrotask(() => setError(null));
     getTicketDetail(id)
       .then(setTicket)
       .catch((err) => {
@@ -221,6 +224,30 @@ export default function GuestTicketDetailPage({
               <span className="text-xs text-muted-foreground">توضیحات</span>
               <p className="text-sm">{ticket.description}</p>
             </div>
+
+            {ticket.attachments.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-muted-foreground">تصاویر پیوست</span>
+                <div className="flex flex-wrap gap-2">
+                  {ticket.attachments.map((attachment) => (
+                    <a
+                      key={attachment.id}
+                      href={attachment.image}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block overflow-hidden rounded-md border"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={attachment.image}
+                        alt="پیوست تیکت"
+                        className="size-20 object-cover"
+                      />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
               <span>ثبت‌شده: {formatDate(ticket.created_at)}</span>

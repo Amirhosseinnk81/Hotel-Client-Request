@@ -60,6 +60,13 @@ export interface Category {
 export type TicketStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
 export type TicketPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
 
+export interface TicketAttachment {
+  id: number;
+  image: string;
+  uploaded_by_username: string | null;
+  created_at: string;
+}
+
 export interface Ticket {
   id: number;
   title: string;
@@ -83,6 +90,8 @@ export interface Ticket {
   guest_feedback?: string;
   reopened_at?: string | null;
   can_reopen?: boolean;
+  /** Stage 2.8 — present on both guest and operator ticket reads. */
+  attachments: TicketAttachment[];
   created_at: string;
   updated_at: string;
   resolved_at: string | null;

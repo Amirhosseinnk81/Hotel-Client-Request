@@ -3,9 +3,11 @@
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   Clock,
+  ImagePlus,
   Loader2,
   MessageSquarePlus,
   UserPlus,
@@ -33,6 +35,7 @@ import {
 import { FormError } from "@/components/form-error";
 import { toast } from "@/hooks/use-toast";
 import {
+  addOperatorTicketAttachment,
   addOperatorTicketNote,
   assignTicketToSelf,
   getAccessToken,
@@ -119,6 +122,7 @@ export default function OperatorTicketDetailPage({
 
   const [targetStatus, setTargetStatus] = useState<TicketStatus | "">("");
   const [resolution, setResolution] = useState("");
+  const [resolutionAttachment, setResolutionAttachment] = useState<File | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const [timeline, setTimeline] = useState<TicketTimelineEntry[] | null>(null);
@@ -242,9 +246,28 @@ export default function OperatorTicketDetailPage({
         status: targetStatus,
         ...(targetStatus === "RESOLVED" ? { resolution } : {}),
       });
+
+      if (targetStatus === "RESOLVED" && resolutionAttachment) {
+        try {
+          await addOperatorTicketAttachment(id, resolutionAttachment);
+        } catch (attachmentErr) {
+          // The status change itself succeeded — a failed photo upload
+          // shouldn't be reported as if the resolution itself failed.
+          toast({
+            title: "وضعیت ثبت شد، ولی عکس پیوست نشد",
+            description:
+              attachmentErr instanceof ApiError
+                ? attachmentErr.message
+                : "خطا در آپلود تصویر.",
+            variant: "destructive",
+          });
+        }
+      }
+
       setTicket(updated);
       setTargetStatus("");
       setResolution("");
+      setResolutionAttachment(null);
       loadTimeline();
       toast({
         title: "وضعیت به‌روزرسانی شد",
@@ -357,12 +380,42 @@ export default function OperatorTicketDetailPage({
                     ? `اختصاص به: ${ticket.assigned_to_username}`
                     : "اختصاص‌نیافته"}
                 </Badge>
+                {ticket.is_overdue && (
+                  <Badge variant="destructive" className="gap-1">
+                    <AlertTriangle className="size-3" />
+                    معوق
+                  </Badge>
+                )}
               </div>
 
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">توضیحات</span>
                 <p className="text-sm">{ticket.description}</p>
               </div>
+
+              {ticket.attachments.length > 0 && (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground">تصاویر پیوست</span>
+                  <div className="flex flex-wrap gap-2">
+                    {ticket.attachments.map((attachment) => (
+                      <a
+                        key={attachment.id}
+                        href={attachment.image}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block overflow-hidden rounded-md border"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={attachment.image}
+                          alt="پیوست تیکت"
+                          className="size-20 object-cover"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
                 <span>ثبت‌شده: {formatDate(ticket.created_at)}</span>
@@ -496,6 +549,28 @@ export default function OperatorTicketDetailPage({
                       placeholder="توضیح دهید که چه اقدامی انجام شد…"
                       value={resolution}
                       onChange={(e) => setResolution(e.target.value)}
+                    />
+                  </div>
+                )}
+
+                {needsResolution && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="resolution-attachment">عکس نتیجه (اختیاری)</Label>
+                    <label
+                      htmlFor="resolution-attachment"
+                      className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/40"
+                    >
+                      <ImagePlus className="size-4 shrink-0" />
+                      {resolutionAttachment ? resolutionAttachment.name : "انتخاب تصویر…"}
+                    </label>
+                    <input
+                      id="resolution-attachment"
+                      type="file"
+                      accept="image/*"
+                      className="sr-only"
+                      onChange={(e) =>
+                        setResolutionAttachment(e.target.files?.[0] ?? null)
+                      }
                     />
                   </div>
                 )}

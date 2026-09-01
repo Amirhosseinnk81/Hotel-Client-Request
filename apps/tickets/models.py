@@ -1,7 +1,12 @@
 from datetime import timedelta
 
 from django.conf import settings
-from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.exceptions import ValidationError
+from django.core.validators import (
+    FileExtensionValidator,
+    MaxValueValidator,
+    MinValueValidator,
+)
 from django.db import models
 from django.utils import timezone
 
@@ -353,3 +358,59 @@ class QuickRequestTemplate(models.Model):
 
     def __str__(self):
         return self.title
+
+
+def validate_attachment_size(file):
+    """Rejects uploads over MAX_ATTACHMENT_SIZE_MB (default 5MB, env-tunable)."""
+    max_bytes = settings.MAX_ATTACHMENT_SIZE_MB * 1024 * 1024
+    if file.size > max_bytes:
+        raise ValidationError(
+            f"File too large ({file.size / 1024 / 1024:.1f}MB). "
+            f"Max size is {settings.MAX_ATTACHMENT_SIZE_MB}MB."
+        )
+
+
+def ticket_attachment_upload_path(instance, filename):
+    return f"ticket_attachments/{instance.ticket_id}/{filename}"
+
+
+class TicketAttachment(models.Model):
+    """
+    An image attached to a ticket (Stage 2.8) — either a guest's photo of
+    the problem (attached at creation or later) or an operator's photo of
+    the fix (attached before resolving). Local disk storage under
+    MEDIA_ROOT only; no S3/MinIO in this phase.
+    """
+
+    ticket = models.ForeignKey(
+        Ticket,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+
+    image = models.ImageField(
+        upload_to=ticket_attachment_upload_path,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=["jpg", "jpeg", "png", "webp", "gif"]
+            ),
+            validate_attachment_size,
+        ],
+        help_text="Image only (jpg/jpeg/png/webp/gif), max MAX_ATTACHMENT_SIZE_MB.",
+    )
+
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="ticket_attachments",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Attachment #{self.pk} on Ticket #{self.ticket_id}"

@@ -1,14 +1,24 @@
+import io
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
+from PIL import Image
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.departments.models import Department
 from apps.guests.models import Guest
 from apps.rooms.models import Room
-from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
+from .models import (
+    Category,
+    QuickRequestTemplate,
+    Ticket,
+    TicketAttachment,
+    TicketHistory,
+    TicketNote,
+)
 
 User = get_user_model()
 
@@ -1654,3 +1664,263 @@ class TicketGuestExperienceTests(APITestCase):
         response = self.client.get("/api/v1/quick-templates/")
 
         self.assertEqual(response.status_code, 401)
+
+
+def _make_test_image(name="photo.png", size_kb=None):
+    """A tiny but genuinely valid PNG, so Pillow-backed ImageField
+    validation accepts it. If size_kb is given, generates a larger image
+    filled with random noise (a solid color compresses to almost nothing
+    in PNG regardless of dimensions, which defeats the point of a
+    max-size test) so the encoded file actually reaches roughly that size.
+    """
+    if not size_kb:
+        buffer = io.BytesIO()
+        Image.new("RGB", (10, 10), color=(255, 0, 0)).save(buffer, format="PNG")
+        buffer.seek(0)
+        return SimpleUploadedFile(name, buffer.read(), content_type="image/png")
+
+    import math
+    import os
+
+    # Random noise barely compresses, so raw size ~= encoded size. Aim a
+    # bit above the target so PNG/zlib overhead doesn't undershoot it.
+    dimension = max(10, int(math.sqrt((size_kb * 1024 * 1.3) / 3)))
+    raw = os.urandom(dimension * dimension * 3)
+    image = Image.frombytes("RGB", (dimension, dimension), raw)
+
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG", compress_level=0)
+    buffer.seek(0)
+    return SimpleUploadedFile(name, buffer.read(), content_type="image/png")
+
+
+class TicketAttachmentAPITests(APITestCase):
+    """Stage 2.8: guest/operator image attachments on a ticket."""
+
+    def setUp(self):
+        self.department = Department.objects.create(
+            name="Housekeeping",
+            code="HOUSEKEEPING_ATT",
+        )
+        self.other_department = Department.objects.create(
+            name="Maintenance",
+            code="MAINTENANCE_ATT",
+        )
+
+        self.category = Category.objects.create(
+            name="Towels",
+            code="TOWELS_ATT",
+        )
+
+        self.room = Room.objects.create(number="501", status=Room.Status.OCCUPIED)
+
+        self.guest_user = User.objects.create_user(
+            username="guest501",
+            role=User.Role.GUEST,
+        )
+        self.guest = Guest.objects.create(
+            user=self.guest_user,
+            full_name="Attachment Test Guest",
+            national_id="0077778888",
+            phone="09121112222",
+            room=self.room,
+        )
+
+        self.other_guest_user = User.objects.create_user(
+            username="guest502",
+            role=User.Role.GUEST,
+        )
+        other_room = Room.objects.create(number="502", status=Room.Status.OCCUPIED)
+        self.other_guest = Guest.objects.create(
+            user=self.other_guest_user,
+            full_name="Other Guest",
+            national_id="0099990000",
+            phone="09123332222",
+            room=other_room,
+        )
+
+        self.operator_user = User.objects.create_user(
+            username="attachment_operator",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.department,
+        )
+        self.other_operator_user = User.objects.create_user(
+            username="attachment_operator_2",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.department,
+        )
+
+        self.ticket = Ticket.objects.create(
+            guest=self.guest,
+            department=self.department,
+            category=self.category,
+            room=self.room,
+            title="Extra towels",
+            description="Please send towels.",
+        )
+
+        self.guest_attachments_url = f"/api/v1/tickets/{self.ticket.id}/attachments/"
+        self.operator_attachments_url = (
+            f"/api/v1/operator/tickets/{self.ticket.id}/attachments/"
+        )
+
+    def authenticate_guest(self, user=None):
+        refresh = RefreshToken.for_user(user or self.guest_user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
+
+    def authenticate_operator(self, user=None):
+        self.client.force_authenticate(user or self.operator_user)
+
+    # --- Guest upload -----------------------------------------------------
+
+    def test_guest_can_attach_image_to_own_ticket(self):
+        self.authenticate_guest()
+
+        response = self.client.post(
+            self.guest_attachments_url,
+            {"image": _make_test_image()},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(TicketAttachment.objects.filter(ticket=self.ticket).count(), 1)
+        attachment = TicketAttachment.objects.get(ticket=self.ticket)
+        self.assertEqual(attachment.uploaded_by, self.guest_user)
+
+    def test_guest_cannot_attach_to_someone_elses_ticket(self):
+        self.authenticate_guest(self.other_guest_user)
+
+        response = self.client.post(
+            self.guest_attachments_url,
+            {"image": _make_test_image()},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertEqual(TicketAttachment.objects.filter(ticket=self.ticket).count(), 0)
+
+    def test_guest_can_attach_regardless_of_status(self):
+        self.ticket.status = Ticket.Status.RESOLVED
+        self.ticket.save(update_fields=["status"])
+        self.authenticate_guest()
+
+        response = self.client.post(
+            self.guest_attachments_url,
+            {"image": _make_test_image()},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+    def test_non_image_file_is_rejected(self):
+        self.authenticate_guest()
+        fake_file = SimpleUploadedFile(
+            "not_an_image.txt", b"just some text", content_type="text/plain"
+        )
+
+        response = self.client.post(
+            self.guest_attachments_url, {"image": fake_file}, format="multipart"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(TicketAttachment.objects.filter(ticket=self.ticket).count(), 0)
+
+    def test_oversized_image_is_rejected(self):
+        from django.test import override_settings
+
+        self.authenticate_guest()
+
+        with override_settings(MAX_ATTACHMENT_SIZE_MB=1):
+            # ~1200x1200 RGB PNG comfortably exceeds 1MB uncompressed-ish.
+            big_image = _make_test_image(size_kb=1200)
+            response = self.client.post(
+                self.guest_attachments_url, {"image": big_image}, format="multipart"
+            )
+
+        self.assertEqual(response.status_code, 400)
+
+    # --- Operator upload ----------------------------------------------------
+
+    def test_assigned_operator_can_attach_image(self):
+        self.ticket.assigned_to = self.operator_user
+        self.ticket.save(update_fields=["assigned_to"])
+        self.authenticate_operator()
+
+        response = self.client.post(
+            self.operator_attachments_url,
+            {"image": _make_test_image()},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 201)
+        attachment = TicketAttachment.objects.get(ticket=self.ticket)
+        self.assertEqual(attachment.uploaded_by, self.operator_user)
+
+    def test_unassigned_operator_in_same_department_cannot_attach(self):
+        """Being in the same department isn't enough — must be the
+        assignee, per the Stage 2.8 spec (stricter than notes/history)."""
+        self.ticket.assigned_to = self.other_operator_user
+        self.ticket.save(update_fields=["assigned_to"])
+        self.authenticate_operator(self.operator_user)
+
+        response = self.client.post(
+            self.operator_attachments_url,
+            {"image": _make_test_image()},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_unassigned_ticket_rejects_operator_attachment(self):
+        # assigned_to is still None — no one is "the assignee" yet.
+        self.authenticate_operator()
+
+        response = self.client.post(
+            self.operator_attachments_url,
+            {"image": _make_test_image()},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_guest_cannot_use_operator_attachment_endpoint(self):
+        self.ticket.assigned_to = self.operator_user
+        self.ticket.save(update_fields=["assigned_to"])
+        self.authenticate_guest()
+
+        response = self.client.post(
+            self.operator_attachments_url,
+            {"image": _make_test_image()},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, 403)
+
+    # --- Read-side exposure ----------------------------------------------
+
+    def test_attachments_appear_on_guest_ticket_detail(self):
+        TicketAttachment.objects.create(
+            ticket=self.ticket, image=_make_test_image(), uploaded_by=self.guest_user
+        )
+        self.authenticate_guest()
+
+        response = self.client.get(f"/api/v1/tickets/{self.ticket.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["attachments"]), 1)
+        self.assertEqual(
+            response.data["attachments"][0]["uploaded_by_username"], "guest501"
+        )
+
+    def test_attachments_appear_on_operator_ticket_detail(self):
+        TicketAttachment.objects.create(
+            ticket=self.ticket, image=_make_test_image(), uploaded_by=self.guest_user
+        )
+        self.authenticate_operator()
+
+        response = self.client.get(f"/api/v1/operator/tickets/{self.ticket.id}/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data["attachments"]), 1)

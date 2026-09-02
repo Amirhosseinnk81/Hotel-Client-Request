@@ -58,6 +58,7 @@ import {
   statusBadgeVariant,
   priorityLabels,
   priorityBadgeVariant,
+  allowedNextStatuses,
 } from "@/lib/ticket-labels";
 
 function formatDate(iso: string) {
@@ -92,14 +93,6 @@ function describeHistoryEntry(entry: TicketHistoryEntry): string {
       return entry.action_display;
   }
 }
-
-/** Business rule: OPEN → IN_PROGRESS → RESOLVED, or OPEN/IN_PROGRESS → CANCELLED. */
-const allowedNextStatuses: Record<TicketStatus, TicketStatus[]> = {
-  OPEN: ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["RESOLVED", "CANCELLED"],
-  RESOLVED: [],
-  CANCELLED: [],
-};
 
 /** Sentinel value for the "no one" option — Radix Select rejects an empty string value. */
 const UNASSIGNED_VALUE = "UNASSIGNED";
@@ -247,9 +240,19 @@ export default function OperatorTicketDetailPage({
         ...(targetStatus === "RESOLVED" ? { resolution } : {}),
       });
 
+      // Start from what the status-update call returned, then patch in the
+      // just-uploaded attachment locally — `updated` was fetched before the
+      // upload, so its attachments list doesn't include it yet, and we'd
+      // rather not do a full extra reload just to pick up one new photo.
+      let finalTicket = updated;
+
       if (targetStatus === "RESOLVED" && resolutionAttachment) {
         try {
-          await addOperatorTicketAttachment(id, resolutionAttachment);
+          const attachment = await addOperatorTicketAttachment(id, resolutionAttachment);
+          finalTicket = {
+            ...updated,
+            attachments: [...updated.attachments, attachment],
+          };
         } catch (attachmentErr) {
           // The status change itself succeeded — a failed photo upload
           // shouldn't be reported as if the resolution itself failed.
@@ -264,7 +267,7 @@ export default function OperatorTicketDetailPage({
         }
       }
 
-      setTicket(updated);
+      setTicket(finalTicket);
       setTargetStatus("");
       setResolution("");
       setResolutionAttachment(null);

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, ChevronLeft, Inbox, UserCheck2 } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Inbox, LayoutGrid, List, UserCheck2 } from "lucide-react";
 
 import {
   Card,
@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -22,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { FormError } from "@/components/form-error";
 import { Skeleton } from "@/components/ui/skeleton";
+import { KanbanBoard } from "@/components/kanban-board";
 import { getOperatorTickets, ApiError } from "@/lib/api/client";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { Ticket, TicketPriority, TicketStatus } from "@/lib/api/types";
@@ -63,6 +65,10 @@ export default function OperatorHomePage() {
   const [priorityFilter, setPriorityFilter] = useState<TicketPriority | "ALL">("ALL");
   const [searchInput, setSearchInput] = useState("");
   const debouncedSearch = useDebouncedValue(searchInput, 400);
+  // Kanban shows OPEN/IN_PROGRESS/RESOLVED side by side, so the status
+  // filter doesn't apply there — only List view uses it (see the fetch
+  // effect below, and the hidden Select further down).
+  const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
 
   useEffect(() => {
     let cancelled = false;
@@ -74,7 +80,7 @@ export default function OperatorHomePage() {
     });
 
     getOperatorTickets({
-      status: statusFilter === "ALL" ? undefined : statusFilter,
+      status: viewMode === "kanban" || statusFilter === "ALL" ? undefined : statusFilter,
       priority: priorityFilter === "ALL" ? undefined : priorityFilter,
       search: debouncedSearch || undefined,
     })
@@ -90,7 +96,13 @@ export default function OperatorHomePage() {
     return () => {
       cancelled = true;
     };
-  }, [statusFilter, priorityFilter, debouncedSearch]);
+  }, [statusFilter, priorityFilter, debouncedSearch, viewMode]);
+
+  const handleTicketChange = (updated: Ticket) => {
+    setTickets((prev) =>
+      prev ? prev.map((t) => (t.id === updated.id ? updated : t)) : prev
+    );
+  };
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4">
@@ -101,6 +113,29 @@ export default function OperatorHomePage() {
         </p>
       </div>
 
+      <div className="flex w-fit gap-1 rounded-lg border p-1">
+        <Button
+          type="button"
+          size="sm"
+          variant={viewMode === "list" ? "secondary" : "ghost"}
+          className="gap-1.5"
+          onClick={() => setViewMode("list")}
+        >
+          <List className="size-3.5" />
+          لیست
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={viewMode === "kanban" ? "secondary" : "ghost"}
+          className="gap-1.5"
+          onClick={() => setViewMode("kanban")}
+        >
+          <LayoutGrid className="size-3.5" />
+          کانبان
+        </Button>
+      </div>
+
       <div className="flex flex-col gap-3 sm:flex-row">
         <Input
           placeholder="جستجو در عنوان یا شماره اتاق…"
@@ -108,21 +143,23 @@ export default function OperatorHomePage() {
           onChange={(e) => setSearchInput(e.target.value)}
           className="sm:max-w-xs"
         />
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => setStatusFilter(v as TicketStatus | "ALL")}
-        >
-          <SelectTrigger className="sm:max-w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {statusFilterOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {viewMode === "list" && (
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => setStatusFilter(v as TicketStatus | "ALL")}
+          >
+            <SelectTrigger className="sm:max-w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {statusFilterOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Select
@@ -178,7 +215,11 @@ export default function OperatorHomePage() {
         </Card>
       )}
 
-      {tickets && tickets.length > 0 && (
+      {tickets && tickets.length > 0 && viewMode === "kanban" && (
+        <KanbanBoard tickets={tickets} onTicketChange={handleTicketChange} />
+      )}
+
+      {tickets && tickets.length > 0 && viewMode === "list" && (
         <div className="flex flex-col gap-3">
           {tickets.map((ticket) => (
             <Link key={ticket.id} href={`/operator/tickets/${ticket.id}`}>

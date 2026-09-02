@@ -313,3 +313,40 @@ class QuickRequestTemplateSerializer(serializers.ModelSerializer):
         model = QuickRequestTemplate
         fields = ["id", "title", "icon", "department", "category", "order"]
         read_only_fields = fields
+
+
+class AdminStatsByStatusSerializer(serializers.Serializer):
+    """Ticket count per Ticket.Status value, system-wide (Stage 2.4)."""
+
+    OPEN = serializers.IntegerField()
+    IN_PROGRESS = serializers.IntegerField()
+    RESOLVED = serializers.IntegerField()
+    CANCELLED = serializers.IntegerField()
+
+
+class AdminStatsByDepartmentSerializer(serializers.Serializer):
+    """One row of the by-department breakdown (Stage 2.4)."""
+
+    department_id = serializers.IntegerField()
+    department_name = serializers.CharField()
+    open = serializers.IntegerField()
+    in_progress = serializers.IntegerField()
+    resolved = serializers.IntegerField()
+    cancelled = serializers.IntegerField()
+    total = serializers.IntegerField()
+
+
+class AdminStatsSummarySerializer(serializers.Serializer):
+    """
+    GET /admin/stats/summary/ (Stage 2.4) — read-only aggregate view for
+    admins: ticket counts by status/department, average resolution time
+    over the last `resolution_window_days`, and the current system-wide
+    overdue count (Stage 2.9 SLA).
+    """
+
+    by_status = AdminStatsByStatusSerializer()
+    by_department = AdminStatsByDepartmentSerializer(many=True)
+    avg_resolution_minutes = serializers.FloatField(allow_null=True)
+    overdue_count = serializers.IntegerField()
+    resolution_window_days = serializers.IntegerField()
+    generated_at = serializers.DateTimeField()

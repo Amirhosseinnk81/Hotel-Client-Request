@@ -48,3 +48,22 @@ class IsAdminRole(BasePermission):
             return True
 
         return request.user.is_superuser or request.user.role == "ADMIN"
+
+
+class IsAdminOnly(BasePermission):
+    """
+    Admin (or Django superuser) access only — for every HTTP method,
+    unlike IsAdminRole which leaves GET/HEAD/OPTIONS open to any
+    authenticated user. Used for endpoints that expose cross-department
+    data (e.g. admin stats) that operators/guests must never read, not
+    just never write.
+    """
+
+    message = "Only admins are allowed to access this resource."
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and (request.user.is_superuser or request.user.role == "ADMIN")
+        )

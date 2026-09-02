@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    AdminStatsSummaryView,
     CategoryDetailView,
     CategoryListCreateView,
     GuestTicketAttachmentCreateView,
@@ -21,6 +22,11 @@ from .views import (
 )
 
 urlpatterns = [
+    path(
+        "admin/stats/summary/",
+        AdminStatsSummaryView.as_view(),
+        name="admin-stats-summary",
+    ),
     path(
         "categories/",
         CategoryListCreateView.as_view(),

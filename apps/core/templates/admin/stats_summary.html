@@ -1,0 +1,98 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">{% translate 'Home' %}</a>
+  &rsaquo; {{ title }}
+</div>
+{% endblock %}
+
+{% block content %}
+<style>
+  .stats-cards { display: flex; flex-wrap: wrap; gap: 16px; margin: 0 0 24px; }
+  .stats-card {
+    background: var(--body-bg, #fff);
+    border: 1px solid var(--hairline-color, #ccc);
+    border-radius: 6px;
+    padding: 16px 20px;
+    min-width: 160px;
+  }
+  .stats-card .stats-card-number { font-size: 28px; font-weight: 600; line-height: 1.2; }
+  .stats-card .stats-card-label { color: var(--body-quiet-color, #666); font-size: 13px; margin-top: 4px; }
+  .stats-card.overdue .stats-card-number { color: #c0392b; }
+  table.stats-table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
+  table.stats-table th, table.stats-table td { padding: 8px 12px; border-bottom: 1px solid var(--hairline-color, #eee); text-align: left; }
+  table.stats-table th { background: var(--darkened-bg, #f5f5f5); }
+  .stats-generated-at { color: var(--body-quiet-color, #666); font-size: 12px; margin-top: 8px; }
+</style>
+
+<h1>{{ title }}</h1>
+
+<div class="stats-cards">
+  <div class="stats-card">
+    <div class="stats-card-number">{{ stats.by_status.OPEN }}</div>
+    <div class="stats-card-label">{% translate 'Open' %}</div>
+  </div>
+  <div class="stats-card">
+    <div class="stats-card-number">{{ stats.by_status.IN_PROGRESS }}</div>
+    <div class="stats-card-label">{% translate 'In Progress' %}</div>
+  </div>
+  <div class="stats-card">
+    <div class="stats-card-number">{{ stats.by_status.RESOLVED }}</div>
+    <div class="stats-card-label">{% translate 'Resolved' %}</div>
+  </div>
+  <div class="stats-card">
+    <div class="stats-card-number">{{ stats.by_status.CANCELLED }}</div>
+    <div class="stats-card-label">{% translate 'Cancelled' %}</div>
+  </div>
+  <div class="stats-card overdue">
+    <div class="stats-card-number">{{ stats.overdue_count }}</div>
+    <div class="stats-card-label">{% translate 'Currently overdue' %}</div>
+  </div>
+  <div class="stats-card">
+    <div class="stats-card-number">
+      {% if stats.avg_resolution_minutes is not None %}
+        {{ stats.avg_resolution_minutes }} {% translate 'min' %}
+      {% else %}
+        &mdash;
+      {% endif %}
+    </div>
+    <div class="stats-card-label">
+      {% blocktranslate with days=stats.resolution_window_days %}Avg. resolution time (last {{ days }} days){% endblocktranslate %}
+    </div>
+  </div>
+</div>
+
+<h2>{% translate 'By department' %}</h2>
+<table class="stats-table">
+  <thead>
+    <tr>
+      <th>{% translate 'Department' %}</th>
+      <th>{% translate 'Open' %}</th>
+      <th>{% translate 'In Progress' %}</th>
+      <th>{% translate 'Resolved' %}</th>
+      <th>{% translate 'Cancelled' %}</th>
+      <th>{% translate 'Total' %}</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in stats.by_department %}
+    <tr>
+      <td>{{ row.department_name }}</td>
+      <td>{{ row.open }}</td>
+      <td>{{ row.in_progress }}</td>
+      <td>{{ row.resolved }}</td>
+      <td>{{ row.cancelled }}</td>
+      <td>{{ row.total }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6">{% translate 'No tickets yet.' %}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="stats-generated-at">
+  {% translate 'Generated at' %}: {{ stats.generated_at }}
+</div>
+{% endblock %}

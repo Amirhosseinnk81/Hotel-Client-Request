@@ -1924,3 +1924,157 @@ class TicketAttachmentAPITests(APITestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["attachments"]), 1)
+
+class AdminStatsSummaryAPITests(APITestCase):
+    """Stage 2.4: GET /api/v1/admin/stats/summary/"""
+
+    def setUp(self):
+        self.dept_a = Department.objects.create(name="Housekeeping", code="HK_STATS")
+        self.dept_b = Department.objects.create(name="Maintenance", code="MAINT_STATS")
+
+        self.category = Category.objects.create(
+            name="Towels", code="TOWELS_STATS", sla_minutes=15
+        )
+
+        self.room = Room.objects.create(number="401", status=Room.Status.OCCUPIED)
+
+        guest_user = User.objects.create_user(username="guest401", role=User.Role.GUEST)
+        self.guest = Guest.objects.create(
+            user=guest_user,
+            full_name="Test Guest",
+            national_id="0099999999",
+            phone="09123334444",
+            room=self.room,
+        )
+
+        self.admin_user = User.objects.create_user(
+            username="hotel_admin_stats", password="testpassword", role=User.Role.ADMIN
+        )
+        self.operator_user = User.objects.create_user(
+            username="operator401",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.dept_a,
+        )
+
+        self.url = "/api/v1/admin/stats/summary/"
+
+    def make_ticket(self, department, status, created_minutes_ago=0, resolved_minutes_ago=None):
+        ticket = Ticket.objects.create(
+            guest=self.guest,
+            department=department,
+            category=self.category,
+            room=self.room,
+            title="Test ticket",
+            description="...",
+            status=status,
+        )
+        update_fields = {
+            "created_at": timezone.now() - timedelta(minutes=created_minutes_ago)
+        }
+        if resolved_minutes_ago is not None:
+            update_fields["resolved_at"] = timezone.now() - timedelta(
+                minutes=resolved_minutes_ago
+            )
+        Ticket.objects.filter(pk=ticket.pk).update(**update_fields)
+        ticket.refresh_from_db()
+        return ticket
+
+    def test_unauthenticated_cannot_access(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_guest_cannot_access(self):
+        self.client.force_authenticate(self.guest.user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_operator_cannot_access(self):
+        # Deliberately IsAdminOnly, not IsAdminRole: unlike
+        # Category/Department/Room, this endpoint must stay closed to
+        # operators even for GET, since it aggregates every department.
+        self.client.force_authenticate(self.operator_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_admin_can_access_and_sees_status_breakdown(self):
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN)
+        self.make_ticket(self.dept_a, Ticket.Status.IN_PROGRESS)
+        self.make_ticket(self.dept_b, Ticket.Status.RESOLVED, resolved_minutes_ago=10)
+        self.make_ticket(self.dept_b, Ticket.Status.CANCELLED)
+
+        self.client.force_authenticate(self.admin_user)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.data["by_status"],
+            {"OPEN": 1, "IN_PROGRESS": 1, "RESOLVED": 1, "CANCELLED": 1},
+        )
+
+    def test_by_department_breakdown(self):
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN)
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN)
+        self.make_ticket(self.dept_b, Ticket.Status.RESOLVED, resolved_minutes_ago=5)
+
+        self.client.force_authenticate(self.admin_user)
+        response = self.client.get(self.url)
+
+        by_dept = {row["department_name"]: row for row in response.data["by_department"]}
+        self.assertEqual(by_dept["Housekeeping"]["open"], 2)
+        self.assertEqual(by_dept["Housekeeping"]["total"], 2)
+        self.assertEqual(by_dept["Maintenance"]["resolved"], 1)
+        self.assertEqual(by_dept["Maintenance"]["total"], 1)
+
+    def test_avg_resolution_minutes_only_counts_last_30_days(self):
+        # Resolved 10 minutes ago, created 40 minutes ago -> 30 min resolution.
+        self.make_ticket(
+            self.dept_a,
+            Ticket.Status.RESOLVED,
+            created_minutes_ago=40,
+            resolved_minutes_ago=10,
+        )
+        # Resolved 40 days ago -> outside the 30-day window, must be excluded.
+        old_ticket = self.make_ticket(
+            self.dept_a,
+            Ticket.Status.RESOLVED,
+            created_minutes_ago=40,
+            resolved_minutes_ago=10,
+        )
+        Ticket.objects.filter(pk=old_ticket.pk).update(
+            resolved_at=timezone.now() - timedelta(days=40)
+        )
+
+        self.client.force_authenticate(self.admin_user)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.data["avg_resolution_minutes"], 30.0)
+
+    def test_avg_resolution_minutes_is_null_with_no_recent_resolutions(self):
+        self.client.force_authenticate(self.admin_user)
+        response = self.client.get(self.url)
+        self.assertIsNone(response.data["avg_resolution_minutes"])
+
+    def test_overdue_count_is_system_wide(self):
+        # sla_minutes=15 on self.category; 20 minutes ago is overdue.
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN, created_minutes_ago=20)
+        self.make_ticket(self.dept_b, Ticket.Status.IN_PROGRESS, created_minutes_ago=20)
+        # Within SLA, not overdue.
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN, created_minutes_ago=5)
+        # Resolved tickets are never overdue no matter how old.
+        self.make_ticket(
+            self.dept_b, Ticket.Status.RESOLVED, created_minutes_ago=999, resolved_minutes_ago=1
+        )
+
+        self.client.force_authenticate(self.admin_user)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.data["overdue_count"], 2)
+
+    def test_superuser_can_access(self):
+        superuser = User.objects.create_superuser(
+            username="superuser_stats", password="testpassword", email="s@example.com"
+        )
+        self.client.force_authenticate(superuser)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)

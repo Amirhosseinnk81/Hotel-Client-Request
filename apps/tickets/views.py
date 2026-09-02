@@ -11,11 +11,13 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serial
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers as drf_serializers
 
-from apps.core.permissions import IsAdminRole
+from apps.core.permissions import IsAdminOnly, IsAdminRole
 
 from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
 from .permissions import IsOperator
+from .services import compute_admin_stats_summary
 from .serializers import (
+    AdminStatsSummarySerializer,
     CategorySerializer,
     OperatorColleagueSerializer,
     QuickRequestTemplateSerializer,
@@ -587,6 +589,27 @@ class TicketNoteCreateView(generics.CreateAPIView):
     def perform_create(self, serializer):
         ticket = _get_department_ticket_or_404(self.request, self.kwargs["pk"])
         serializer.save(ticket=ticket, author=self.request.user)
+
+
+@extend_schema(responses=AdminStatsSummarySerializer)
+class AdminStatsSummaryView(APIView):
+    """
+    GET /api/v1/admin/stats/summary/
+
+    Cross-department snapshot for hotel admins (Stage 2.4): ticket counts
+    by status and by department, average resolution time over the last
+    30 days, and the current system-wide overdue count (Stage 2.9 SLA).
+    Admin-only — IsAdminOnly, not IsAdminRole, since this exposes every
+    department's data and must stay closed to operators/guests even for
+    GET (unlike Category/Department/Room, which are intentionally
+    readable by anyone authenticated).
+    """
+
+    permission_classes = [IsAdminOnly]
+
+    def get(self, request):
+        data = compute_admin_stats_summary()
+        return Response(AdminStatsSummarySerializer(data).data)
 
 
 class OperatorTicketAttachmentCreateView(generics.CreateAPIView):

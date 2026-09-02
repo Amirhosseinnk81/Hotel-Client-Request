@@ -7,6 +7,7 @@ import { AlertTriangle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResolveTicketDialog } from "@/components/resolve-ticket-dialog";
+import { RelativeTime } from "@/components/relative-time";
 import { toast } from "@/hooks/use-toast";
 import { updateOperatorTicket, ApiError } from "@/lib/api/client";
 import {
@@ -14,6 +15,7 @@ import {
   statusLabels,
   priorityBadgeVariant,
   priorityLabels,
+  priorityIcons,
 } from "@/lib/ticket-labels";
 import type { Ticket, TicketStatus } from "@/lib/api/types";
 
@@ -82,7 +84,9 @@ export function KanbanBoard({
   return (
     <>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        {COLUMNS.map((column) => (
+        {COLUMNS.map((column) => {
+          const columnTickets = ticketsInColumn(column);
+          return (
           <div
             key={column}
             onDragOver={(e) => {
@@ -101,20 +105,26 @@ export function KanbanBoard({
           >
             <div className="flex items-center justify-between px-1">
               <h3 className="text-sm font-medium">{statusLabels[column]}</h3>
-              <span className="text-xs text-muted-foreground">
-                {ticketsInColumn(column).length}
-              </span>
+              <span className="text-xs text-muted-foreground">{columnTickets.length}</span>
             </div>
 
             <div className="flex min-h-24 flex-col gap-2">
-              {ticketsInColumn(column).map((ticket) => (
+              {columnTickets.length === 0 && (
+                <div className="flex flex-1 items-center justify-center rounded-md border border-dashed py-6 text-xs text-muted-foreground">
+                  خالی
+                </div>
+              )}
+              {columnTickets.map((ticket) => (
                 <div
                   key={ticket.id}
                   draggable
                   onDragStart={() => setDraggedId(ticket.id)}
                   onDragEnd={() => setDraggedId(null)}
                 >
-                  <Link href={`/operator/tickets/${ticket.id}`}>
+                  <Link
+                    href={`/operator/tickets/${ticket.id}`}
+                    className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  >
                     <Card
                       className={
                         "cursor-grab gap-2 py-3 transition-colors hover:bg-secondary/40 active:cursor-grabbing " +
@@ -124,19 +134,28 @@ export function KanbanBoard({
                       <CardHeader className="px-3">
                         <CardTitle className="text-sm leading-snug">{ticket.title}</CardTitle>
                       </CardHeader>
-                      <CardContent className="flex flex-wrap items-center gap-1.5 px-3">
-                        <Badge
-                          variant={priorityBadgeVariant[ticket.priority]}
-                          className="text-xs"
-                        >
-                          {priorityLabels[ticket.priority]}
-                        </Badge>
-                        {ticket.is_overdue && (
-                          <Badge variant="destructive" className="gap-1 text-xs">
-                            <AlertTriangle className="size-3" />
-                            معوق
+                      <CardContent className="flex flex-col gap-1.5 px-3">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge
+                            variant={priorityBadgeVariant[ticket.priority]}
+                            className="gap-1 text-xs"
+                          >
+                            {(() => {
+                              const PriorityIcon = priorityIcons[ticket.priority];
+                              return <PriorityIcon className="size-3" />;
+                            })()}
+                            {priorityLabels[ticket.priority]}
                           </Badge>
-                        )}
+                          {ticket.is_overdue && (
+                            <Badge variant="destructive" className="gap-1 text-xs">
+                              <AlertTriangle className="size-3" />
+                              معوق
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          <RelativeTime iso={ticket.created_at} />
+                        </span>
                       </CardContent>
                     </Card>
                   </Link>
@@ -144,7 +163,8 @@ export function KanbanBoard({
               ))}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {resolveDialogTicketId !== null && (

@@ -1,3 +1,5 @@
+import { ArrowDown, ArrowUp, Flame, Minus, type LucideIcon } from "lucide-react";
+
 import type { TicketPriority, TicketStatus } from "@/lib/api/types";
 
 export const statusLabels: Record<TicketStatus, string> = {
@@ -32,6 +34,20 @@ export const priorityBadgeVariant: Record<
   NORMAL: "default",
   HIGH: "warning",
   URGENT: "destructive",
+};
+
+/**
+ * Stage 2.5 — priority icon shown alongside the label on every ticket
+ * card, so priority is scannable at a glance without reading text.
+ * ArrowDown/Minus/ArrowUp read as an intensity ramp; URGENT breaks the
+ * pattern deliberately (Flame) so it doesn't blend in as "just a bigger
+ * arrow" next to HIGH.
+ */
+export const priorityIcons: Record<TicketPriority, LucideIcon> = {
+  LOW: ArrowDown,
+  NORMAL: Minus,
+  HIGH: ArrowUp,
+  URGENT: Flame,
 };
 
 /**

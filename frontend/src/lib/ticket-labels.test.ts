@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   priorityBadgeVariant,
+  priorityIcons,
   priorityLabels,
   statusBadgeVariant,
   statusLabels,
@@ -40,6 +41,12 @@ describe("ticket priority labels", () => {
   it("has a badge variant for every priority", () => {
     for (const priority of allPriorities) {
       expect(priorityBadgeVariant[priority]).toBeTruthy();
+    }
+  });
+
+  it("has an icon for every priority", () => {
+    for (const priority of allPriorities) {
+      expect(priorityIcons[priority]).toBeTruthy();
     }
   });
 });

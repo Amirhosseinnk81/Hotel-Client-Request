@@ -22,6 +22,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormError } from "@/components/form-error";
+import { Skeleton } from "@/components/ui/skeleton";
+import { RelativeTime } from "@/components/relative-time";
 import { getTickets, ApiError } from "@/lib/api/client";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { Ticket, TicketStatus } from "@/lib/api/types";
@@ -30,15 +32,8 @@ import {
   statusBadgeVariant,
   priorityLabels,
   priorityBadgeVariant,
+  priorityIcons,
 } from "@/lib/ticket-labels";
-
-function formatDate(iso: string) {
-  return new Intl.DateTimeFormat("fa-IR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(new Date(iso));
-}
 
 const statusFilterOptions: { value: TicketStatus | "ALL"; label: string }[] = [
   { value: "ALL", label: "همه‌ی وضعیت‌ها" },
@@ -128,11 +123,22 @@ export default function GuestTicketsPage() {
       </div>
 
       {!tickets && !error && (
-        <Card>
-          <CardContent className="pt-6 text-sm text-muted-foreground">
-            در حال بارگذاری…
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
+                <div className="flex flex-1 flex-col gap-2">
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </CardHeader>
+              <CardContent className="flex gap-2">
+                <Skeleton className="h-5 w-14" />
+                <Skeleton className="h-5 w-14" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       )}
 
       {error && (
@@ -145,41 +151,72 @@ export default function GuestTicketsPage() {
 
       {filteredTickets && filteredTickets.length === 0 && (
         <Card>
-          <CardContent className="flex flex-col items-center gap-2 pt-6 text-center text-sm text-muted-foreground">
-            <Inbox className="size-6" />
-            {tickets && tickets.length > 0
-              ? "درخواستی با این فیلترها یافت نشد."
-              : "هنوز درخواستی ثبت نکرده‌اید."}
+          <CardContent className="flex flex-col items-center gap-3 pt-6 pb-8 text-center">
+            <Inbox className="size-8 text-muted-foreground/60" />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium">
+                {tickets && tickets.length > 0 ? "موردی یافت نشد" : "هنوز درخواستی ندارید"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {tickets && tickets.length > 0
+                  ? "با این فیلتر یا عبارت جست‌وجو درخواستی پیدا نشد."
+                  : "با ثبت اولین درخواست، اینجا نمایش داده می‌شود."}
+              </p>
+            </div>
+            {tickets && tickets.length > 0 ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setStatusFilter("ALL");
+                  setSearchInput("");
+                }}
+              >
+                پاک‌کردن فیلترها
+              </Button>
+            ) : (
+              <Button asChild size="sm" className="gap-1.5">
+                <Link href="/guest/tickets/new">ثبت درخواست جدید</Link>
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
 
       {filteredTickets && filteredTickets.length > 0 && (
         <div className="flex flex-col gap-3">
-          {filteredTickets.map((ticket) => (
-            <Link key={ticket.id} href={`/guest/tickets/${ticket.id}`}>
-              <Card className="transition-colors hover:bg-secondary/40">
-                <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
-                  <div className="flex flex-col gap-1">
-                    <CardTitle className="text-base">{ticket.title}</CardTitle>
-                    <CardDescription>
-                      {ticket.department_name} · {ticket.category_name} ·{" "}
-                      {formatDate(ticket.created_at)}
-                    </CardDescription>
-                  </div>
-                  <ChevronLeft className="mt-1 size-4 shrink-0 text-muted-foreground" />
-                </CardHeader>
-                <CardContent className="flex gap-2">
-                  <Badge variant={statusBadgeVariant[ticket.status]}>
-                    {statusLabels[ticket.status]}
-                  </Badge>
-                  <Badge variant={priorityBadgeVariant[ticket.priority]}>
-                    {priorityLabels[ticket.priority]}
-                  </Badge>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+          {filteredTickets.map((ticket) => {
+            const PriorityIcon = priorityIcons[ticket.priority];
+            return (
+              <Link
+                key={ticket.id}
+                href={`/guest/tickets/${ticket.id}`}
+                className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <Card className="transition-colors hover:bg-secondary/40">
+                  <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
+                    <div className="flex flex-col gap-1">
+                      <CardTitle className="text-base">{ticket.title}</CardTitle>
+                      <CardDescription>
+                        {ticket.department_name} · {ticket.category_name} ·{" "}
+                        <RelativeTime iso={ticket.created_at} />
+                      </CardDescription>
+                    </div>
+                    <ChevronLeft className="mt-1 size-4 shrink-0 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent className="flex gap-2">
+                    <Badge variant={statusBadgeVariant[ticket.status]}>
+                      {statusLabels[ticket.status]}
+                    </Badge>
+                    <Badge variant={priorityBadgeVariant[ticket.priority]} className="gap-1">
+                      <PriorityIcon className="size-3" />
+                      {priorityLabels[ticket.priority]}
+                    </Badge>
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
     </main>

@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +26,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { FormError } from "@/components/form-error";
+import { RelativeTime } from "@/components/relative-time";
 import { toast } from "@/hooks/use-toast";
 import { getTicketDetail, rateTicket, reopenTicket, ApiError } from "@/lib/api/client";
 import type { Ticket } from "@/lib/api/types";
@@ -33,17 +35,8 @@ import {
   statusBadgeVariant,
   priorityLabels,
   priorityBadgeVariant,
+  priorityIcons,
 } from "@/lib/ticket-labels";
-
-function formatDate(iso: string) {
-  return new Intl.DateTimeFormat("fa-IR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
-}
 
 /** Interactive 1-5 star picker, used before a rating has been submitted. */
 function StarPicker({
@@ -186,8 +179,22 @@ export default function GuestTicketDetailPage({
 
       {!ticket && !error && (
         <Card>
-          <CardContent className="pt-6 text-sm text-muted-foreground">
-            در حال بارگذاری…
+          <CardHeader>
+            <div className="flex items-start justify-between gap-2">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-5 w-16 rounded-full" />
+            </div>
+            <Skeleton className="h-3.5 w-32" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex gap-2">
+              <Skeleton className="h-5 w-20 rounded-full" />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
           </CardContent>
         </Card>
       )}
@@ -200,7 +207,9 @@ export default function GuestTicketDetailPage({
         </Card>
       )}
 
-      {ticket && (
+      {ticket && (() => {
+        const PriorityIcon = priorityIcons[ticket.priority];
+        return (
         <Card>
           <CardHeader>
             <div className="flex items-start justify-between gap-2">
@@ -215,7 +224,8 @@ export default function GuestTicketDetailPage({
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex gap-2">
-              <Badge variant={priorityBadgeVariant[ticket.priority]}>
+              <Badge variant={priorityBadgeVariant[ticket.priority]} className="gap-1">
+                <PriorityIcon className="size-3" />
                 اولویت: {priorityLabels[ticket.priority]}
               </Badge>
             </div>
@@ -250,8 +260,12 @@ export default function GuestTicketDetailPage({
             )}
 
             <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
-              <span>ثبت‌شده: {formatDate(ticket.created_at)}</span>
-              <span>آخرین به‌روزرسانی: {formatDate(ticket.updated_at)}</span>
+              <span>
+                ثبت‌شده: <RelativeTime iso={ticket.created_at} />
+              </span>
+              <span>
+                آخرین به‌روزرسانی: <RelativeTime iso={ticket.updated_at} />
+              </span>
             </div>
 
             {ticket.status === "RESOLVED" && ticket.resolution && (
@@ -263,14 +277,15 @@ export default function GuestTicketDetailPage({
                 <p className="text-sm">{ticket.resolution}</p>
                 {ticket.resolved_at && (
                   <span className="text-xs text-muted-foreground">
-                    زمان حل: {formatDate(ticket.resolved_at)}
+                    زمان حل: <RelativeTime iso={ticket.resolved_at} />
                   </span>
                 )}
               </div>
             )}
           </CardContent>
         </Card>
-      )}
+        );
+      })()}
 
       {/* Stage 2.3 — rating + reopen, only once the ticket is RESOLVED */}
       {ticket && ticket.status === "RESOLVED" && (

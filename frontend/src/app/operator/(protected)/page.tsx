@@ -24,6 +24,7 @@ import {
 import { FormError } from "@/components/form-error";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KanbanBoard } from "@/components/kanban-board";
+import { RelativeTime } from "@/components/relative-time";
 import { getOperatorTickets, ApiError } from "@/lib/api/client";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { Ticket, TicketPriority, TicketStatus } from "@/lib/api/types";
@@ -32,15 +33,8 @@ import {
   statusBadgeVariant,
   priorityLabels,
   priorityBadgeVariant,
+  priorityIcons,
 } from "@/lib/ticket-labels";
-
-function formatDate(iso: string) {
-  return new Intl.DateTimeFormat("fa-IR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(new Date(iso));
-}
 
 const statusFilterOptions: { value: TicketStatus | "ALL"; label: string }[] = [
   { value: "ALL", label: "همه‌ی وضعیت‌ها" },
@@ -97,6 +91,15 @@ export default function OperatorHomePage() {
       cancelled = true;
     };
   }, [statusFilter, priorityFilter, debouncedSearch, viewMode]);
+
+  const hasActiveFilters =
+    statusFilter !== "ALL" || priorityFilter !== "ALL" || searchInput.trim() !== "";
+
+  const clearFilters = () => {
+    setStatusFilter("ALL");
+    setPriorityFilter("ALL");
+    setSearchInput("");
+  };
 
   const handleTicketChange = (updated: Ticket) => {
     setTickets((prev) =>
@@ -208,9 +211,21 @@ export default function OperatorHomePage() {
 
       {tickets && tickets.length === 0 && (
         <Card>
-          <CardContent className="flex flex-col items-center gap-2 pt-6 text-center text-sm text-muted-foreground">
-            <Inbox className="size-6" />
-            درخواستی با این فیلترها یافت نشد.
+          <CardContent className="flex flex-col items-center gap-3 pt-6 pb-8 text-center">
+            <Inbox className="size-8 text-muted-foreground/60" />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-medium">درخواستی یافت نشد</p>
+              <p className="text-sm text-muted-foreground">
+                {hasActiveFilters
+                  ? "با این فیلترها یا عبارت جست‌وجو موردی پیدا نشد."
+                  : "فعلاً درخواستی برای واحد شما ثبت نشده."}
+              </p>
+            </div>
+            {hasActiveFilters && (
+              <Button variant="outline" size="sm" onClick={clearFilters}>
+                پاک‌کردن فیلترها
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
@@ -221,46 +236,54 @@ export default function OperatorHomePage() {
 
       {tickets && tickets.length > 0 && viewMode === "list" && (
         <div className="flex flex-col gap-3">
-          {tickets.map((ticket) => (
-            <Link key={ticket.id} href={`/operator/tickets/${ticket.id}`}>
-              <Card
-                className={
-                  ticket.is_overdue
-                    ? "border-destructive/60 bg-destructive/5 transition-colors hover:bg-destructive/10"
-                    : "transition-colors hover:bg-secondary/40"
-                }
+          {tickets.map((ticket) => {
+            const PriorityIcon = priorityIcons[ticket.priority];
+            return (
+              <Link
+                key={ticket.id}
+                href={`/operator/tickets/${ticket.id}`}
+                className="rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
-                  <div className="flex flex-col gap-1">
-                    <CardTitle className="text-base">{ticket.title}</CardTitle>
-                    <CardDescription>
-                      اتاق {ticket.room_number} · {ticket.category_name} ·{" "}
-                      {formatDate(ticket.created_at)}
-                    </CardDescription>
-                  </div>
-                  <ChevronLeft className="mt-1 size-4 shrink-0 text-muted-foreground" />
-                </CardHeader>
-                <CardContent className="flex flex-wrap items-center gap-2">
-                  <Badge variant={statusBadgeVariant[ticket.status]}>
-                    {statusLabels[ticket.status]}
-                  </Badge>
-                  <Badge variant={priorityBadgeVariant[ticket.priority]}>
-                    {priorityLabels[ticket.priority]}
-                  </Badge>
-                  {ticket.is_overdue && (
-                    <Badge variant="destructive" className="gap-1">
-                      <AlertTriangle className="size-3" />
-                      معوق
+                <Card
+                  className={
+                    ticket.is_overdue
+                      ? "border-destructive/60 bg-destructive/5 transition-colors hover:bg-destructive/10"
+                      : "transition-colors hover:bg-secondary/40"
+                  }
+                >
+                  <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
+                    <div className="flex flex-col gap-1">
+                      <CardTitle className="text-base">{ticket.title}</CardTitle>
+                      <CardDescription>
+                        اتاق {ticket.room_number} · {ticket.category_name} ·{" "}
+                        <RelativeTime iso={ticket.created_at} />
+                      </CardDescription>
+                    </div>
+                    <ChevronLeft className="mt-1 size-4 shrink-0 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent className="flex flex-wrap items-center gap-2">
+                    <Badge variant={statusBadgeVariant[ticket.status]}>
+                      {statusLabels[ticket.status]}
                     </Badge>
-                  )}
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <UserCheck2 className="size-3.5" />
-                    {ticket.assigned_to_username ?? "اختصاص‌نیافته"}
-                  </span>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+                    <Badge variant={priorityBadgeVariant[ticket.priority]} className="gap-1">
+                      <PriorityIcon className="size-3" />
+                      {priorityLabels[ticket.priority]}
+                    </Badge>
+                    {ticket.is_overdue && (
+                      <Badge variant="destructive" className="gap-1">
+                        <AlertTriangle className="size-3" />
+                        معوق
+                      </Badge>
+                    )}
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <UserCheck2 className="size-3.5" />
+                      {ticket.assigned_to_username ?? "اختصاص‌نیافته"}
+                    </span>
+                  </CardContent>
+                </Card>
+              </Link>
+            );
+          })}
         </div>
       )}
     </main>

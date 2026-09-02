@@ -32,7 +32,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { FormError } from "@/components/form-error";
+import { RelativeTime } from "@/components/relative-time";
 import { toast } from "@/hooks/use-toast";
 import {
   addOperatorTicketAttachment,
@@ -58,18 +67,9 @@ import {
   statusBadgeVariant,
   priorityLabels,
   priorityBadgeVariant,
+  priorityIcons,
   allowedNextStatuses,
 } from "@/lib/ticket-labels";
-
-function formatDate(iso: string) {
-  return new Intl.DateTimeFormat("fa-IR", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(iso));
-}
 
 /** Turns one TicketHistory entry into a single human-readable Persian line. */
 function describeHistoryEntry(entry: TicketHistoryEntry): string {
@@ -122,6 +122,10 @@ export default function OperatorTicketDetailPage({
   const [timelineError, setTimelineError] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
   const [isAddingNote, setIsAddingNote] = useState(false);
+
+  // Stage 2.5 — CANCELLED is destructive/irreversible, so submitting it
+  // opens a confirm dialog first instead of firing immediately.
+  const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
 
   const currentUserId = decodeAccessToken(getAccessToken() ?? "")?.user_id ?? null;
 
@@ -375,7 +379,11 @@ export default function OperatorTicketDetailPage({
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex flex-wrap gap-2">
-                <Badge variant={priorityBadgeVariant[ticket.priority]}>
+                <Badge variant={priorityBadgeVariant[ticket.priority]} className="gap-1">
+                  {(() => {
+                    const PriorityIcon = priorityIcons[ticket.priority];
+                    return <PriorityIcon className="size-3" />;
+                  })()}
                   اولویت: {priorityLabels[ticket.priority]}
                 </Badge>
                 <Badge variant="secondary">
@@ -421,8 +429,12 @@ export default function OperatorTicketDetailPage({
               )}
 
               <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
-                <span>ثبت‌شده: {formatDate(ticket.created_at)}</span>
-                <span>آخرین به‌روزرسانی: {formatDate(ticket.updated_at)}</span>
+                <span>
+                  ثبت‌شده: <RelativeTime iso={ticket.created_at} />
+                </span>
+                <span>
+                  آخرین به‌روزرسانی: <RelativeTime iso={ticket.updated_at} />
+                </span>
               </div>
 
               {ticket.status === "RESOLVED" && ticket.resolution && (
@@ -434,7 +446,7 @@ export default function OperatorTicketDetailPage({
                   <p className="text-sm">{ticket.resolution}</p>
                   {ticket.resolved_at && (
                     <span className="text-xs text-muted-foreground">
-                      زمان حل: {formatDate(ticket.resolved_at)}
+                      زمان حل: <RelativeTime iso={ticket.resolved_at} />
                     </span>
                   )}
                 </div>
@@ -580,8 +592,15 @@ export default function OperatorTicketDetailPage({
 
                 <Button
                   className="w-fit gap-1.5"
+                  variant={targetStatus === "CANCELLED" ? "destructive" : "default"}
                   disabled={!canSubmitStatus || isUpdating}
-                  onClick={handleUpdateStatus}
+                  onClick={() => {
+                    if (targetStatus === "CANCELLED") {
+                      setIsCancelConfirmOpen(true);
+                      return;
+                    }
+                    handleUpdateStatus();
+                  }}
                 >
                   {isUpdating && <Loader2 className="size-3.5 animate-spin" />}
                   {isUpdating ? "در حال ثبت…" : "ثبت تغییر وضعیت"}
@@ -589,6 +608,39 @@ export default function OperatorTicketDetailPage({
               </CardContent>
             </Card>
           )}
+
+          <Dialog open={isCancelConfirmOpen} onOpenChange={setIsCancelConfirmOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>لغو این درخواست؟</DialogTitle>
+                <DialogDescription>
+                  وضعیت درخواست به «لغوشده» تغییر می‌کند و این کار قابل‌بازگشت نیست. مهمان
+                  دیگر نمی‌تواند برای این درخواست امتیاز ثبت کند یا آن را دوباره باز کند.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  onClick={() => setIsCancelConfirmOpen(false)}
+                  disabled={isUpdating}
+                >
+                  انصراف
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="gap-1.5"
+                  disabled={isUpdating}
+                  onClick={async () => {
+                    await handleUpdateStatus();
+                    setIsCancelConfirmOpen(false);
+                  }}
+                >
+                  {isUpdating && <Loader2 className="size-3.5 animate-spin" />}
+                  {isUpdating ? "در حال لغو…" : "بله، لغو کن"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Card>
             <CardHeader>
@@ -626,14 +678,16 @@ export default function OperatorTicketDetailPage({
                         <div className="flex flex-col gap-0.5">
                           <p className="text-sm">{describeHistoryEntry(entry)}</p>
                           <span className="text-xs text-muted-foreground">
-                            {entry.user_username ?? "سامانه"} · {formatDate(entry.created_at)}
+                            {entry.user_username ?? "سامانه"} ·{" "}
+                            <RelativeTime iso={entry.created_at} />
                           </span>
                         </div>
                       ) : (
                         <div className="flex flex-col gap-0.5 rounded-lg border bg-muted/40 p-2.5">
                           <p className="text-sm">{entry.text}</p>
                           <span className="text-xs text-muted-foreground">
-                            یادداشت {entry.author_username ?? "—"} · {formatDate(entry.created_at)}
+                            یادداشت {entry.author_username ?? "—"} ·{" "}
+                            <RelativeTime iso={entry.created_at} />
                           </span>
                         </div>
                       )}

@@ -51,14 +51,24 @@ export const priorityIcons: Record<TicketPriority, LucideIcon> = {
 };
 
 /**
- * Business rule: OPEN → IN_PROGRESS → RESOLVED, or OPEN/IN_PROGRESS →
- * CANCELLED. Single source of truth — shared by the ticket detail page's
- * status Select and the Kanban board's drag targets (Stage 2.10), so the
- * two can never silently drift apart.
+ * Business rule: OPEN → IN_PROGRESS → RESOLVED, with CANCELLED reachable
+ * only from OPEN, and IN_PROGRESS able to drop back to OPEN (an operator
+ * who picked a ticket up by mistake, or is handing it back to the queue).
+ *
+ * This MUST stay a mirror of `Ticket.ALLOWED_STATUS_TRANSITIONS` in
+ * apps/tickets/models.py — the backend is what actually enforces it, and
+ * anything offered here that the backend rejects turns into a 400 the
+ * user can't do anything about. Notably CANCELLED is NOT reachable from
+ * IN_PROGRESS — a ticket has to be cancelled while it's still OPEN, or
+ * else be resolved.
+ *
+ * Single source of truth on the frontend side — shared by the ticket
+ * detail page's status Select and the Kanban board's drag targets
+ * (Stage 2.10), so those two can never drift apart either.
  */
 export const allowedNextStatuses: Record<TicketStatus, TicketStatus[]> = {
   OPEN: ["IN_PROGRESS", "CANCELLED"],
-  IN_PROGRESS: ["RESOLVED", "CANCELLED"],
+  IN_PROGRESS: ["RESOLVED", "OPEN"],
   RESOLVED: [],
   CANCELLED: [],
 };

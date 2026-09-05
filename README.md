@@ -2,7 +2,7 @@
 
 سامانه مدیریت درخواست‌های مهمان هتل (Hotel Client Request Platform) برای ثبت، پیگیری و رسیدگی به درخواست‌های خدماتی و فنی مهمانان.
 
-> **وضعیت فعلی:** MVP کامل — Backend (Django/DRF) و Frontend (Next.js) هر دو تکمیل و تست شده‌اند: پرتال مهمان و داشبورد اپراتور هر دو به‌طور کامل پیاده‌سازی شده‌اند. بخش‌های باز باقی‌مانده صرفاً مربوط به آماده‌سازی برای استقرار Production هستند (نگاه کنید به [Roadmap](#-roadmap)).
+> **وضعیت فعلی:** فاز ۱ (MVP) کامل و فاز ۲ (بلوغ محصول و UX) پیاده‌سازی شده — پرتال مهمان و داشبورد اپراتور هر دو کامل‌اند، به‌علاوهٔ یادداشت داخلی، امتیازدهی و بازگشایی مهمان، SLA، پیوست تصویر، نمای کانبان، خروجی PDF فارسی، تاریخچهٔ وضعیت اتاق و حالت تیره. کارهای باز عمدتاً مربوط به آماده‌سازی استقرار Production هستند (نگاه کنید به [Roadmap](#-roadmap)).
 
 ---
 
@@ -124,18 +124,27 @@ Admin از **Django Admin** استفاده می‌کند (هیچ فرانت‌ا
 
 - Login با National ID + Room Number (بدون رمز عبور؛ اتاق باید وضعیت `OCCUPIED` داشته باشد)
 - مشاهده پروفایل
-- ثبت Ticket با انتخاب Department، Category و Priority
+- ثبت Ticket با انتخاب Department، Category و Priority — یا با یک کلیک از روی قالب‌های درخواست سریع
 - مشاهده لیست Ticketهای خود با فیلتر وضعیت و جستجو
-- مشاهده جزئیات Ticket و Resolution
+- مشاهده جزئیات Ticket و Resolution، همراه با زمان تخمینی پاسخ بر پایهٔ SLA دسته
+- پیوست‌کردن تصویر به درخواست
+- امتیازدهی ۱ تا ۵ و ثبت بازخورد پس از حل شدن درخواست
+- بازگشایی درخواست حل‌شده — یک‌بار و تا ۴۸ ساعت
+- گرفتن خروجی PDF فارسی از درخواست
+- حالت تیره
 
 ## Operator Dashboard
 
 - ورود با نام کاربری/رمز عبور
 - مشاهده Ticketهای Department با فیلتر وضعیت/اولویت و جستجوی debounced
+- نمای کانبان با درگ‌اند‌دراپ در کنار نمای لیست
 - Assign / Reassign کردن Ticket به هر اپراتور هم‌واحد
 - تغییر Status (با رعایت ماشین‌حالت مجاز)
 - تغییر Priority
-- ثبت Resolution
+- ثبت Resolution و پیوست تصویر
+- ثبت یادداشت داخلی (مهمان نمی‌بیند) و مشاهدهٔ تایم‌لاین کامل تیکت
+- نشانهٔ «معوق» برای تیکت‌هایی که از SLA دسته‌شان گذشته‌اند
+- زنگولهٔ اعلان تیکت‌های جدید (Polling) و تعیین وضعیت «در دسترس»
 
 ## Admin
 
@@ -195,6 +204,10 @@ Admin از **Django Admin** استفاده می‌کند (هیچ فرانت‌ا
 | django-cors-headers | 4.4+ |
 | psycopg (binary) | 3.2+ |
 | python-decouple | خواندن `.env` |
+| Pillow | پردازش تصویر پیوست تیکت |
+| reportlab | تولید PDF |
+| arabic-reshaper + python-bidi | شکل‌دهی و ترتیب راست‌به‌چپ متن فارسی در PDF |
+| jdatetime | تاریخ شمسی در PDF |
 | PostgreSQL | 16 |
 
 ## Frontend
@@ -309,11 +322,16 @@ cd frontend
 # نصب وابستگی‌ها
 npm install
 
-# ساخت فایل .env.local (فایل نمونه در ریپو موجود نیست، دستی بسازید)
-echo NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api/v1 > .env.local
+# ساخت فایل .env.local از روی نمونهٔ موجود در ریپو
+copy env.local.example .env.local       # ویندوز
+# cp env.local.example .env.local       # مک/لینوکس
 ```
 
-اگر `.env.local` ساخته نشود، فرانت‌اند به‌صورت پیش‌فرض به `http://127.0.0.1:8000/api/v1` وصل می‌شود.
+> ⚠️ فایل نمونه در ریپو `env.local.example` نام دارد (بدون نقطهٔ ابتدایی)، چون الگوی `.env*` در `.gitignore` است. Next.js فقط `.env.local` را می‌خواند، پس کپی‌کردنش الزامی است.
+
+> ⚠️ **حتماً `localhost` بنویسید، نه `127.0.0.1`.** توکن refresh در یک کوکی `httpOnly` با `SameSite=Lax` نگه‌داری می‌شود و مرورگر `localhost` و `127.0.0.1` را دو **سایت** متفاوت می‌بیند، نه صرفاً دو پورت. اگر فرانت‌اند روی `localhost:3000` باشد و این متغیر روی `127.0.0.1:8000`، ورود ظاهراً موفق می‌شود ولی نشست در هر بار رفرش صفحه بی‌صدا از بین می‌رود. به همین دلیل بک‌اند را هم با `runserver localhost:8000` اجرا کنید.
+
+اگر `.env.local` ساخته نشود، فرانت‌اند به‌صورت پیش‌فرض به `http://localhost:8000/api/v1` وصل می‌شود.
 
 ---
 
@@ -322,8 +340,8 @@ echo NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api/v1 > .env.local
 در دو ترمینال جدا:
 
 ```bash
-# ترمینال ۱ — بک‌اند
-python manage.py runserver
+# ترمینال ۱ — بک‌اند (حتماً localhost، نه 127.0.0.1 — بخش راه‌اندازی Frontend)
+python manage.py runserver localhost:8000
 
 # ترمینال ۲ — فرانت‌اند
 cd frontend
@@ -334,7 +352,15 @@ npm run dev
 
 # 🌱 ایجاد داده‌های اولیه
 
-از طریق Django Admin (`/admin/`) با کاربر Superuser:
+**سریع‌ترین راه** — دستور seed که واحدها، دسته‌ها (همراه SLA)، اتاق‌ها، اپراتورها، مهمان‌ها و قالب‌های درخواست سریع را با دادهٔ فارسی می‌سازد:
+
+```bash
+python manage.py seed_demo_data
+```
+
+اجرای دوباره‌اش امن است (رکوردهای موجود را دوباره نمی‌سازد). برای بازنشانی رمز حساب‌های دمو `--reset-passwords` را اضافه کنید. نام کاربری و رمز ساخته‌شده در خروجی همان دستور چاپ می‌شود.
+
+**یا به‌صورت دستی** از طریق Django Admin (`/admin/`) با کاربر Superuser:
 
 1. یک یا چند **Department** بسازید (مثلاً نظافت، فنی)
 2. یک یا چند **Category** بسازید (مثلاً خرابی تلویزیون، درخواست حوله)
@@ -349,11 +375,11 @@ npm run dev
 | سرویس | آدرس |
 |---|---|
 | Frontend | http://localhost:3000 |
-| Backend API | http://127.0.0.1:8000/api/v1 |
-| Django Admin | http://127.0.0.1:8000/admin/ |
-| OpenAPI Schema | http://127.0.0.1:8000/api/schema/ |
-| Swagger UI | http://127.0.0.1:8000/api/docs/ |
-| ReDoc | http://127.0.0.1:8000/api/redoc/ |
+| Backend API | http://localhost:8000/api/v1 |
+| Django Admin | http://localhost:8000/admin/ |
+| OpenAPI Schema | http://localhost:8000/api/schema/ |
+| Swagger UI | http://localhost:8000/api/docs/ |
+| ReDoc | http://localhost:8000/api/redoc/ |
 
 ---
 
@@ -365,7 +391,10 @@ npm run dev
 - Access Token شامل claim سفارشی `role` است
 - `ROTATE_REFRESH_TOKENS` و `BLACKLIST_AFTER_ROTATION` فعال هستند
 - طول عمر توکن‌ها از طریق `.env` قابل تنظیم است (`JWT_ACCESS_TOKEN_LIFETIME`, `JWT_REFRESH_TOKEN_LIFETIME`)
-- سمت فرانت‌اند، توکن‌ها در `localStorage` نگه‌داری می‌شوند — به‌عنوان یک تصمیم آگاهانه برای سادگی MVP (بخش [امنیت](#-امنیت) را ببینید)
+- **Refresh Token** فقط به‌صورت کوکی `httpOnly` (با `SameSite=Lax` و `path=/api/v1/auth/`) صادر می‌شود و هرگز در بدنهٔ پاسخ JSON قرار نمی‌گیرد — یعنی جاوااسکریپت فرانت‌اند اصلاً راهی برای خواندنش ندارد
+- **Access Token** در بدنهٔ پاسخ برمی‌گردد و فقط در حافظهٔ فرانت‌اند نگه‌داری می‌شود (نه `localStorage`، نه کوکی قابل‌خواندن با JS). با هر بار رفرش صفحه از بین می‌رود و به‌صورت خودکار از روی کوکی refresh بازسازی می‌شود
+- به همین دلیل `CORS_ALLOW_CREDENTIALS=True` است و `CORS_ALLOWED_ORIGINS` باید یک لیست صریح بماند (هرگز `*`)
+- لاگین مهمان رمز عبور ندارد، پس با throttle محافظت می‌شود (`GUEST_LOGIN_THROTTLE_RATE`، پیش‌فرض `10/min`)
 
 ---
 
@@ -386,13 +415,28 @@ npm run dev
 | `/categories/{id}/` | GET, PATCH, PUT, DELETE | مشابه departments |
 | `/rooms/` | GET, POST | مدیریت اتاق (Admin) |
 | `/rooms/{id}/` | GET, PATCH, PUT, DELETE | مدیریت اتاق (Admin) |
+| `/rooms/{id}/status-logs/` | GET | تاریخچهٔ تغییر وضعیت اتاق (فقط‌خواندنی) |
+| `/quick-templates/` | GET | قالب‌های درخواست سریع برای فرم مهمان |
 | `/tickets/` | GET, POST | لیست/ثبت تیکت (فقط تیکت‌های مهمان جاری)، فیلتر `search` |
 | `/tickets/{id}/` | GET, PATCH | جزئیات تیکت مهمان (status/resolution فقط‌خواندنی) |
+| `/tickets/{id}/rate/` | POST | ثبت امتیاز ۱ تا ۵ و بازخورد توسط مهمان پس از حل شدن |
+| `/tickets/{id}/reopen/` | POST | بازگشایی توسط مهمان — فقط یک‌بار و تا ۴۸ ساعت پس از حل شدن |
+| `/tickets/{id}/attachments/` | POST | آپلود تصویر توسط مهمان (multipart) |
+| `/tickets/{id}/export/pdf/` | GET | خروجی PDF فارسی تیکت (`application/pdf`، نه JSON) |
 | `/operator/tickets/` | GET | لیست تیکت‌های واحد اپراتور؛ فیلتر `status`, `priority`, `assigned_to`, `search`, `ordering` |
+| `/operator/tickets/new-count/` | GET | شمارش تیکت‌های جدید (برای زنگولهٔ Polling) |
+| `/operator/tickets/overdue-count/` | GET | شمارش تیکت‌های از SLA گذشته |
 | `/operator/tickets/{id}/` | GET, PATCH | جزئیات/ویرایش (status، priority، resolution، assigned_to) |
 | `/operator/tickets/{id}/assign/` | POST | اختصاص به خودِ اپراتور فراخوان؛ status خودکار `IN_PROGRESS` |
+| `/operator/tickets/{id}/history/` | GET | تایم‌لاین تیکت (تاریخچهٔ سیستمی + یادداشت‌ها) |
+| `/operator/tickets/{id}/notes/` | POST | ثبت یادداشت داخلی (مهمان هرگز نمی‌بیند) |
+| `/operator/tickets/{id}/attachments/` | POST | آپلود تصویر توسط اپراتور (multipart) |
 | `/operator/colleagues/` | GET | لیست اپراتورهای هم‌واحد (برای اختصاص/تغییر اختصاص) |
+| `/operator/me/status/` | GET, PATCH | وضعیت «در دسترس بودن» اپراتور |
+| `/admin/stats/summary/` | GET | آمار تجمیعی بین‌واحدی — فقط ادمین |
 | `/schema/` `/docs/` `/redoc/` | GET | مستندات OpenAPI |
+
+خروجی لیست‌ها صفحه‌بندی‌شده است (`PageNumberPagination`، `PAGE_SIZE=10`)، یعنی به شکل `{"count": ..., "results": [...]}` برمی‌گردد.
 
 فرمت خطای استاندارد برای همه‌ی endpoint ها:
 
@@ -414,15 +458,19 @@ npm run dev
 | `CANCELLED` | — (نهایی) |
 
 - این قانون هم در سطح مدل (`Ticket.can_transition_to`) و هم در سریالایزر اپراتور اجرا می‌شود
+- توجه: `CANCELLED` فقط از `OPEN` قابل دسترسی است، نه از `IN_PROGRESS`
 - ثبت `resolution` هنگام انتقال به `RESOLVED` الزامی است؛ `resolved_at` خودکار پر می‌شود
 - برای جلوگیری از دور زدن این قانون، فیلدهای `status`, `resolution`, `resolved_at`, `assigned_to` در Django Admin **read-only** هستند — تغییر واقعی وضعیت فقط از مسیر API ممکن است
+- سمت فرانت‌اند، `allowedNextStatuses` در `frontend/src/lib/ticket-labels.ts` آینهٔ همین جدول است و یک تست (`ticket-labels.test.ts`) هم‌راستایی این دو را تضمین می‌کند
+
+**بازگشایی توسط مهمان** عمداً بخشی از این جدول نیست و مسیر جداگانهٔ خودش را دارد (`POST /tickets/{id}/reopen/`): فقط از وضعیت `RESOLVED`، فقط **یک‌بار** در طول عمر تیکت، و حداکثر تا **۴۸ ساعت** پس از `resolved_at`. محدودیت یک‌بار بودن با فیلد `reopened_at` کنترل می‌شود نه با وضعیت فعلی، تا اگر تیکت دوباره حل شد باز هم برقرار بماند.
 
 ---
 
 # 🗄 مدل داده
 
 ### User
-`username`, `password`, `role` (GUEST/OPERATOR/ADMIN), `department` (FK، فقط برای OPERATOR)
+`username`, `password`, `role` (GUEST/OPERATOR/ADMIN), `department` (FK، فقط برای OPERATOR)، `is_available`
 
 ### Guest
 `user` (OneToOne)، `full_name`، `national_id` (unique)، `phone`، `room` (FK)
@@ -430,24 +478,44 @@ npm run dev
 ### Room
 `number` (unique)، `floor`، `status` (AVAILABLE/OCCUPIED/MAINTENANCE)
 
-### Department / Category
+### RoomStatusLog
+`room` (FK)، `previous_status`، `new_status`، `changed_at` — خودکار توسط `Room.save()` نوشته می‌شود. append-only: هیچ‌جا آپدیت یا حذف نمی‌شود.
+
+### Department
 `name`، `code`، `is_active`، `created_at`، `updated_at`
 
+### Category
+مثل Department، به‌علاوهٔ `sla_minutes` (پیش‌فرض ۶۰) — همین یک عدد هم «زمان تخمینی پاسخ» نمایش‌داده‌شده به مهمان است و هم مبنای هایلایت «معوق» در داشبورد اپراتور.
+
 ### Ticket
-`guest` (FK)، `room` (FK, PROTECT — اسنپ‌شات لحظه‌ی ثبت)، `department` (FK, PROTECT)، `category` (FK, PROTECT)، `assigned_to` (FK → User با role=OPERATOR، nullable)، `title`، `description`، `status` (پیش‌فرض OPEN)، `priority` (پیش‌فرض NORMAL)، `resolution`، `created_at`، `updated_at`، `resolved_at`
+`guest` (FK)، `room` (FK, PROTECT — اسنپ‌شات لحظه‌ی ثبت)، `department` (FK, PROTECT)، `category` (FK, PROTECT)، `assigned_to` (FK → User با role=OPERATOR، nullable)، `title`، `description`، `status` (پیش‌فرض OPEN)، `priority` (پیش‌فرض NORMAL)، `resolution`، `created_at`، `updated_at`، `resolved_at`، `guest_rating` (۱ تا ۵، nullable)، `guest_feedback`، `reopened_at`
+
+پراپرتی‌های محاسباتی: `sla_deadline`، `is_overdue`، `overdue_since`، `can_guest_reopen`.
 
 ### TicketHistory
 `ticket` (FK)، `user` (FK, nullable)، `action` (CREATED/UPDATED/ASSIGNED/STATUS_CHANGED/PRIORITY_CHANGED)، `old_value`، `new_value`، `created_at`
+
+### TicketNote
+`ticket` (FK)، `author` (FK, nullable)، `text`، `created_at` — یادداشت داخلی اپراتور/ادمین. عمداً مدلی جدا از `TicketHistory` است (متن آزادِ انسان‌نوشته در برابر رکورد ممیزی سیستمی)؛ این دو در لایهٔ API در یک تایم‌لاین واحد ادغام می‌شوند. **مهمان هرگز نباید اینها را ببیند.**
+
+### TicketAttachment
+`ticket` (FK)، `image`، `uploaded_by` (FK, nullable)، `created_at` — فقط تصویر، سقف حجم `MAX_ATTACHMENT_SIZE_MB`، ذخیره روی دیسک محلی زیر `MEDIA_ROOT`.
+
+### QuickRequestTemplate
+`title`، `icon` (نام آیکون lucide-react)، `department` (FK)، `category` (FK)، `is_active`، `order` — میان‌بُر یک‌کلیکی روی فرم ثبت درخواست مهمان. فقط از Django Admin مدیریت می‌شود.
 
 ---
 
 # 🛡 Permission و Authorization
 
-سه کلاس مشترک در `apps/core/permissions.py`:
+چهار کلاس مشترک در `apps/core/permissions.py`:
 
 - **IsGuest** — فقط نقش GUEST
 - **IsOperator** — فقط نقش OPERATOR
 - **IsAdminRole** — خواندن برای همه‌ی احرازهویت‌شده‌ها، نوشتن فقط ADMIN/superuser
+- **IsAdminOnly** — حتی خواندن هم فقط ADMIN/superuser
+
+> ⚠️ تفاوت `IsAdminRole` و `IsAdminOnly` حیاتی است: اولی GET را برای هر کاربر لاگین‌شده باز می‌گذارد. هر endpointی که دادهٔ بین‌واحدی برمی‌گرداند (مثل `/admin/stats/summary/`) باید `IsAdminOnly` باشد، وگرنه اپراتور آمار واحدهای دیگر را هم می‌بیند.
 
 **Object-level:**
 - مهمان فقط تیکت‌های خودش را می‌بیند
@@ -460,10 +528,11 @@ npm run dev
 
 ## Backend
 
-۷۵ تست یکپارچگی/واحد (Django Test Runner، نه pytest):
+۱۵۶ تست یکپارچگی/واحد (Django Test Runner، نه pytest) — علیه PostgreSQL واقعی، نه SQLite:
 
 ```bash
-python manage.py test
+python manage.py test                # کل تست‌ها
+python manage.py test apps.tickets   # فقط یک اپ
 ```
 
 تست‌ها در دو سطح سازمان‌دهی شده‌اند:
@@ -472,15 +541,15 @@ python manage.py test
 
 ## Frontend
 
-۲۶ تست خودکار با Vitest + React Testing Library:
+۳۳ تست خودکار با Vitest + React Testing Library:
 
 ```bash
 cd frontend
-npm test          # اجرای یک‌باره
+npm test            # اجرای یک‌باره
 npm run test:watch  # حالت watch
 ```
 
-پوشش شامل: منطق JWT، کامل‌بودن نگاشت لیبل‌های وضعیت/اولویت، هوک debounce، کامپوننت خطای فرم، و هوک محافظت مسیر (`useRequireRole`).
+پوشش شامل: منطق JWT، کامل‌بودن نگاشت لیبل‌های وضعیت/اولویت، هم‌راستایی ماشین‌حالت فرانت با بک‌اند، توابع قالب‌بندی تاریخ، هوک debounce، کامپوننت خطای فرم، و هوک محافظت مسیر (`useRequireRole`).
 
 > تست End-to-End (مثلاً Playwright) هنوز راه‌اندازی نشده؛ تست دستی کامل هر دو پرتال انجام و تأیید شده است.
 
@@ -516,8 +585,14 @@ copy .env.example .env
 فرانت‌اند فایل نمونه‌ی جداگانه‌ای ندارد؛ به‌صورت دستی `frontend/.env.local` بسازید:
 
 ```
-NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api/v1
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 ```
+
+| متغیر | توضیح |
+|---|---|
+| `JWT_COOKIE_SECURE` | فقط برای توسعهٔ محلی روی `http` مقدار `False` بگذارید؛ در هر محیط واقعی `True` |
+| `GUEST_LOGIN_THROTTLE_RATE` | سقف نرخ تلاش ورود مهمان (پیش‌فرض `10/min`) |
+| `MAX_ATTACHMENT_SIZE_MB` | بیشینهٔ حجم تصویر پیوست تیکت (پیش‌فرض ۵) |
 
 ---
 
@@ -526,7 +601,9 @@ NEXT_PUBLIC_API_URL=http://127.0.0.1:8000/api/v1
 - JWT با `ROTATE_REFRESH_TOKENS` و `BLACKLIST_AFTER_ROTATION`
 - تمام کلیدهای خارجی حساس (`room`, `department`, `category` روی Ticket) از `PROTECT` استفاده می‌کنند تا حذف تصادفی داده‌های مرجع، تیکت‌های تاریخی را خراب نکند
 - کنترل دسترسی مبتنی بر نقش در سطح API و Object-level (بخش بالا)
-- **بدهی فنی شناخته‌شده:** توکن‌های JWT در `localStorage` مرورگر ذخیره می‌شوند، نه httpOnly cookie — این یک تصمیم آگاهانه برای سادگی MVP بوده و پیش از استقرار Production باید بازبینی شود (ریسک XSS)
+- **ذخیره‌سازی توکن:** refresh فقط در کوکی `httpOnly` و access فقط در حافظهٔ فرانت‌اند. بدهی فنی `localStorage` که در MVP وجود داشت برطرف شده — با هر تغییری در `AuthProvider` یا `lib/api/client.ts` مطمئن شوید این معماری نقض نمی‌شود
+- CSRF روی مسیرهای refresh/logout با `SameSite=Lax` مهار می‌شود (این کوکی به درخواست‌های POST بین‌سایتی ضمیمه نمی‌شود) و مسیر کوکی به پیشوند `auth/` محدود است
+- پیوست‌های تیکت فقط تصویر (`jpg/jpeg/png/webp/gif`) با سقف حجم `MAX_ATTACHMENT_SIZE_MB` پذیرفته می‌شوند و روی دیسک محلی زیر `MEDIA_ROOT` می‌نشینند؛ در Production باید پشت nginx سرو شوند نه Django
 - `DEBUG=True` و `SECRET_KEY` نمونه در `.env.example` **هرگز** نباید در Production استفاده شوند
 
 ---
@@ -558,9 +635,23 @@ cmd /c rmdir /s /q .next
 
 # 📊 وضعیت توسعه
 
-**Backend** — کامل (Phase 14): مدل کاربر سفارشی، مجوزهای مبتنی بر نقش، ورود مهمان/اپراتور، مدیریت کامل Ticket/Room/Department/Category، Django Admin، مستندات OpenAPI، ۷۵ تست خودکار.
+**فاز ۱ (MVP)** — کامل. مدل کاربر سفارشی، مجوزهای مبتنی بر نقش، ورود مهمان/اپراتور، مدیریت کامل Ticket/Room/Department/Category، Django Admin، مستندات OpenAPI، و هر دو پرتال مهمان و اپراتور.
 
-**Frontend** — کامل: پرتال مهمان (ورود، پروفایل، ثبت/لیست/جزئیات تیکت با فیلتر و جستجو) و داشبورد اپراتور (فیلتر/جستجو، اختصاص/تغییر اختصاص، تغییر وضعیت، ثبت Resolution) هر دو تکمیل و تست‌شده‌اند. ۲۶ تست خودکار (Vitest).
+**فاز ۲ (بلوغ محصول و UX، بدون زیرساخت جدید)** — آنچه تا این لحظه روی MVP اضافه و در کد پیاده شده:
+
+- مهاجرت ذخیره‌سازی JWT از `localStorage` به کوکی `httpOnly` (access فقط در حافظه)
+- یادداشت داخلی اپراتور و تایم‌لاین یکپارچهٔ تیکت
+- امتیازدهی و بازخورد مهمان، و بازگشایی محدود تیکت (یک‌بار، تا ۴۸ ساعت)
+- قالب‌های درخواست سریع روی فرم مهمان
+- SLA بر پایهٔ `Category.sla_minutes` و نشانهٔ «معوق» در داشبورد اپراتور
+- پیوست تصویر برای مهمان و اپراتور
+- زمان نسبی فارسی و قالب‌بندی متمرکز تاریخ
+- نمای کانبان با درگ‌اند‌دراپ برای اپراتور
+- تاریخچهٔ خودکار وضعیت اتاق، خروجی PDF فارسی تیکت، و حالت تیره
+
+**تست‌ها** — ۱۵۶ تست بک‌اند (Django Test Runner) و ۳۳ تست فرانت‌اند (Vitest).
+
+**فاز ۳ (شروع‌نشده)** — Celery + Redis + Django Channels برای پیامک، اعلان لحظه‌ای، وب‌هوک PMS و IPTV.
 
 ---
 
@@ -568,12 +659,12 @@ cmd /c rmdir /s /q .next
 
 موارد باز باقی‌مانده (خارج از قابلیت‌های اصلی MVP که همگی تکمیل شده‌اند):
 
-- آماده‌سازی برای استقرار Production (تنظیمات production، دامنه، HTTPS)
+- آماده‌سازی برای استقرار Production (تنظیمات production، دامنه، HTTPS، سرو کردن `MEDIA_ROOT` پشت nginx)
 - پایپ‌لاین CI/CD
 - تست End-to-End در فرانت‌اند
-- بازبینی مهاجرت ذخیره‌سازی JWT از `localStorage` به httpOnly cookie
+- تست خودکار برای کامپوننت‌های تازهٔ فرانت (کلید حالت تیره، دکمهٔ خروجی PDF)
 
-موارد زیر **صراحتاً خارج از دامنه‌ی این پروژه** هستند و برنامه‌ریزی زمانی ندارند: AI Routing، اعلان (SMS/Email/Push)، Analytics پیشرفته، اتصال به PMS/VoIP/IPTV، Redis، Celery، Docker، اپلیکیشن موبایل، معماری Multi-Tenant.
+موارد زیر **صراحتاً خارج از دامنه‌ی فاز فعلی** هستند: AI Routing، Analytics پیشرفته، Docker، اپلیکیشن موبایل، و معماری Multi-Tenant. اعلان پیامکی/لحظه‌ای، اتصال PMS/IPTV، Redis و Celery به فاز ۳ موکول شده‌اند.
 
 ---
 
@@ -584,6 +675,8 @@ cmd /c rmdir /s /q .next
 - **PostgreSQL 16** (نه ۱۷) — چون از قبل روی سیستم توسعه نصب بود
 - **ورود مهمان با کد ملی + شماره اتاق** (نه کد ملی + تلفن طبق برنامه‌ی اولیه)
 - **تنها یک دستیار هوش مصنوعی روی پروژه کار می‌کند** — پس از کشف تناقض کد ناشی از کار موازی دو AI روی یک مخزن
-- **ذخیره‌ی JWT در localStorage** برای سادگی MVP، با یادداشت صریح درباره‌ی ریسک امنیتی برای بازبینی در آینده
+- **ذخیره‌ی JWT** ابتدا در `localStorage` برای سادگی MVP بود؛ در فاز ۲ به refresh در کوکی `httpOnly` و access فقط در حافظه تغییر کرد تا پنجرهٔ سوءاستفاده از XSS به طول عمر کوتاه access محدود شود
+- **`SameSite=Lax` به‌جای machinery توکن CSRF جنگو** برای مسیرهای refresh/logout — این کوکی به POST بین‌سایتی ضمیمه نمی‌شود و همین دو مسیر هم دقیقاً POST هستند
 - **shadcn/ui به‌صورت دستی** (نه CLI) به‌دلیل عدم دسترسی به رجیستری رسمی در محیط توسعه
-- **Vazirmatn self-hosted** به‌جای Google Fonts آنلاین
+- **Vazirmatn self-hosted** به‌جای Google Fonts آنلاین. برای PDF از فایل TTF کامل استفاده می‌شود نه نسخهٔ Non-Latin؛ آن نسخه گلیف حروف لاتین و ارقام ASCII را ندارد و شمارهٔ اتاق و username را خالی چاپ می‌کند
+- **یک عدد SLA به‌ازای هر Category** (نه جدول جدا به‌ازای هر اولویت) — همان عدد هم به مهمان نشان داده می‌شود و هم مبنای «معوق» است، پس فقط یک مقدار برای هماهنگ نگه‌داشتن وجود دارد

@@ -22,6 +22,8 @@ from .views import (
     TicketPdfExportView,
 )
 
+app_name = "tickets"
+
 urlpatterns = [
     path(
         "admin/stats/summary/",

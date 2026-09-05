@@ -2078,3 +2078,105 @@ class AdminStatsSummaryAPITests(APITestCase):
         self.client.force_authenticate(superuser)
         response = self.client.get(self.url)
         self.assertEqual(response.status_code, 200)
+
+
+class TicketPdfExportAPITests(APITestCase):
+    """Stage 2.7 — GET /api/v1/tickets/{id}/export/pdf/"""
+
+    def setUp(self):
+        self.dept_a = Department.objects.create(name="Housekeeping", code="HK_PDF")
+        self.dept_b = Department.objects.create(name="Maintenance", code="MAINT_PDF")
+        self.category = Category.objects.create(name="Towels", code="TOWELS_PDF")
+        self.room = Room.objects.create(number="501", status=Room.Status.OCCUPIED)
+
+        self.guest_user = User.objects.create_user(username="guest501", role=User.Role.GUEST)
+        self.guest = Guest.objects.create(
+            user=self.guest_user,
+            full_name="Test Guest",
+            national_id="0055555555",
+            phone="09121112222",
+            room=self.room,
+        )
+
+        self.other_guest_user = User.objects.create_user(
+            username="other_guest501", role=User.Role.GUEST
+        )
+
+        self.operator_same_dept = User.objects.create_user(
+            username="operator_dept_a_pdf",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.dept_a,
+        )
+        self.operator_other_dept = User.objects.create_user(
+            username="operator_dept_b_pdf",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.dept_b,
+        )
+        self.admin_user = User.objects.create_user(
+            username="admin_pdf", password="testpassword", role=User.Role.ADMIN
+        )
+
+        self.ticket = Ticket.objects.create(
+            guest=self.guest,
+            department=self.dept_a,
+            category=self.category,
+            room=self.room,
+            title="Extra towel",
+            description="Please send two extra towels.",
+        )
+
+        self.url = f"/api/v1/tickets/{self.ticket.pk}/export/pdf/"
+
+    def test_unauthenticated_cannot_export(self):
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 401)
+
+    def test_owning_guest_can_export(self):
+        self.client.force_authenticate(self.guest_user)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/pdf")
+        self.assertIn(f'ticket-{self.ticket.pk}.pdf', response["Content-Disposition"])
+        self.assertTrue(response.content.startswith(b"%PDF"))
+
+    def test_other_guest_cannot_export(self):
+        self.client.force_authenticate(self.other_guest_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_operator_in_same_department_can_export(self):
+        self.client.force_authenticate(self.operator_same_dept)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_operator_in_other_department_cannot_export(self):
+        self.client.force_authenticate(self.operator_other_dept)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 404)
+
+    def test_admin_can_export_any_ticket(self):
+        self.client.force_authenticate(self.admin_user)
+        response = self.client.get(self.url)
+        self.assertEqual(response.status_code, 200)
+
+    def test_export_of_resolved_ticket_with_resolution_and_feedback(self):
+        self.ticket.status = Ticket.Status.RESOLVED
+        self.ticket.resolution = "Towels delivered."
+        self.ticket.resolved_at = timezone.now()
+        self.ticket.guest_rating = 5
+        self.ticket.guest_feedback = "Great, thanks!"
+        self.ticket.save()
+
+        self.client.force_authenticate(self.guest_user)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.content.startswith(b"%PDF"))
+
+    def test_nonexistent_ticket_returns_404(self):
+        self.client.force_authenticate(self.admin_user)
+        response = self.client.get("/api/v1/tickets/999999/export/pdf/")
+        self.assertEqual(response.status_code, 404)

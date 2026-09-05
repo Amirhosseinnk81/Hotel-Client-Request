@@ -19,6 +19,7 @@ from .views import (
     QuickRequestTemplateListView,
     TicketHistoryView,
     TicketNoteCreateView,
+    TicketPdfExportView,
 )
 
 urlpatterns = [
@@ -66,6 +67,11 @@ urlpatterns = [
         "tickets/<int:pk>/attachments/",
         GuestTicketAttachmentCreateView.as_view(),
         name="guest-ticket-attachment-create",
+    ),
+    path(
+        "tickets/<int:pk>/export/pdf/",
+        TicketPdfExportView.as_view(),
+        name="ticket-export-pdf",
     ),
     path(
         "operator/tickets/",

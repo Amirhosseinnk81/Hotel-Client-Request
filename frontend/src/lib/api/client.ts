@@ -456,3 +456,44 @@ export async function getOverdueTicketCount(): Promise<number> {
   const { count } = await apiFetch<{ count: number }>("/operator/tickets/overdue-count/");
   return count;
 }
+
+/**
+ * Stage 2.7 — PDF export. Doesn't go through apiFetch since that always
+ * parses the response as JSON; this mirrors apiFetch's auth-header +
+ * one-retry-on-401 logic but returns the raw PDF bytes as a Blob
+ * instead. Works for guests (own ticket), operators (own department),
+ * and admins — the backend enforces exactly who's allowed.
+ */
+export async function exportTicketPdf(ticketId: number | string): Promise<Blob> {
+  let token = currentAccessToken;
+  if (token && isTokenExpired(token)) {
+    try {
+      token = await refreshAccessToken();
+    } catch {
+      setAccessToken(null);
+      token = null;
+    }
+  }
+
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  let response = await fetch(`${API_URL}/tickets/${ticketId}/export/pdf/`, { headers });
+
+  if (response.status === 401 && token) {
+    try {
+      const refreshed = await refreshAccessToken();
+      headers.set("Authorization", `Bearer ${refreshed}`);
+      response = await fetch(`${API_URL}/tickets/${ticketId}/export/pdf/`, { headers });
+    } catch {
+      setAccessToken(null);
+    }
+  }
+
+  if (!response.ok) {
+    const body = await parseErrorBody(response);
+    throw new ApiError(response.status, body.message, body.errors);
+  }
+
+  return response.blob();
+}

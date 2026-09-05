@@ -43,6 +43,49 @@
   --ring: #0f5257;
 }
 
+/*
+ * Stage 2.7 — dark mode. Same warm teal/brass identity as :root, not a
+ * generic gray/black inversion: surfaces lean toward a dark, slightly
+ * green-gray charcoal (not pure black) and the accent hues are lifted
+ * a few steps in lightness/saturation so they still read clearly
+ * against the dark background instead of going muddy.
+ */
+.dark {
+  --background: #14181a;
+  --foreground: #eef1ee;
+
+  --card: #1c2124;
+  --card-foreground: #eef1ee;
+
+  --popover: #1c2124;
+  --popover-foreground: #eef1ee;
+
+  --primary: #1fa0a6;
+  --primary-foreground: #0a1516;
+
+  --secondary: #23282b;
+  --secondary-foreground: #eef1ee;
+
+  --muted: #23282b;
+  --muted-foreground: #9aa39c;
+
+  --accent: #d3a94c;
+  --accent-foreground: #1b1f1d;
+
+  --destructive: #e0654a;
+  --destructive-foreground: #1b0a06;
+
+  --success: #56ab80;
+  --success-foreground: #08150e;
+
+  --warning: #dcae4e;
+  --warning-foreground: #1b1f1d;
+
+  --border: #2c3134;
+  --input: #2c3134;
+  --ring: #1fa0a6;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -89,4 +132,8 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+html.dark {
+  color-scheme: dark;
 }

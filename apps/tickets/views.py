@@ -1,9 +1,11 @@
 from django.contrib.auth import get_user_model
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, generics, status
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,6 +16,7 @@ from rest_framework import serializers as drf_serializers
 from apps.core.permissions import IsAdminOnly, IsAdminRole
 
 from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
+from .pdf import generate_ticket_pdf
 from .permissions import IsOperator
 from .services import compute_admin_stats_summary
 from .serializers import (
@@ -28,6 +31,47 @@ from .serializers import (
     TicketSerializer,
     OperatorTicketSerializer,
 )
+
+
+@extend_schema(
+    responses={200: OpenApiTypes.BINARY},
+    description="Returns a PDF file (application/pdf), not JSON.",
+)
+class TicketPdfExportView(APIView):
+    """
+    GET /api/v1/tickets/{id}/export/pdf/
+
+    Stage 2.7 — a one-ticket PDF summary for the hotel's physical
+    archive. Reachable by anyone who could already read this ticket
+    through *some* existing endpoint: the guest who owns it (same rule
+    as GuestTicketDetailView), an operator in its department (same rule
+    as OperatorTicketDetailView), or an admin (unrestricted, like
+    AdminStatsSummaryView). A 404 (not 403) for a mismatched
+    guest/operator keeps this consistent with how those other views
+    already behave — existence of someone else's ticket isn't leaked.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        ticket_qs = Ticket.objects.select_related(
+            "room", "department", "category", "assigned_to", "guest"
+        )
+
+        user = request.user
+        if user.is_superuser or user.role == "ADMIN":
+            ticket = get_object_or_404(ticket_qs, pk=pk)
+        elif user.role == "OPERATOR":
+            ticket = get_object_or_404(ticket_qs, pk=pk, department=user.department)
+        elif user.role == "GUEST":
+            ticket = get_object_or_404(ticket_qs, pk=pk, guest__user=user)
+        else:
+            raise PermissionDenied()
+
+        pdf_bytes = generate_ticket_pdf(ticket)
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="ticket-{ticket.pk}.pdf"'
+        return response
 
 
 class CategoryListCreateView(generics.ListCreateAPIView):

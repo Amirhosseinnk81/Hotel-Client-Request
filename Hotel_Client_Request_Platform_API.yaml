@@ -4,9 +4,33 @@ info:
   version: 1.0.0
   description: API for managing hotel guest requests and operator workflows.
 paths:
+  /api/v1/admin/stats/summary/:
+    get:
+      operationId: api_v1_admin_stats_summary_retrieve
+      description: |-
+        GET /api/v1/admin/stats/summary/
+
+        Cross-department snapshot for hotel admins (Stage 2.4): ticket counts
+        by status and by department, average resolution time over the last
+        30 days, and the current system-wide overdue count (Stage 2.9 SLA).
+        Admin-only — IsAdminOnly, not IsAdminRole, since this exposes every
+        department's data and must stay closed to operators/guests even for
+        GET (unlike Category/Department/Room, which are intentionally
+        readable by anyone authenticated).
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminStatsSummary'
+          description: ''
   /api/v1/auth/guest/login/:
     post:
-      operationId: v1_auth_guest_login_create
+      operationId: api_v1_auth_guest_login_create
       description: |-
         POST /api/v1/auth/guest/login/
 
@@ -37,7 +61,7 @@ paths:
           description: Guest authenticated successfully.
   /api/v1/auth/logout/:
     post:
-      operationId: v1_auth_logout_create
+      operationId: api_v1_auth_logout_create
       description: |-
         POST /api/v1/auth/logout/
 
@@ -51,7 +75,7 @@ paths:
           description: Logged out.
   /api/v1/auth/operator/login/:
     post:
-      operationId: v1_auth_operator_login_create
+      operationId: api_v1_auth_operator_login_create
       description: |-
         POST /api/v1/auth/operator/login/ — username + password login for
         operators/admins.
@@ -59,7 +83,7 @@ paths:
         The refresh token is set as an httpOnly cookie rather than returned in
         the response body — see apps/core/jwt_cookies.py.
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -77,7 +101,7 @@ paths:
           description: No response body
   /api/v1/auth/token/refresh/:
     post:
-      operationId: v1_auth_token_refresh_create
+      operationId: api_v1_auth_token_refresh_create
       description: |-
         POST /api/v1/auth/token/refresh/
 
@@ -94,7 +118,7 @@ paths:
           description: Missing, invalid, or expired refresh cookie.
   /api/v1/categories/:
     get:
-      operationId: v1_categories_list
+      operationId: api_v1_categories_list
       description: |-
         GET  /api/v1/categories/  — any authenticated user can browse.
         POST /api/v1/categories/  — admins only.
@@ -124,7 +148,7 @@ paths:
         schema:
           type: string
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -135,7 +159,7 @@ paths:
                 $ref: '#/components/schemas/PaginatedCategoryList'
           description: ''
     post:
-      operationId: v1_categories_create
+      operationId: api_v1_categories_create
       description: |-
         GET  /api/v1/categories/  — any authenticated user can browse.
         POST /api/v1/categories/  — admins only.
@@ -146,7 +170,7 @@ paths:
         toggling is_active) still happens through Django Admin, which queries
         the model directly and is unaffected by this filter.
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -170,7 +194,7 @@ paths:
           description: ''
   /api/v1/categories/{id}/:
     get:
-      operationId: v1_categories_retrieve
+      operationId: api_v1_categories_retrieve
       parameters:
       - in: path
         name: id
@@ -178,7 +202,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -189,7 +213,7 @@ paths:
                 $ref: '#/components/schemas/Category'
           description: ''
     put:
-      operationId: v1_categories_update
+      operationId: api_v1_categories_update
       parameters:
       - in: path
         name: id
@@ -197,7 +221,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -220,7 +244,7 @@ paths:
                 $ref: '#/components/schemas/Category'
           description: ''
     patch:
-      operationId: v1_categories_partial_update
+      operationId: api_v1_categories_partial_update
       parameters:
       - in: path
         name: id
@@ -228,7 +252,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -250,7 +274,7 @@ paths:
                 $ref: '#/components/schemas/Category'
           description: ''
     delete:
-      operationId: v1_categories_destroy
+      operationId: api_v1_categories_destroy
       parameters:
       - in: path
         name: id
@@ -258,7 +282,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -266,7 +290,7 @@ paths:
           description: No response body
   /api/v1/departments/:
     get:
-      operationId: v1_departments_list
+      operationId: api_v1_departments_list
       description: |-
         GET  /api/v1/departments/  — any authenticated user (guest/operator/admin) can browse.
         POST /api/v1/departments/  — admins only.
@@ -290,7 +314,7 @@ paths:
         schema:
           type: string
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -301,12 +325,12 @@ paths:
                 $ref: '#/components/schemas/PaginatedDepartmentList'
           description: ''
     post:
-      operationId: v1_departments_create
+      operationId: api_v1_departments_create
       description: |-
         GET  /api/v1/departments/  — any authenticated user (guest/operator/admin) can browse.
         POST /api/v1/departments/  — admins only.
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -330,7 +354,7 @@ paths:
           description: ''
   /api/v1/departments/{id}/:
     get:
-      operationId: v1_departments_retrieve
+      operationId: api_v1_departments_retrieve
       description: |-
         GET/PATCH/PUT — read for anyone authenticated, write for admins only.
         DELETE is admin-only too (blocked at the DB level anyway while
@@ -342,7 +366,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -353,7 +377,7 @@ paths:
                 $ref: '#/components/schemas/Department'
           description: ''
     put:
-      operationId: v1_departments_update
+      operationId: api_v1_departments_update
       description: |-
         GET/PATCH/PUT — read for anyone authenticated, write for admins only.
         DELETE is admin-only too (blocked at the DB level anyway while
@@ -365,7 +389,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -388,7 +412,7 @@ paths:
                 $ref: '#/components/schemas/Department'
           description: ''
     patch:
-      operationId: v1_departments_partial_update
+      operationId: api_v1_departments_partial_update
       description: |-
         GET/PATCH/PUT — read for anyone authenticated, write for admins only.
         DELETE is admin-only too (blocked at the DB level anyway while
@@ -400,7 +424,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -422,7 +446,7 @@ paths:
                 $ref: '#/components/schemas/Department'
           description: ''
     delete:
-      operationId: v1_departments_destroy
+      operationId: api_v1_departments_destroy
       description: |-
         GET/PATCH/PUT — read for anyone authenticated, write for admins only.
         DELETE is admin-only too (blocked at the DB level anyway while
@@ -434,7 +458,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -442,7 +466,7 @@ paths:
           description: No response body
   /api/v1/guest/profile/:
     get:
-      operationId: v1_guest_profile_retrieve
+      operationId: api_v1_guest_profile_retrieve
       description: |-
         GET /api/v1/guest/profile/
 
@@ -462,7 +486,7 @@ paths:
           description: User is not a guest or has no guest profile.
   /api/v1/health/:
     get:
-      operationId: v1_health_retrieve
+      operationId: api_v1_health_retrieve
       description: |-
         Simple liveness endpoint — confirms the project boots and DRF routing
         works, independent of the database or any app-specific logic.
@@ -485,7 +509,7 @@ paths:
           description: ''
   /api/v1/operator/colleagues/:
     get:
-      operationId: v1_operator_colleagues_list
+      operationId: api_v1_operator_colleagues_list
       description: |-
         GET /api/v1/operator/colleagues/ — every operator in the current
         user's department, so a ticket can be assigned (or reassigned) to any
@@ -506,7 +530,7 @@ paths:
         schema:
           type: string
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -520,13 +544,13 @@ paths:
           description: ''
   /api/v1/operator/me/status/:
     put:
-      operationId: v1_operator_me_status_update
+      operationId: api_v1_operator_me_status_update
       description: |-
         PATCH /api/v1/operator/me/status/ — the logged-in operator toggles
         their own 'available / busy' status. Deliberately scoped to "me": an
         operator cannot flip a colleague's availability through this endpoint.
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -548,13 +572,13 @@ paths:
                 $ref: '#/components/schemas/OperatorAvailability'
           description: ''
     patch:
-      operationId: v1_operator_me_status_partial_update
+      operationId: api_v1_operator_me_status_partial_update
       description: |-
         PATCH /api/v1/operator/me/status/ — the logged-in operator toggles
         their own 'available / busy' status. Deliberately scoped to "me": an
         operator cannot flip a colleague's availability through this endpoint.
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -577,7 +601,7 @@ paths:
           description: ''
   /api/v1/operator/tickets/:
     get:
-      operationId: v1_operator_tickets_list
+      operationId: api_v1_operator_tickets_list
       parameters:
       - in: query
         name: assigned_to
@@ -630,7 +654,7 @@ paths:
           * `RESOLVED` - Resolved
           * `CANCELLED` - Cancelled
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -642,7 +666,7 @@ paths:
           description: ''
   /api/v1/operator/tickets/{id}/:
     get:
-      operationId: v1_operator_tickets_retrieve
+      operationId: api_v1_operator_tickets_retrieve
       parameters:
       - in: path
         name: id
@@ -650,7 +674,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -661,7 +685,7 @@ paths:
                 $ref: '#/components/schemas/OperatorTicket'
           description: ''
     put:
-      operationId: v1_operator_tickets_update
+      operationId: api_v1_operator_tickets_update
       parameters:
       - in: path
         name: id
@@ -669,7 +693,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -692,7 +716,7 @@ paths:
                 $ref: '#/components/schemas/OperatorTicket'
           description: ''
     patch:
-      operationId: v1_operator_tickets_partial_update
+      operationId: api_v1_operator_tickets_partial_update
       parameters:
       - in: path
         name: id
@@ -700,7 +724,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -723,7 +747,7 @@ paths:
           description: ''
   /api/v1/operator/tickets/{id}/assign/:
     post:
-      operationId: v1_operator_tickets_assign_create
+      operationId: api_v1_operator_tickets_assign_create
       parameters:
       - in: path
         name: id
@@ -731,7 +755,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -743,7 +767,7 @@ paths:
           description: ''
   /api/v1/operator/tickets/{id}/attachments/:
     post:
-      operationId: v1_operator_tickets_attachments_create
+      operationId: api_v1_operator_tickets_attachments_create
       description: |-
         POST /api/v1/operator/tickets/{id}/attachments/
 
@@ -758,7 +782,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -782,7 +806,7 @@ paths:
           description: ''
   /api/v1/operator/tickets/{id}/history/:
     get:
-      operationId: v1_operator_tickets_history_list
+      operationId: api_v1_operator_tickets_history_list
       description: |-
         GET /api/v1/operator/tickets/{id}/history/
 
@@ -797,7 +821,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -811,7 +835,7 @@ paths:
           description: ''
   /api/v1/operator/tickets/{id}/notes/:
     post:
-      operationId: v1_operator_tickets_notes_create
+      operationId: api_v1_operator_tickets_notes_create
       description: |-
         POST /api/v1/operator/tickets/{id}/notes/
 
@@ -824,7 +848,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -848,7 +872,7 @@ paths:
           description: ''
   /api/v1/operator/tickets/new-count/:
     get:
-      operationId: v1_operator_tickets_new_count_retrieve
+      operationId: api_v1_operator_tickets_new_count_retrieve
       description: |-
         GET /api/v1/operator/tickets/new-count/?since=<ISO 8601 timestamp>
 
@@ -867,7 +891,7 @@ paths:
         description: ISO 8601 timestamp of the last time the client checked. Defaults
           to now (i.e. zero new tickets) if omitted or invalid.
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -879,7 +903,7 @@ paths:
           description: ''
   /api/v1/operator/tickets/overdue-count/:
     get:
-      operationId: v1_operator_tickets_overdue_count_retrieve
+      operationId: api_v1_operator_tickets_overdue_count_retrieve
       description: |-
         GET /api/v1/operator/tickets/overdue-count/
 
@@ -893,7 +917,7 @@ paths:
         stats view (Stage 2.4) and is available for an in-app supervisor
         warning; an actual push alert is out of scope until Stage 3.2.
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -905,7 +929,7 @@ paths:
           description: ''
   /api/v1/quick-templates/:
     get:
-      operationId: v1_quick_templates_list
+      operationId: api_v1_quick_templates_list
       description: |-
         GET /api/v1/quick-templates/ — the one-click shortcuts shown on the
         guest's "new ticket" form (Stage 2.3). Management is Django-Admin-only;
@@ -924,7 +948,7 @@ paths:
         schema:
           type: string
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -938,7 +962,7 @@ paths:
           description: ''
   /api/v1/rooms/:
     get:
-      operationId: v1_rooms_list
+      operationId: api_v1_rooms_list
       description: |-
         GET  /api/v1/rooms/  — any authenticated user can browse.
         POST /api/v1/rooms/  — admins only.
@@ -962,7 +986,7 @@ paths:
         schema:
           type: string
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -973,12 +997,12 @@ paths:
                 $ref: '#/components/schemas/PaginatedRoomList'
           description: ''
     post:
-      operationId: v1_rooms_create
+      operationId: api_v1_rooms_create
       description: |-
         GET  /api/v1/rooms/  — any authenticated user can browse.
         POST /api/v1/rooms/  — admins only.
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -1002,7 +1026,7 @@ paths:
           description: ''
   /api/v1/rooms/{id}/:
     get:
-      operationId: v1_rooms_retrieve
+      operationId: api_v1_rooms_retrieve
       description: |-
         GET               — read for anyone authenticated.
         PATCH/PUT/DELETE  — admins only (e.g. marking a room under MAINTENANCE).
@@ -1013,7 +1037,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -1024,7 +1048,7 @@ paths:
                 $ref: '#/components/schemas/Room'
           description: ''
     put:
-      operationId: v1_rooms_update
+      operationId: api_v1_rooms_update
       description: |-
         GET               — read for anyone authenticated.
         PATCH/PUT/DELETE  — admins only (e.g. marking a room under MAINTENANCE).
@@ -1035,7 +1059,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -1058,7 +1082,7 @@ paths:
                 $ref: '#/components/schemas/Room'
           description: ''
     patch:
-      operationId: v1_rooms_partial_update
+      operationId: api_v1_rooms_partial_update
       description: |-
         GET               — read for anyone authenticated.
         PATCH/PUT/DELETE  — admins only (e.g. marking a room under MAINTENANCE).
@@ -1069,7 +1093,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -1091,7 +1115,7 @@ paths:
                 $ref: '#/components/schemas/Room'
           description: ''
     delete:
-      operationId: v1_rooms_destroy
+      operationId: api_v1_rooms_destroy
       description: |-
         GET               — read for anyone authenticated.
         PATCH/PUT/DELETE  — admins only (e.g. marking a room under MAINTENANCE).
@@ -1102,15 +1126,56 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
         '204':
           description: No response body
+  /api/v1/rooms/{id}/status-logs/:
+    get:
+      operationId: api_v1_rooms_status_logs_list
+      description: |-
+        GET /api/v1/rooms/{id}/status-logs/
+
+        Stage 2.7 — the audit trail written automatically by Room.save().
+        IsAdminOnly (not IsAdminRole) — IsAdminRole leaves GET open to any
+        authenticated user, but this internal operational history should
+        stay admin-only for reads too, unlike plain Room data.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RoomStatusLog'
+          description: ''
   /api/v1/tickets/:
     get:
-      operationId: v1_tickets_list
+      operationId: api_v1_tickets_list
       parameters:
       - name: ordering
         required: false
@@ -1131,7 +1196,7 @@ paths:
         schema:
           type: string
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -1142,9 +1207,9 @@ paths:
                 $ref: '#/components/schemas/PaginatedTicketList'
           description: ''
     post:
-      operationId: v1_tickets_create
+      operationId: api_v1_tickets_create
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -1168,7 +1233,7 @@ paths:
           description: ''
   /api/v1/tickets/{id}/:
     get:
-      operationId: v1_tickets_retrieve
+      operationId: api_v1_tickets_retrieve
       parameters:
       - in: path
         name: id
@@ -1176,7 +1241,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -1187,7 +1252,7 @@ paths:
                 $ref: '#/components/schemas/Ticket'
           description: ''
     put:
-      operationId: v1_tickets_update
+      operationId: api_v1_tickets_update
       parameters:
       - in: path
         name: id
@@ -1195,7 +1260,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -1218,7 +1283,7 @@ paths:
                 $ref: '#/components/schemas/Ticket'
           description: ''
     patch:
-      operationId: v1_tickets_partial_update
+      operationId: api_v1_tickets_partial_update
       parameters:
       - in: path
         name: id
@@ -1226,7 +1291,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -1249,7 +1314,7 @@ paths:
           description: ''
   /api/v1/tickets/{id}/attachments/:
     post:
-      operationId: v1_tickets_attachments_create
+      operationId: api_v1_tickets_attachments_create
       description: |-
         POST /api/v1/tickets/{id}/attachments/
 
@@ -1265,7 +1330,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -1287,9 +1352,31 @@ paths:
               schema:
                 $ref: '#/components/schemas/TicketAttachment'
           description: ''
+  /api/v1/tickets/{id}/export/pdf/:
+    get:
+      operationId: api_v1_tickets_export_pdf_retrieve
+      description: Returns a PDF file (application/pdf), not JSON.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/tickets/{id}/rate/:
     post:
-      operationId: v1_tickets_rate_create
+      operationId: api_v1_tickets_rate_create
       description: |-
         POST /api/v1/tickets/{id}/rate/
 
@@ -1304,7 +1391,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       requestBody:
         content:
           application/json:
@@ -1328,7 +1415,7 @@ paths:
           description: ''
   /api/v1/tickets/{id}/reopen/:
     post:
-      operationId: v1_tickets_reopen_create
+      operationId: api_v1_tickets_reopen_create
       description: |-
         POST /api/v1/tickets/{id}/reopen/
 
@@ -1344,7 +1431,7 @@ paths:
           type: integer
         required: true
       tags:
-      - v1
+      - api
       security:
       - jwtAuth: []
       responses:
@@ -1370,6 +1457,81 @@ components:
         * `ASSIGNED` - Assigned
         * `STATUS_CHANGED` - Status Changed
         * `PRIORITY_CHANGED` - Priority Changed
+    AdminStatsByDepartment:
+      type: object
+      description: One row of the by-department breakdown (Stage 2.4).
+      properties:
+        department_id:
+          type: integer
+        department_name:
+          type: string
+        open:
+          type: integer
+        in_progress:
+          type: integer
+        resolved:
+          type: integer
+        cancelled:
+          type: integer
+        total:
+          type: integer
+      required:
+      - cancelled
+      - department_id
+      - department_name
+      - in_progress
+      - open
+      - resolved
+      - total
+    AdminStatsByStatus:
+      type: object
+      description: Ticket count per Ticket.Status value, system-wide (Stage 2.4).
+      properties:
+        OPEN:
+          type: integer
+        IN_PROGRESS:
+          type: integer
+        RESOLVED:
+          type: integer
+        CANCELLED:
+          type: integer
+      required:
+      - CANCELLED
+      - IN_PROGRESS
+      - OPEN
+      - RESOLVED
+    AdminStatsSummary:
+      type: object
+      description: |-
+        GET /admin/stats/summary/ (Stage 2.4) — read-only aggregate view for
+        admins: ticket counts by status/department, average resolution time
+        over the last `resolution_window_days`, and the current system-wide
+        overdue count (Stage 2.9 SLA).
+      properties:
+        by_status:
+          $ref: '#/components/schemas/AdminStatsByStatus'
+        by_department:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminStatsByDepartment'
+        avg_resolution_minutes:
+          type: number
+          format: double
+          nullable: true
+        overdue_count:
+          type: integer
+        resolution_window_days:
+          type: integer
+        generated_at:
+          type: string
+          format: date-time
+      required:
+      - avg_resolution_minutes
+      - by_department
+      - by_status
+      - generated_at
+      - overdue_count
+      - resolution_window_days
     Category:
       type: object
       properties:
@@ -1997,6 +2159,36 @@ components:
         * `AVAILABLE` - Available
         * `OCCUPIED` - Occupied
         * `MAINTENANCE` - Maintenance
+    RoomStatusLog:
+      type: object
+      description: |-
+        Stage 2.7 — read-only, entries are only ever written by
+        Room.save(); there's no create/update endpoint for this model.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        room:
+          type: integer
+          readOnly: true
+        previous_status:
+          allOf:
+          - $ref: '#/components/schemas/RoomStatusEnum'
+          readOnly: true
+        new_status:
+          allOf:
+          - $ref: '#/components/schemas/RoomStatusEnum'
+          readOnly: true
+        changed_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - changed_at
+      - id
+      - new_status
+      - previous_status
+      - room
     Ticket:
       type: object
       properties:

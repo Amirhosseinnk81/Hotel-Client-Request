@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { FormError } from "@/components/form-error";
 import { RelativeTime } from "@/components/relative-time";
+import { TicketPdfExportButton } from "@/components/ticket-pdf-export-button";
 import { toast } from "@/hooks/use-toast";
 import {
   addOperatorTicketAttachment,
@@ -325,12 +326,15 @@ export default function OperatorTicketDetailPage({
 
   return (
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4">
-      <Button asChild variant="ghost" size="sm" className="w-fit gap-1.5">
-        <Link href="/operator">
-          <ArrowRight className="size-3.5" />
-          بازگشت به لیست درخواست‌ها
-        </Link>
-      </Button>
+      <div className="flex items-center justify-between gap-2">
+        <Button asChild variant="ghost" size="sm" className="w-fit gap-1.5">
+          <Link href="/operator">
+            <ArrowRight className="size-3.5" />
+            بازگشت به لیست درخواست‌ها
+          </Link>
+        </Button>
+        {ticket && <TicketPdfExportButton ticketId={ticket.id} />}
+      </div>
 
       {!ticket && !error && (
         <Card>

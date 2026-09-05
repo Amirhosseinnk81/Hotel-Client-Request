@@ -6,6 +6,7 @@ import { Bell, LogOut } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/auth-context";
 import { useRequireRole } from "@/hooks/use-require-role";
 import {
@@ -145,6 +146,8 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
               )}
             </Link>
           </Button>
+
+          <ThemeToggle />
 
           <Button variant="ghost" size="sm" className="gap-1.5" onClick={logout}>
             <LogOut className="size-3.5" />

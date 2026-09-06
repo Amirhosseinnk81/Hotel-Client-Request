@@ -56,19 +56,23 @@ export default function GuestLoginPage() {
   };
 
   return (
-    <main className="flex min-h-full flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <div className="mb-2 flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+    // Brand moment: generous vertical air and a wider card than a
+    // utilitarian login would use. This is the first screen a guest
+    // sees, so it carries the hotel's identity rather than optimising
+    // for density.
+    <main className="flex min-h-full flex-1 items-center justify-center px-6 py-16">
+      <Card className="w-full max-w-md px-2 py-10">
+        <CardHeader className="gap-3">
+          <div className="mb-1 flex size-11 items-center justify-center border border-accent/40 text-accent">
             <DoorOpen className="size-5" />
           </div>
-          <CardTitle className="text-xl">ورود مهمان</CardTitle>
-          <CardDescription>
+          <CardTitle className="display-2 rule-accent">ورود مهمان</CardTitle>
+          <CardDescription className="pt-2">
             برای ورود، کد ملی و شماره اتاق خود را وارد کنید.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="nationalId">کد ملی</Label>
               <Input
@@ -103,7 +107,7 @@ export default function GuestLoginPage() {
 
             <FormError message={apiError} />
 
-            <Button type="submit" disabled={isSubmitting} className="mt-2">
+            <Button type="submit" disabled={isSubmitting} className="mt-3 w-full">
               {isSubmitting ? "در حال ورود…" : "ورود"}
             </Button>
           </form>

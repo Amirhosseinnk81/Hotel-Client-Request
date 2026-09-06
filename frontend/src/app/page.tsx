@@ -34,7 +34,7 @@ export default async function Home() {
     <main className="flex min-h-full flex-1 flex-col items-center justify-center gap-6 p-6">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-xl">پلتفرم درخواست‌های مهمان هتل</CardTitle>
+          <CardTitle className="display-2">پلتفرم درخواست‌های مهمان هتل</CardTitle>
           <CardDescription>برای ادامه، پرتال خود را انتخاب کنید.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">

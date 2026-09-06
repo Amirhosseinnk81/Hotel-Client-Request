@@ -110,7 +110,7 @@ export default function OperatorHomePage() {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold">درخواست‌های واحد شما</h1>
+        <h1 className="display-2">درخواست‌های واحد شما</h1>
         <p className="text-sm text-muted-foreground">
           مدیریت درخواست‌های ثبت‌شده توسط مهمانان برای واحد شما.
         </p>
@@ -253,7 +253,7 @@ export default function OperatorHomePage() {
                 >
                   <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
                     <div className="flex flex-col gap-1">
-                      <CardTitle className="text-base">{ticket.title}</CardTitle>
+                      <CardTitle className="text-base font-medium">{ticket.title}</CardTitle>
                       <CardDescription>
                         اتاق {ticket.room_number} · {ticket.category_name} ·{" "}
                         <RelativeTime iso={ticket.created_at} />

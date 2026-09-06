@@ -54,19 +54,19 @@ export default function OperatorLoginPage() {
   };
 
   return (
-    <main className="flex min-h-full flex-1 items-center justify-center p-6">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <div className="mb-2 flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+    <main className="flex min-h-full flex-1 items-center justify-center px-6 py-16">
+      <Card className="w-full max-w-md px-2 py-10">
+        <CardHeader className="gap-3">
+          <div className="mb-1 flex size-11 items-center justify-center border border-accent/40 text-accent">
             <Briefcase className="size-5" />
           </div>
-          <CardTitle className="text-xl">ورود اپراتور</CardTitle>
-          <CardDescription>
+          <CardTitle className="display-2 rule-accent">ورود اپراتور</CardTitle>
+          <CardDescription className="pt-2">
             با نام کاربری و رمز عبور خود وارد شوید.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="username">نام کاربری</Label>
               <Input
@@ -100,7 +100,7 @@ export default function OperatorLoginPage() {
 
             <FormError message={apiError} />
 
-            <Button type="submit" disabled={isSubmitting} className="mt-2">
+            <Button type="submit" disabled={isSubmitting} className="mt-3 w-full">
               {isSubmitting ? "در حال ورود…" : "ورود"}
             </Button>
           </form>

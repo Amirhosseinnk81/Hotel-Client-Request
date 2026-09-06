@@ -7,7 +7,10 @@ function Card({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card"
       className={cn(
-        "bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm",
+        // Hairline border, no drop shadow: the source design separates
+        // surfaces with a 1px rule rather than lifting them off the page.
+        // Shadows here read as "web app"; the border reads as print.
+        "bg-card text-card-foreground flex flex-col gap-6 rounded-none border py-6",
         className
       )}
       {...props}
@@ -29,7 +32,9 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="card-title"
-      className={cn("font-semibold leading-none", className)}
+      // Weight 400 + tight tracking, not semibold: emphasis comes from
+      // size and surrounding space. See .display-* in globals.css.
+      className={cn("font-normal tracking-[-0.01em] leading-tight", className)}
       {...props}
     />
   );

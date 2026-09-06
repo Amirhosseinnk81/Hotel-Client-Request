@@ -58,11 +58,11 @@ MAINTENANCE_ROOM_NUMBERS = ["110", "210"]
 
 # (username, password, department_code)
 OPERATORS = [
-    ("op_housekeeping", "ZZzz123!@#", "HOUSEKEEPING"),
-    ("op_frontdesk", "ZZzz123!@#", "FRONT_DESK"),
-    ("op_maintenance", "ZZzz123!@#", "MAINTENANCE"),
-    ("op_roomservice", "ZZzz123!@#", "ROOM_SERVICE"),
-    ("op_concierge", "ZZzz123!@#", "CONCIERGE"),
+    ("op_housekeeping", "Demo!Pass123", "HOUSEKEEPING"),
+    ("op_frontdesk", "Demo!Pass123", "FRONT_DESK"),
+    ("op_maintenance", "Demo!Pass123", "MAINTENANCE"),
+    ("op_roomservice", "Demo!Pass123", "ROOM_SERVICE"),
+    ("op_concierge", "Demo!Pass123", "CONCIERGE"),
 ]
 ADMIN_USERNAME = "hotel_admin"
 ADMIN_PASSWORD = "Demo!Pass123"
@@ -97,6 +97,36 @@ class Command(BaseCommand):
             ),
         )
 
+    # -- generic lookup ---------------------------------------------------
+
+    def _get_or_create_by_name_or_code(self, model, name, code, extra_defaults=None):
+        """
+        Both `name` and `code` are unique on Department/Category. If someone
+        already created "پذیرش" by hand (through the admin, say) under a
+        different code than the one this script uses internally, a plain
+        get_or_create(code=...) would try to INSERT a second row with the
+        same name and blow up on the unique constraint. So: look up by
+        code first, then by name, and only create if genuinely neither
+        matches — an existing row (whatever its code actually is) always
+        wins over creating a duplicate.
+        """
+        obj = model.objects.filter(code=code).first()
+        if obj is not None:
+            return obj, False
+
+        obj = model.objects.filter(name=name).first()
+        if obj is not None:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"  note: {model.__name__} '{name}' already exists with "
+                    f"code '{obj.code}' (expected '{code}') — using it as-is"
+                )
+            )
+            return obj, False
+
+        defaults = {"name": name, "code": code, **(extra_defaults or {})}
+        return model.objects.create(**defaults), True
+
     @transaction.atomic
     def handle(self, *args, **options):
         departments = self._seed_departments()
@@ -113,8 +143,8 @@ class Command(BaseCommand):
     def _seed_departments(self):
         departments = {}
         for entry in DEPARTMENTS:
-            dept, created = Department.objects.get_or_create(
-                code=entry["code"], defaults={"name": entry["name"]}
+            dept, created = self._get_or_create_by_name_or_code(
+                Department, entry["name"], entry["code"]
             )
             departments[entry["code"]] = dept
             self._log(created, "Department", dept.name)
@@ -125,15 +155,14 @@ class Command(BaseCommand):
     def _seed_categories(self):
         categories = {}
         for name, code, sla_minutes, _dept_code in CATEGORIES:
-            category, created = Category.objects.get_or_create(
-                code=code, defaults={"name": name, "sla_minutes": sla_minutes}
+            category, created = self._get_or_create_by_name_or_code(
+                Category, name, code, extra_defaults={"sla_minutes": sla_minutes}
             )
             if not created and category.sla_minutes != sla_minutes:
                 category.sla_minutes = sla_minutes
-                category.name = name
-                category.save(update_fields=["sla_minutes", "name"])
+                category.save(update_fields=["sla_minutes"])
             categories[code] = category
-            self._log(created, "Category", f"{category.name} (SLA {sla_minutes}m)")
+            self._log(created, "Category", f"{category.name} (SLA {category.sla_minutes}m)")
         return categories
 
     # -- rooms -------------------------------------------------------------

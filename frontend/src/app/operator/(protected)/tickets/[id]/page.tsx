@@ -341,14 +341,14 @@ export default function OperatorTicketDetailPage({
           <CardHeader>
             <div className="flex items-start justify-between gap-2">
               <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-5 w-16" />
             </div>
             <Skeleton className="h-3.5 w-32" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex gap-2">
-              <Skeleton className="h-5 w-20 rounded-full" />
-              <Skeleton className="h-5 w-24 rounded-full" />
+              <Skeleton className="h-5 w-20" />
+              <Skeleton className="h-5 w-24" />
             </div>
             <div className="flex flex-col gap-2">
               <Skeleton className="h-3 w-16" />
@@ -372,7 +372,7 @@ export default function OperatorTicketDetailPage({
           <Card>
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
-                <CardTitle className="text-lg">{ticket.title}</CardTitle>
+                <CardTitle className="display-3">{ticket.title}</CardTitle>
                 <Badge variant={statusBadgeVariant[ticket.status]}>
                   {statusLabels[ticket.status]}
                 </Badge>
@@ -461,7 +461,7 @@ export default function OperatorTicketDetailPage({
           {!isClosed && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">اختصاص درخواست</CardTitle>
+                <CardTitle className="text-base font-medium">اختصاص درخواست</CardTitle>
                 <CardDescription>
                   این درخواست را به خودتان یا یکی دیگر از اپراتورهای واحد اختصاص دهید.
                 </CardDescription>
@@ -533,7 +533,7 @@ export default function OperatorTicketDetailPage({
           {options.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">تغییر وضعیت</CardTitle>
+                <CardTitle className="text-base font-medium">تغییر وضعیت</CardTitle>
                 {!isAssignedToMe && ticket.assigned_to && (
                   <CardDescription>
                     این درخواست به اپراتور دیگری اختصاص داده شده.

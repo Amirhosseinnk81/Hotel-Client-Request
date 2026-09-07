@@ -4,86 +4,111 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --radius: 0.5rem;
+  /* Square corners are the single strongest "luxury hotel" signal in the
+     Araz visual language — their primary CTA is a hard 0px rectangle.
+     Kept as a token (rather than hardcoded) so the whole app can be
+     softened again from one line if it ever reads too severe. */
+  --radius: 0rem;
 
-  /* Warm, hospitality-inspired palette — deep teal + brass, not the
-     generic cream/terracotta or violet SaaS defaults. */
-  --background: #f7f7f4;
-  --foreground: #1b1f1d;
+  /*
+   * Palette sampled from arazhotels.com — warm brown + bronze over a
+   * near-neutral charcoal. Replaces the earlier teal/brass identity so
+   * the app reads as part of the hotel's brand rather than a generic
+   * tool sitting next to it.
+   *
+   * Two rules the source site follows that matter more than the exact
+   * hex values, and that anything added later must keep:
+   *
+   * 1. NEVER pure black text. Even headings are a soft grey (#4d4d4d,
+   *    ~8.4:1 on white — comfortably AAA). Pure black reads cheap next
+   *    to it.
+   * 2. Bronze (--accent) is DECORATION, never a text or button colour.
+   *    #c59d72 is only ~2.3:1 against white, so white-on-bronze fails
+   *    contrast outright. That's exactly why the source site builds its
+   *    CTA out of the darker brown (#7c5f47, ~5.7:1) and keeps bronze
+   *    for rules, hovers and small marks. Use --primary for anything
+   *    that carries text.
+   */
+  --background: #faf8f6;
+  --foreground: #4d4d4d;
 
   --card: #ffffff;
-  --card-foreground: #1b1f1d;
+  --card-foreground: #4d4d4d;
 
   --popover: #ffffff;
-  --popover-foreground: #1b1f1d;
+  --popover-foreground: #4d4d4d;
 
-  --primary: #0f5257;
+  --primary: #7c5f47;
   --primary-foreground: #ffffff;
 
-  --secondary: #eceae3;
-  --secondary-foreground: #1b1f1d;
+  --secondary: #f0ebe5;
+  --secondary-foreground: #4d4d4d;
 
-  --muted: #eceae3;
-  --muted-foreground: #6b6f6a;
+  --muted: #f0ebe5;
+  --muted-foreground: #8a8175;
 
-  --accent: #b8863b;
-  --accent-foreground: #ffffff;
+  --accent: #c59d72;
+  --accent-foreground: #2b2118;
 
-  --destructive: #b3432b;
+  --destructive: #a8432c;
   --destructive-foreground: #ffffff;
 
-  --success: #3f7d5c;
+  --success: #4f7355;
   --success-foreground: #ffffff;
 
-  --warning: #c99a3e;
-  --warning-foreground: #1b1f1d;
+  --warning: #b98a3c;
+  --warning-foreground: #2b2118;
 
-  --border: #dedcd3;
-  --input: #dedcd3;
-  --ring: #0f5257;
+  --border: #e4dcd2;
+  --input: #e4dcd2;
+  --ring: #7c5f47;
 }
 
 /*
- * Stage 2.7 — dark mode. Same warm teal/brass identity as :root, not a
- * generic gray/black inversion: surfaces lean toward a dark, slightly
- * green-gray charcoal (not pure black) and the accent hues are lifted
- * a few steps in lightness/saturation so they still read clearly
- * against the dark background instead of going muddy.
+ * Dark mode — built on the source site's own dark surface (#141617), a
+ * near-neutral charcoal rather than the blue-black most dark themes
+ * default to. Same warm brown/bronze identity as :root.
+ *
+ * The one deliberate inversion: on dark, bronze finally has enough
+ * contrast to carry text (#d8b48c is ~9.4:1 on #141617), so --primary
+ * warms up towards it instead of staying the muddy brown that low-light
+ * surfaces would swallow. Bronze-on-dark is readable in a way
+ * bronze-on-white never is.
  */
 .dark {
-  --background: #14181a;
-  --foreground: #eef1ee;
+  --background: #141617;
+  --foreground: #e8e2da;
 
-  --card: #1c2124;
-  --card-foreground: #eef1ee;
+  --card: #1c1f20;
+  --card-foreground: #e8e2da;
 
-  --popover: #1c2124;
-  --popover-foreground: #eef1ee;
+  --popover: #1c1f20;
+  --popover-foreground: #e8e2da;
 
-  --primary: #1fa0a6;
-  --primary-foreground: #0a1516;
+  --primary: #c59d72;
+  --primary-foreground: #1c1409;
 
-  --secondary: #23282b;
-  --secondary-foreground: #eef1ee;
+  --secondary: #262a2b;
+  --secondary-foreground: #e8e2da;
 
-  --muted: #23282b;
-  --muted-foreground: #9aa39c;
+  --muted: #262a2b;
+  --muted-foreground: #a39a8e;
 
-  --accent: #d3a94c;
-  --accent-foreground: #1b1f1d;
+  --accent: #d8b48c;
+  --accent-foreground: #1c1409;
 
-  --destructive: #e0654a;
-  --destructive-foreground: #1b0a06;
+  --destructive: #d4654a;
+  --destructive-foreground: #1c0a06;
 
-  --success: #56ab80;
-  --success-foreground: #08150e;
+  --success: #79a682;
+  --success-foreground: #0b1a0f;
 
-  --warning: #dcae4e;
-  --warning-foreground: #1b1f1d;
+  --warning: #d9a95e;
+  --warning-foreground: #1c1409;
 
-  --border: #2c3134;
-  --input: #2c3134;
-  --ring: #1fa0a6;
+  --border: #32383a;
+  --input: #32383a;
+  --ring: #c59d72;
 }
 
 @theme inline {
@@ -123,8 +148,13 @@
 
   --font-sans: "Vazirmatn Variable", ui-sans-serif, system-ui, sans-serif;
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* With --radius at 0 the old calc() chain produced negative lengths
+     (-4px / -2px), which are invalid and get dropped — leaving those
+     steps to fall back to browser defaults rather than to 0. Clamped at
+     0 so the scale still degrades cleanly if --radius is ever raised
+     again. */
+  --radius-sm: max(0px, calc(var(--radius) - 4px));
+  --radius-md: max(0px, calc(var(--radius) - 2px));
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 }
@@ -132,8 +162,113 @@
 body {
   background: var(--background);
   color: var(--foreground);
+  /* Body copy on the source site runs at a notably loose 1.72 leading
+     with slightly POSITIVE tracking — the opposite of its headings.
+     That contrast is most of what makes the page feel unhurried. */
+  line-height: 1.72;
+  letter-spacing: 0.015em;
 }
 
 html.dark {
   color-scheme: dark;
+}
+
+/*
+ * Display headings.
+ *
+ * The counter-intuitive part, measured off arazhotels.com: headings are
+ * LIGHT (weight 400, not 600/700) and TIGHTLY tracked (-0.015em), while
+ * body text is looser and positively tracked. Reaching for bold here is
+ * the single fastest way to make this look like a generic dashboard
+ * again — the size and the space around it carry the emphasis instead.
+ *
+ * Vazirmatn is a variable font, so 400 against the 300-weight subtitle
+ * gives a real optical step without needing a second family. (The source
+ * site's own face, AbarMid, is commercially licensed and deliberately
+ * not used here.)
+ */
+.display-1 {
+  font-size: 2rem;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.5;
+}
+
+.display-2 {
+  font-size: 1.5rem;
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.45;
+}
+
+.display-3 {
+  font-size: 1.25rem;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+}
+
+/* Small caps-ish label for section headers and metadata rows: the one
+   place widened tracking is welcome, borrowed from the source site's
+   nav treatment. */
+.label-eyebrow {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: var(--muted-foreground);
+}
+
+/* A hairline in bronze — the accent's proper job. Used to mark a brand
+   moment (login card, submitted-ticket confirmation) without letting
+   bronze anywhere near text or a button fill. */
+.rule-accent::after {
+  content: "";
+  display: block;
+  width: 2.5rem;
+  height: 2px;
+  margin-top: 0.875rem;
+  background: var(--accent);
+}
+
+/* Confirmation checkmark: draws itself once, ~500ms, then rests.
+   Plain CSS keyframes on an inline SVG path — no animation library,
+   per the project's existing constraints. */
+@keyframes draw-check {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.confirm-check path {
+  stroke-dasharray: 32;
+  stroke-dashoffset: 32;
+  animation: draw-check 0.5s cubic-bezier(0.65, 0, 0.35, 1) 0.15s forwards;
+}
+
+.confirm-rise {
+  animation: rise-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Respect the viewer's motion preference — the checkmark still ends in
+   its final drawn state, it just doesn't animate there. */
+@media (prefers-reduced-motion: reduce) {
+  .confirm-check path {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .confirm-rise {
+    animation: none;
+  }
 }

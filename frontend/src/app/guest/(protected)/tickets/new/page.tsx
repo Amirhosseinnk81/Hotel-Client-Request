@@ -94,6 +94,10 @@ export default function NewTicketPage() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [submittedTicket, setSubmittedTicket] = useState<{
+    id: number;
+    title: string;
+  } | null>(null);
 
   const {
     register,
@@ -145,6 +149,19 @@ export default function NewTicketPage() {
     };
   }, []);
 
+  // Holds the confirmation on screen just long enough to register, then
+  // moves the guest on to their ticket list. Cleared on unmount so a
+  // guest who navigates away mid-beat doesn't get yanked back.
+  useEffect(() => {
+    if (!submittedTicket) return;
+
+    const timer = window.setTimeout(() => {
+      router.push("/guest/tickets");
+    }, 1600);
+
+    return () => window.clearTimeout(timer);
+  }, [submittedTicket, router]);
+
   const onSubmit = async (data: NewTicketForm) => {
     setApiError(null);
     setAttachmentError(null);
@@ -174,7 +191,12 @@ export default function NewTicketPage() {
         }
       }
 
-      router.push("/guest/tickets");
+      // Deliberately NOT an immediate redirect. Usability testing on
+      // hotel apps repeatedly turns up the same failure: an action
+      // succeeds, the screen changes, and the guest is left unsure
+      // whether it actually went through. A short, explicit "ثبت شد"
+      // beat with the ticket number closes that loop before we navigate.
+      setSubmittedTicket({ id: ticket.id, title: ticket.title });
     } catch (error) {
       setApiError(error instanceof ApiError ? error.message : "خطایی رخ داد. لطفاً دوباره تلاش کنید.");
     }
@@ -186,8 +208,38 @@ export default function NewTicketPage() {
     setValue("category", String(template.category), { shouldValidate: true });
   };
 
+  if (submittedTicket) {
+    return (
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center px-2 py-20">
+        <div className="confirm-rise flex flex-col items-center text-center">
+          <svg
+            className="confirm-check size-14 text-primary"
+            viewBox="0 0 52 52"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M14 27l8.5 8.5L38 19" />
+          </svg>
+
+          <p className="display-2 mt-6">درخواست شما ثبت شد</p>
+
+          <p className="mt-3 text-sm text-muted-foreground">
+            «{submittedTicket.title}» با شمارهٔ {submittedTicket.id} برای هتل
+            ارسال شد و به‌زودی بررسی می‌شود.
+          </p>
+
+          <span className="mt-6 h-px w-10 bg-accent" aria-hidden="true" />
+        </div>
+      </main>
+    );
+  }
+
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4">
+    <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 py-2">
       <Button asChild variant="ghost" size="sm" className="w-fit gap-1.5">
         <Link href="/guest">
           <ArrowRight className="size-3.5" />
@@ -195,10 +247,12 @@ export default function NewTicketPage() {
         </Link>
       </Button>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-xl">ثبت درخواست جدید</CardTitle>
-          <CardDescription>درخواست خود را برای هتل ثبت کنید.</CardDescription>
+      <Card className="py-8">
+        <CardHeader className="gap-2">
+          <CardTitle className="display-2 rule-accent">ثبت درخواست جدید</CardTitle>
+          <CardDescription className="pt-2">
+            درخواست خود را برای هتل ثبت کنید.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           {quickTemplates.length > 0 && (
@@ -210,7 +264,7 @@ export default function NewTicketPage() {
                     key={template.id}
                     type="button"
                     onClick={() => applyQuickTemplate(template)}
-                    className="flex flex-col items-center gap-1.5 rounded-lg border bg-card px-3 py-2.5 text-xs transition-colors hover:bg-secondary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex flex-col items-center gap-1.5 rounded-none border bg-card px-4 py-3 text-xs transition-colors hover:border-accent hover:bg-secondary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <QuickTemplateIcon name={template.icon} />
                     {template.title}

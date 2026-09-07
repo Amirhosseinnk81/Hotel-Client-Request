@@ -92,7 +92,7 @@ export default function GuestTicketsPage() {
       </Button>
 
       <div>
-        <h1 className="text-xl font-semibold">درخواست‌های من</h1>
+        <h1 className="display-2">درخواست‌های من</h1>
         <p className="text-sm text-muted-foreground">
           لیست درخواست‌هایی که تاکنون ثبت کرده‌اید.
         </p>
@@ -196,7 +196,7 @@ export default function GuestTicketsPage() {
                 <Card className="transition-colors hover:bg-secondary/40">
                   <CardHeader className="flex-row items-start justify-between gap-2 space-y-0">
                     <div className="flex flex-col gap-1">
-                      <CardTitle className="text-base">{ticket.title}</CardTitle>
+                      <CardTitle className="text-base font-medium">{ticket.title}</CardTitle>
                       <CardDescription>
                         {ticket.department_name} · {ticket.category_name} ·{" "}
                         <RelativeTime iso={ticket.created_at} />

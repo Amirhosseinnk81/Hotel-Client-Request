@@ -186,13 +186,13 @@ export default function GuestTicketDetailPage({
           <CardHeader>
             <div className="flex items-start justify-between gap-2">
               <Skeleton className="h-5 w-40" />
-              <Skeleton className="h-5 w-16 rounded-full" />
+              <Skeleton className="h-5 w-16" />
             </div>
             <Skeleton className="h-3.5 w-32" />
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <div className="flex gap-2">
-              <Skeleton className="h-5 w-20 rounded-full" />
+              <Skeleton className="h-5 w-20" />
             </div>
             <div className="flex flex-col gap-2">
               <Skeleton className="h-3 w-16" />
@@ -217,7 +217,7 @@ export default function GuestTicketDetailPage({
         <Card>
           <CardHeader>
             <div className="flex items-start justify-between gap-2">
-              <CardTitle className="text-lg">{ticket.title}</CardTitle>
+              <CardTitle className="display-3">{ticket.title}</CardTitle>
               <Badge variant={statusBadgeVariant[ticket.status]}>
                 {statusLabels[ticket.status]}
               </Badge>
@@ -295,7 +295,7 @@ export default function GuestTicketDetailPage({
       {ticket && ticket.status === "RESOLVED" && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">
+            <CardTitle className="text-base font-medium">
               {ticket.guest_rating ? "نظر شما" : "رضایت شما از این خدمت چقدر بود؟"}
             </CardTitle>
           </CardHeader>

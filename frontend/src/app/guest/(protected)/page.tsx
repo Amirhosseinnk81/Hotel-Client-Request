@@ -66,7 +66,7 @@ export default function GuestDashboardPage() {
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6">
       <div>
-        <h1 className="text-xl font-semibold">خوش آمدید{profile ? `، ${profile.full_name}` : ""}</h1>
+        <h1 className="display-2">خوش آمدید{profile ? `، ${profile.full_name}` : ""}</h1>
         <p className="text-sm text-muted-foreground">پروفایل و درخواست‌های شما</p>
       </div>
 
@@ -89,7 +89,7 @@ export default function GuestDashboardPage() {
       {!isLoading && profile && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">اطلاعات مهمان</CardTitle>
+            <CardTitle className="text-base font-medium">اطلاعات مهمان</CardTitle>
             <CardDescription>اطلاعات ثبت‌شدهٔ شما نزد هتل</CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -107,7 +107,7 @@ export default function GuestDashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">درخواست‌ها</CardTitle>
+          <CardTitle className="text-base font-medium">درخواست‌ها</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row">
           <Button asChild className="flex-1 gap-2">

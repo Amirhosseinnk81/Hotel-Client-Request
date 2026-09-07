@@ -25,7 +25,7 @@ function ToastViewport({
 }
 
 const toastVariants = cva(
-  "relative flex w-full items-start gap-2 rounded-lg border bg-card p-4 pl-8 text-card-foreground shadow-md",
+  "relative flex w-full items-start gap-2 rounded-none border bg-card p-4 pl-8 text-card-foreground shadow-md",
   {
     variants: {
       variant: {

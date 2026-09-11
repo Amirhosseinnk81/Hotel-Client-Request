@@ -62,3 +62,35 @@ export function formatRelativeTime(iso: string): string {
 
   return relativeFormatter.format(Math.round(diffSeconds / 60), "minute");
 }
+
+const numberFormatter = new Intl.NumberFormat("fa-IR");
+
+/** e.g. 42 -> "۴۲" — counts on the stats summary. */
+export function formatNumber(value: number): string {
+  return numberFormatter.format(value);
+}
+
+/**
+ * A span of minutes in words: 25 -> "۲۵ دقیقه", 96 -> "۱ ساعت و ۳۶ دقیقه",
+ * 1500 -> "۱ روز و ۱ ساعت". Rounds to whole minutes, and drops minutes
+ * once days are involved — "۳ روز و ۴ ساعت و ۱۲ دقیقه" is more precision
+ * than an average resolution time deserves.
+ */
+export function formatDurationMinutes(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes));
+  const days = Math.floor(total / 1440);
+  const hours = Math.floor((total % 1440) / 60);
+  const mins = total % 60;
+
+  if (days > 0) {
+    return hours > 0
+      ? `${formatNumber(days)} روز و ${formatNumber(hours)} ساعت`
+      : `${formatNumber(days)} روز`;
+  }
+  if (hours > 0) {
+    return mins > 0
+      ? `${formatNumber(hours)} ساعت و ${formatNumber(mins)} دقیقه`
+      : `${formatNumber(hours)} ساعت`;
+  }
+  return `${formatNumber(mins)} دقیقه`;
+}

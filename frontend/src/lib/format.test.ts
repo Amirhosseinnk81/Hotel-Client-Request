@@ -1,6 +1,44 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { formatDateOnly, formatDateTime, formatRelativeTime } from "./format";
+import {
+  formatDateOnly,
+  formatDateTime,
+  formatDurationMinutes,
+  formatNumber,
+  formatRelativeTime,
+} from "./format";
+
+describe("formatNumber", () => {
+  it("renders Persian digits", () => {
+    expect(formatNumber(0)).toBe("۰");
+    expect(formatNumber(42)).toBe("۴۲");
+  });
+});
+
+describe("formatDurationMinutes", () => {
+  it("keeps short spans in minutes", () => {
+    expect(formatDurationMinutes(25)).toBe("۲۵ دقیقه");
+  });
+
+  it("rounds to whole minutes", () => {
+    expect(formatDurationMinutes(30.4)).toBe("۳۰ دقیقه");
+  });
+
+  it("switches to hours, dropping a zero minute part", () => {
+    expect(formatDurationMinutes(60)).toBe("۱ ساعت");
+    expect(formatDurationMinutes(96)).toBe("۱ ساعت و ۳۶ دقیقه");
+  });
+
+  it("switches to days and drops minutes once days are involved", () => {
+    expect(formatDurationMinutes(1440)).toBe("۱ روز");
+    expect(formatDurationMinutes(1500)).toBe("۱ روز و ۱ ساعت");
+    expect(formatDurationMinutes(1441)).toBe("۱ روز");
+  });
+
+  it("never goes negative", () => {
+    expect(formatDurationMinutes(-5)).toBe("۰ دقیقه");
+  });
+});
 
 describe("formatDateOnly / formatDateTime", () => {
   it("renders a Persian calendar date", () => {

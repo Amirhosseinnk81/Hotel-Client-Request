@@ -4,6 +4,7 @@ from .views import (
     AdminStatsSummaryView,
     CategoryDetailView,
     CategoryListCreateView,
+    DepartmentStatsSummaryView,
     GuestTicketAttachmentCreateView,
     GuestTicketDetailView,
     GuestTicketListCreateView,
@@ -119,5 +120,10 @@ urlpatterns = [
         "operator/colleagues/",
         OperatorColleaguesListView.as_view(),
         name="operator-colleagues-list",
+    ),
+    path(
+        "operator/stats/summary/",
+        DepartmentStatsSummaryView.as_view(),
+        name="operator-stats-summary",
     ),
 ]

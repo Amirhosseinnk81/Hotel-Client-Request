@@ -5,7 +5,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import filters, generics, status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -13,15 +13,21 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serial
 from drf_spectacular.types import OpenApiTypes
 from rest_framework import serializers as drf_serializers
 
-from apps.core.permissions import IsAdminOnly, IsAdminRole
+from apps.core.permissions import (
+    CanWorkOnOperatorTicket,
+    IsAdminOnly,
+    IsAdminRole,
+    IsSupervisor,
+)
 
 from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
 from .pdf import generate_ticket_pdf
 from .permissions import IsOperator
-from .services import compute_admin_stats_summary
+from .services import compute_admin_stats_summary, compute_department_stats_summary
 from .serializers import (
     AdminStatsSummarySerializer,
     CategorySerializer,
+    DepartmentStatsSummarySerializer,
     OperatorColleagueSerializer,
     QuickRequestTemplateSerializer,
     TicketAttachmentSerializer,
@@ -383,7 +389,9 @@ class OperatorNewTicketCountView(APIView):
 
 class OperatorTicketDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = OperatorTicketSerializer
-    permission_classes = [IsOperator]
+    # Every operator in the department can read; who may change what is
+    # decided per ticket by CanWorkOnOperatorTicket (assignee or supervisor).
+    permission_classes = [IsOperator, CanWorkOnOperatorTicket]
 
     def get_queryset(self):
         if getattr(self, "swagger_fake_view", False):
@@ -450,7 +458,14 @@ class OperatorTicketDetailView(generics.RetrieveUpdateAPIView):
     responses=OperatorTicketSerializer,
 )
 class OperatorTicketAssignView(APIView):
-    permission_classes = [IsOperator]
+    """
+    POST /api/v1/operator/tickets/{id}/assign/ — a supervisor takes a
+    ticket for themselves. Handing it to someone else goes through PATCH
+    assigned_to on the detail endpoint instead. Regular operators can no
+    longer self-assign: assignment is a supervisor decision.
+    """
+
+    permission_classes = [IsSupervisor]
 
     def post(self, request, pk):
         try:
@@ -475,11 +490,21 @@ class OperatorTicketAssignView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        # RESOLVED/CANCELLED are terminal. This endpoint used to set
+        # IN_PROGRESS unconditionally, which let anyone pull a closed
+        # ticket back open just by assigning it. The "detail" key makes
+        # the error envelope carry this sentence as its `message`.
+        if ticket.status in (Ticket.Status.RESOLVED, Ticket.Status.CANCELLED):
+            raise ValidationError({"detail": "A closed ticket cannot be assigned."})
+
         old_assigned_to = ticket.assigned_to
         old_status = ticket.status
 
         ticket.assigned_to = request.user
-        ticket.status = Ticket.Status.IN_PROGRESS
+        # Through the state machine rather than around it: an OPEN ticket
+        # moves to IN_PROGRESS, one already IN_PROGRESS simply stays put.
+        if ticket.can_transition_to(Ticket.Status.IN_PROGRESS):
+            ticket.status = Ticket.Status.IN_PROGRESS
 
         ticket.save(
             update_fields=[
@@ -654,6 +679,36 @@ class AdminStatsSummaryView(APIView):
     def get(self, request):
         data = compute_admin_stats_summary()
         return Response(AdminStatsSummarySerializer(data).data)
+
+
+@extend_schema(responses=DepartmentStatsSummarySerializer)
+class DepartmentStatsSummaryView(APIView):
+    """
+    GET /api/v1/operator/stats/summary/
+
+    The operator panel's version of the admin Stats Summary, scoped to the
+    caller's own department: ticket counts by status, average resolution
+    time, the overdue count, and each operator's workload. Any operator of
+    the department may read it, regular or supervisor.
+
+    Admins keep using /admin/stats/summary/ for the whole hotel. Two
+    endpoints with one fixed scope each, rather than one endpoint whose
+    scope widens or narrows depending on who asks — and the department
+    always comes from request.user, never from a query parameter a client
+    could change.
+    """
+
+    permission_classes = [IsOperator]
+
+    def get(self, request):
+        department = request.user.department
+        if department is None:
+            # A misconfigured account, not "show everything": the service
+            # refuses None too, but answering here gives a clear 403.
+            raise PermissionDenied("You are not assigned to a department.")
+
+        data = compute_department_stats_summary(department)
+        return Response(DepartmentStatsSummarySerializer(data).data)
 
 
 class OperatorTicketAttachmentCreateView(generics.CreateAPIView):

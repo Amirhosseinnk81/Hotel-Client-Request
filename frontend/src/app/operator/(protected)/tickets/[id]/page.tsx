@@ -48,14 +48,13 @@ import {
   addOperatorTicketAttachment,
   addOperatorTicketNote,
   assignTicketToSelf,
-  getAccessToken,
   getOperatorColleagues,
   getOperatorTicketDetail,
   getOperatorTicketHistory,
   updateOperatorTicket,
   ApiError,
 } from "@/lib/api/client";
-import { decodeAccessToken } from "@/lib/api/tokens";
+import { canTriage, canWorkOnTicket, getOperatorViewer } from "@/lib/ticket-permissions";
 import type {
   OperatorColleague,
   Ticket,
@@ -128,7 +127,8 @@ export default function OperatorTicketDetailPage({
   // opens a confirm dialog first instead of firing immediately.
   const [isCancelConfirmOpen, setIsCancelConfirmOpen] = useState(false);
 
-  const currentUserId = decodeAccessToken(getAccessToken() ?? "")?.user_id ?? null;
+  const viewer = getOperatorViewer();
+  const currentUserId = viewer.userId;
 
   const loadTimeline = () => {
     queueMicrotask(() => setTimelineError(null));
@@ -318,6 +318,12 @@ export default function OperatorTicketDetailPage({
   const options = ticket ? allowedNextStatuses[ticket.status] : [];
   const isClosed = ticket?.status === "RESOLVED" || ticket?.status === "CANCELLED";
   const isAssignedToMe = ticket?.assigned_to !== null && ticket?.assigned_to === currentUserId;
+  // Mirrors the backend (see lib/ticket-permissions.ts): assignment is
+  // supervisor-only, status changes are for the assignee or a supervisor.
+  // The backend enforces both; this only avoids offering controls that
+  // would come back 403.
+  const canAssign = canTriage(viewer);
+  const canChangeStatus = ticket ? canWorkOnTicket(ticket, viewer) : false;
   const needsResolution = targetStatus === "RESOLVED";
   const canSubmitStatus =
     !!targetStatus && (!needsResolution || resolution.trim().length > 0);
@@ -458,7 +464,7 @@ export default function OperatorTicketDetailPage({
             </CardContent>
           </Card>
 
-          {!isClosed && (
+          {!isClosed && canAssign && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base font-medium">اختصاص درخواست</CardTitle>
@@ -530,7 +536,15 @@ export default function OperatorTicketDetailPage({
             </Card>
           )}
 
-          {options.length > 0 && (
+          {options.length > 0 && !canChangeStatus && (
+            <p className="text-sm text-muted-foreground">
+              {ticket.assigned_to
+                ? "این درخواست به اپراتور دیگری اختصاص دارد. فقط اپراتور مسئول یا سرپرست واحد می‌تواند وضعیتش را تغییر دهد."
+                : "این درخواست هنوز به کسی اختصاص نیافته. سرپرست واحد باید آن را به یک اپراتور بسپارد."}
+            </p>
+          )}
+
+          {options.length > 0 && canChangeStatus && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base font-medium">تغییر وضعیت</CardTitle>
@@ -572,7 +586,10 @@ export default function OperatorTicketDetailPage({
                   </div>
                 )}
 
-                {needsResolution && (
+                {/* Only the assignee may attach a proof-of-fix photo (backend
+                    rule), so a supervisor resolving someone else's ticket
+                    isn't offered an upload that would be refused. */}
+                {needsResolution && isAssignedToMe && (
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="resolution-attachment">عکس نتیجه (اختیاری)</Label>
                     <label

@@ -36,11 +36,18 @@ export function ResolveTicketDialog({
   open,
   onOpenChange,
   onResolved,
+  canAttachPhoto,
 }: {
   ticketId: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onResolved: (updated: Ticket) => void;
+  /**
+   * Only the operator the ticket is assigned to may attach a proof-of-fix
+   * photo (backend rule). A supervisor resolving someone else's ticket
+   * would have the upload refused, so the field isn't offered at all.
+   */
+  canAttachPhoto: boolean;
 }) {
   const [resolution, setResolution] = useState("");
   const [attachment, setAttachment] = useState<File | null>(null);
@@ -120,6 +127,7 @@ export function ResolveTicketDialog({
             />
           </div>
 
+          {canAttachPhoto && (
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="kanban-resolution-attachment">عکس نتیجه (اختیاری)</Label>
             <label
@@ -137,6 +145,7 @@ export function ResolveTicketDialog({
               onChange={(e) => setAttachment(e.target.files?.[0] ?? null)}
             />
           </div>
+          )}
         </div>
 
         <DialogFooter>

@@ -1,10 +1,12 @@
 import { decodeAccessToken, isTokenExpired } from "./tokens";
 import type {
+  AdminStatsSummary,
   ApiErrorBody,
   AuthTokens,
   Category,
   CreateTicketPayload,
   Department,
+  DepartmentStatsSummary,
   GuestProfile,
   OperatorAvailability,
   OperatorColleague,
@@ -455,6 +457,16 @@ export async function getNewTicketCount(sinceIso: string): Promise<number> {
 export async function getOverdueTicketCount(): Promise<number> {
   const { count } = await apiFetch<{ count: number }>("/operator/tickets/overdue-count/");
   return count;
+}
+
+/** The whole hotel — admins only. Same numbers as the Django Admin Stats Summary page. */
+export async function getAdminStatsSummary(): Promise<AdminStatsSummary> {
+  return apiFetch<AdminStatsSummary>("/admin/stats/summary/");
+}
+
+/** The caller's own department — any operator, regular or supervisor. */
+export async function getDepartmentStatsSummary(): Promise<DepartmentStatsSummary> {
+  return apiFetch<DepartmentStatsSummary>("/operator/stats/summary/");
 }
 
 /**

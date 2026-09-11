@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Bell, LogOut } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -32,6 +33,14 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
   const role = payload?.role ?? null;
   const userId = payload?.user_id ?? null;
 
+  const pathname = usePathname();
+  const navClass = (active: boolean) =>
+    `px-2 py-1 transition-colors ${
+      active
+        ? "border-b-2 border-accent text-foreground"
+        : "text-muted-foreground hover:text-foreground"
+    }`;
+
   // The colleagues endpoint (department roster) is the only place that
   // already exposes is_available, so it doubles as "get my own status" —
   // no separate "me" endpoint needed. Only OPERATOR accounts appear in it,
@@ -54,7 +63,9 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
   // accumulate correctly without double-counting. Replaced by real-time
   // push in Stage 3.2 (Django Channels/SSE).
   useEffect(() => {
-    if (!canRender) return;
+    // The new-ticket count endpoint is operator-only (admins have no
+    // department), so admins simply don't poll.
+    if (!canRender || role !== "OPERATOR") return;
 
     let cancelled = false;
     let lastChecked = new Date().toISOString();
@@ -78,7 +89,7 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
       cancelled = true;
       clearInterval(interval);
     };
-  }, [canRender]);
+  }, [canRender, role]);
 
   const handleToggleAvailability = async () => {
     if (isAvailable === null || isTogglingAvailability) return;
@@ -112,7 +123,23 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
               — {payload.username}
             </span>
           )}
+          {payload?.is_supervisor && (
+            <Badge variant="secondary" className="ms-2 align-middle text-[11px] font-normal">
+              سرپرست
+            </Badge>
+          )}
         </span>
+
+        <nav className="flex items-center gap-1 text-sm">
+          {role === "OPERATOR" && (
+            <Link href="/operator" className={navClass(pathname === "/operator")}>
+              درخواست‌ها
+            </Link>
+          )}
+          <Link href="/operator/summary" className={navClass(pathname === "/operator/summary")}>
+            خلاصه
+          </Link>
+        </nav>
 
         <div className="flex items-center gap-2">
           {role === "OPERATOR" && isAvailable !== null && (
@@ -133,6 +160,7 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
             </Button>
           )}
 
+          {role === "OPERATOR" && (
           <Button variant="ghost" size="sm" className="relative gap-1.5" asChild>
             <Link href="/operator" onClick={() => setNewCount(0)}>
               <Bell className="size-3.5" />
@@ -146,6 +174,7 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
               )}
             </Link>
           </Button>
+          )}
 
           <ThemeToggle />
 

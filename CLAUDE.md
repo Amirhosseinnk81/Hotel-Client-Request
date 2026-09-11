@@ -24,8 +24,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Frontend | **Next.js 16.3.2** (App Router) + React 19.2 + TypeScript + Tailwind v4 |
 | UI Kit | shadcn/ui **دستی‌ساز** (بدون CLI) در `frontend/src/components/ui/` روی Radix |
 | فونت | `@fontsource-variable/vazirmatn` در UI؛ TTF کامل Vazirmatn برای PDF |
-| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۱۵۶ تست** |
-| تست فرانت | Vitest + React Testing Library — **۴۰ تست** |
+| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۱۸۵ تست** |
+| تست فرانت | Vitest + React Testing Library — **۶۲ تست** |
 | Deployment | مستقیم روی هاست ویندوز، بدون Docker/Redis/Celery |
 
 ## دستورهای رایج
@@ -34,9 +34,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # بک‌اند (از ریشهٔ ریپو)
 python manage.py migrate
 python manage.py runserver localhost:8000      # localhost، نه 127.0.0.1 — بخش «دو تلهٔ همیشگی»
-python manage.py seed_demo_data                # دادهٔ دموی فارسی: واحدها، دسته‌ها، اتاق، اپراتور، مهمان
+python manage.py seed_demo_data                # دادهٔ دموی فارسی: واحدها، دسته‌ها، اتاق، اپراتور، سرپرست، مهمان
 python manage.py seed_demo_data --reset-passwords
-python manage.py test                          # کل ۱۵۶ تست
+python manage.py test                          # کل ۱۸۵ تست
 python manage.py test apps.tickets             # فقط یک اپ
 python manage.py spectacular --file Hotel_Client_Request_Platform_API.yaml
 ```
@@ -44,7 +44,7 @@ python manage.py spectacular --file Hotel_Client_Request_Platform_API.yaml
 اجرای یک تست منفرد:
 
 ```bash
-python manage.py test apps.tickets.tests.OperatorTicketTests.test_operator_can_cancel_open_ticket
+python manage.py test apps.tickets.tests.OperatorTicketAPITests.test_operator_can_cancel_open_ticket
 ```
 
 ```bash
@@ -84,7 +84,7 @@ npx vitest run -t "relative"                   # فیلتر روی نام تست
 - `config/settings/` — `base.py` (مشترک) + `development.py` / `production.py`
 - `apps/` — هر اپ با الگوی ثابت: `models.py` → `serializers.py` → `views.py` (DRF generics) → `urls.py` → `admin.py` → `tests.py`
   - `core/` — پرمیشن‌های مشترک، `jwt_cookies.py`، `throttling.py`، `exceptions.py`، health check، `seed_demo_data`
-  - `accounts/` — User سفارشی (`role`، `department`، `is_available`)، لاگین اپراتور، refresh، logout
+  - `accounts/` — User سفارشی (`role`، `department`، `is_available`، `is_supervisor`)، لاگین اپراتور، refresh، logout
   - `guests/` — Guest و لاگین مهمان
   - `rooms/` — Room و `RoomStatusLog` (لاگ append-only که خودِ `Room.save()` می‌نویسد)
   - `departments/` — CRUD ادمین
@@ -127,6 +127,16 @@ CANCELLED    → (نهایی)
 - **فونت:** از فونت «Non-Latin» پکیج Vazirmatn استفاده نکن؛ گلیف حروف لاتین و ارقام ASCII را ندارد و شمارهٔ اتاق و username خالی چاپ می‌شوند. فونت کامل `apps/tickets/assets/fonts/Vazirmatn-{Regular,Bold}.ttf` (لایسنس OFL کنارش هست) درست است.
 - **Shaping:** reportlab خودش RTL و جوین حروف را مدیریت نمی‌کند؛ باید با `arabic-reshaper` + `python-bidi` شکل داده شود. **word-wrap باید روی متن unshaped انجام شود و بعد هر خط جداگانه shape شود** — اگر متن shape‌شده را wrap کنی ترتیب حروف به هم می‌ریزد. الگویش در `_wrap_lines` و `_shape` است.
 
+## خلاصهٔ آمار
+
+همان صفحهٔ «Stats Summary» در Django Admin، در پنل اپراتور هم هست: `/operator/summary`.
+
+- **دو endpoint، هرکدام با یک scope ثابت** — نه یک endpoint که بسته به نقش گشاد یا تنگ شود. ادمین: `GET /admin/stats/summary/` (کل هتل، `IsAdminOnly`). اپراتور و سرپرست: `GET /operator/stats/summary/` (فقط واحد خودشان، `IsOperator`). واحد همیشه از `request.user` می‌آید، هرگز از پارامتر کوئری.
+- هر دو از `apps/tickets/services.py` می‌خوانند و منطق وضعیت/میانگین/معوق در helperهای مشترک است. خروجی `compute_admin_stats_summary()` دقیقاً حفظ شده، چون صفحهٔ Django Admin هم از همان می‌خواند.
+- **`compute_department_stats_summary(None)` عمداً `ValueError` می‌دهد** و ویو برای اپراتورِ بی‌واحد ۴۰۳ برمی‌گرداند. «بدون واحد» هرگز نباید بی‌صدا «همهٔ واحدها» شود — این دقیقاً همان نشتی است که باید جلویش را گرفت. `test_operator_without_a_department_is_refused_not_shown_the_whole_hotel` این را pin می‌کند.
+- در نسخهٔ واحد، جدول «به تفکیک واحد» (که فقط یک ردیف می‌شد) جایش را به «بار کاری اپراتورها» داده: کل روستر واحد، حتی اپراتور بی‌کار با ۰، سرپرست‌ها اول. «فعال» یعنی تیکت‌های OPEN/IN_PROGRESS اختصاص‌یافته — همان تعریفی که «مشغول» در مرحلهٔ در دسترس بودن خودکار خواهد داشت.
+- اعداد با `formatNumber` و مدت‌ها با `formatDurationMinutes` از `lib/format.ts`.
+
 ## Dark Mode
 
 کلاس‌محور است: `ThemeProvider` در `frontend/src/contexts/theme-context.tsx` کلاس `dark` را روی `<html>` می‌گذارد و انتخاب کاربر را در `localStorage` نگه می‌دارد. در Tailwind v4 با `@custom-variant dark (&:is(.dark *))` در `globals.css` وصل شده. پالت تیره همان هویت قهوه‌ای/برنزی را نگه می‌دارد، نه یک وارونه‌سازی خاکستری/مشکی.
@@ -147,6 +157,24 @@ CANCELLED    → (نهایی)
 
 `RoomStatusLog` را خودِ `Room.save()` می‌نویسد — append-only، هیچ‌جا آپدیت یا حذف نمی‌شود. خواندنش از `GET /api/v1/rooms/{id}/status-logs/`. سریالایزرش عمداً فقط‌خواندنی است.
 
+## سطح دسترسی اپراتورها
+
+سه سطح. سرپرست یک **فلگ** روی User است (`is_supervisor`)، نه نقش جدید — تا همهٔ چک‌های موجود `role == "OPERATOR"` (scoping واحد، لیست همکاران، اینکه تیکت به چه کسی قابل تخصیص است) بدون تغییر کار کنند و سرپرست همچنان خودش هم تیکت‌گیر باشد.
+
+| | دیدن تیکت‌های واحد | وضعیت و resolution | اولویت و تخصیص |
+|---|---|---|---|
+| اپراتور عادی | همه | فقط تیکت‌های خودش | ✗ |
+| سرپرست | همه | همهٔ تیکت‌های واحد | ✓ |
+| ادمین | — (فقط خلاصهٔ کل هتل) | ✗ | ✗ |
+
+- پیاده‌سازی: `IsSupervisor` و `CanWorkOnOperatorTicket` در `apps/core/permissions.py`. آینهٔ فرانتش `lib/ticket-permissions.ts` است (با تست خودش) و فقط تصمیم می‌گیرد کدام کنترل نمایش داده شود.
+- **هرگز برای مجوز به claim توکن اعتماد نکن.** `is_supervisor` در JWT فقط راهنمای UI است: refresh rotation claimها را عیناً جلو می‌برد، پس سرپرستِ تنزل‌یافته تا ورود بعدی claim قدیمی را دارد. `IsSupervisor` همیشه از `request.user` (دیتابیس) می‌خواند و `test_demoting_a_supervisor_takes_effect_despite_a_stale_token_claim` این را pin می‌کند.
+- عکس نتیجه همچنان فقط کار مسئول تیکت است، حتی وقتی سرپرست Resolve می‌کند؛ فرانت ورودی عکس را برای غیرمسئول نشان نمی‌دهد.
+- تیکت بسته (RESOLVED/CANCELLED) از هیچ مسیری قابل تخصیص نیست. endpoint تخصیص قبلاً بی‌شرط `IN_PROGRESS` می‌گذاشت و تیکت نهایی را دوباره باز می‌کرد؛ حالا از `can_transition_to` عبور می‌کند.
+- **بعد از migration `accounts/0004` همهٔ اپراتورهای موجود عادی‌اند** و هیچ‌کس نمی‌تواند تخصیص دهد تا ادمین در Django Admin تیک `is_supervisor` را برای دست‌کم یک نفر در هر واحد بزند. `seed_demo_data` برای هر واحد یک حساب `sup_*` می‌سازد.
+- ادمین در پنل اپراتور تیکت نمی‌بیند (همهٔ endpointهای تیکت اپراتور `IsOperator` دارند و ادمین واحد ندارد). صفحهٔ اول او در پنل `/operator/summary` است — خلاصهٔ کل هتل — و `/operator` خودکار به آنجا هدایتش می‌کند. زنگوله و polling تیکت جدید هم برای ادمین خاموش است.
+- در `OperatorTicketAPITests` اپراتور نمونه سرپرست است، چون آن تست‌ها ماشین‌حالت و اعتبارسنجی را می‌سنجند نه سطح دسترسی. سطح دسترسی کلاس خودش را دارد: `OperatorAccessLevelTests`.
+
 ## الگوهای جاافتاده — اینها را تکرار کن، چیز نو اختراع نکن
 
 **بک‌اند**
@@ -155,7 +183,8 @@ CANCELLED    → (نهایی)
 - تغییر مدل → `makemigrations <app>`.
 - تغییر API → دوباره `spectacular` بزن. فایل YAML دستی ادیت نمی‌شود.
 - منطق غیر-CRUD برود در `services.py` (نمونه: `compute_admin_stats_summary`)، نه داخل view.
-- همهٔ اپ‌ها `app_name` دارند و مسیرهایشان namespace‌دار است. تست‌های `apps/tickets/tests.py` هنوز آدرس‌ها را به‌صورت رشتهٔ ثابت (`"/api/v1/operator/tickets/"`) می‌نویسند، چون این اپ تا همین اواخر `app_name` نداشت؛ بقیهٔ اپ‌ها از `reverse("<app>:<name>")` استفاده می‌کنند. تست جدید که می‌نویسی از `reverse("tickets:...")` استفاده کن.
+- همهٔ اپ‌ها `app_name` دارند و تست‌های هر اپ آدرس‌ها را با `reverse("<app>:<name>")` می‌سازند — از جمله `apps/tickets/tests.py` که قبلاً رشتهٔ ثابت می‌نوشت و حالا یکدست شده. تست جدید هم همین‌طور.
+- **استثنای عمدی:** `tests/test_mvp_integration.py` آدرس‌های تیکت و راه‌اندازی را به‌صورت مسیر ثابت نگه می‌دارد. `lib/api/client.ts` فرانت همین مسیرها را هاردکد کرده؛ اگر مسیری تغییر نام بدهد، `reverse()` بی‌صدا دنبالش می‌رود ولی کلاینت واقعی می‌شکند. آن فایل قناری قرارداد آدرس فرانت است — «درستش» نکن و به `reverse()` تبدیلش نکن.
 
 **فرانت‌اند**
 
@@ -218,7 +247,7 @@ https://<host>/guest/login?room=305
 
 ## قبل از تحویل هر تغییر — Verification Gate
 
-بدون استثنا و به همین ترتیب:
+این روال به‌صورت اسکیل پروژه‌ای هم درآمده: `.claude/skills/deliver/SKILL.md`. با `/deliver` صدایش بزن تا همین ترتیب به‌علاوهٔ چک‌های مغایرت (migration جامانده، YAML قدیمی، هم‌راستایی ماشین‌حالت، عدد تست در اسناد) یک‌جا اجرا شود. خلاصه‌اش همین زیر است:
 
 1. بک‌اند تغییر کرده؟ `python manage.py test` **کامل** روی PostgreSQL 16 واقعی — نه فقط اپ تغییریافته، نه SQLite.
 2. فرانت‌اند تغییر کرده؟ هر سه باید سبز باشند: `npm run lint` ، `npm run build` ، `npm test`.

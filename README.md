@@ -97,10 +97,14 @@
 اپراتور می‌تواند:
 
 - Ticketهای Department خود را با فیلتر (وضعیت/اولویت) و جستجوی زنده مشاهده کند
-- Ticket را به خودش **یا هر اپراتور دیگری در همان واحد** Assign کند
-- وضعیت Ticket را طبق ماشین‌حالت مجاز تغییر دهد
+- وضعیت و Resolution تیکت‌هایی را که **به خودش** اختصاص یافته طبق ماشین‌حالت مجاز تغییر دهد (Resolution برای انتقال به Resolved الزامی است)
+- روی هر تیکت واحد یادداشت داخلی بگذارد
+
+**سرپرست واحد** (اپراتوری که `is_supervisor` دارد) علاوه بر این‌ها می‌تواند:
+
+- Ticket را به هر اپراتور همان واحد — یا خودش — Assign / Reassign کند
 - Priority را تغییر دهد
-- Resolution ثبت کند (الزامی برای انتقال به وضعیت Resolved)
+- وضعیت هر تیکت واحد را، به هر کسی که اختصاص یافته باشد، تغییر دهد
 
 ### Admin
 
@@ -108,7 +112,7 @@ Admin از **Django Admin** استفاده می‌کند (هیچ فرانت‌ا
 
 امکانات مدیریتی شامل:
 
-- User Management (شامل تعیین Department برای هر Operator)
+- User Management (شامل تعیین Department برای هر Operator و انتخاب سرپرست هر واحد با تیک `is_supervisor`)
 - Guest Management
 - Room Management
 - Department Management
@@ -139,17 +143,20 @@ Admin از **Django Admin** استفاده می‌کند (هیچ فرانت‌ا
 - ورود با نام کاربری/رمز عبور
 - مشاهده Ticketهای Department با فیلتر وضعیت/اولویت و جستجوی debounced
 - نمای کانبان با درگ‌اند‌دراپ در کنار نمای لیست
-- Assign / Reassign کردن Ticket به هر اپراتور هم‌واحد
-- تغییر Status (با رعایت ماشین‌حالت مجاز)
-- تغییر Priority
+- Assign / Reassign کردن Ticket به هر اپراتور هم‌واحد (فقط سرپرست)
+- تغییر Status تیکت‌های خودش (سرپرست: همهٔ تیکت‌های واحد)
+- تغییر Priority (فقط سرپرست)
 - ثبت Resolution و پیوست تصویر
 - ثبت یادداشت داخلی (مهمان نمی‌بیند) و مشاهدهٔ تایم‌لاین کامل تیکت
 - نشانهٔ «معوق» برای تیکت‌هایی که از SLA دسته‌شان گذشته‌اند
 - زنگولهٔ اعلان تیکت‌های جدید (Polling) و تعیین وضعیت «در دسترس»
+- صفحهٔ «خلاصه»: آمار واحد خودش — درخواست‌ها به تفکیک وضعیت، معوق‌ها، میانگین زمان رسیدگی، و بار کاری هر اپراتور
 
 ## Admin
 
 مدیریت کامل داده‌های اصلی از طریق Django Admin.
+
+به‌علاوه، ادمین می‌تواند با همان حساب وارد پنل اپراتور شود و صفحهٔ «خلاصه» را برای **کل هتل** ببیند — همان اعداد صفحهٔ Stats Summary در Django Admin.
 
 ---
 
@@ -361,6 +368,8 @@ python manage.py seed_demo_data
 
 اجرای دوباره‌اش امن است (رکوردهای موجود را دوباره نمی‌سازد). برای بازنشانی رمز حساب‌های دمو `--reset-passwords` را اضافه کنید. نام کاربری و رمز ساخته‌شده در خروجی همان دستور چاپ می‌شود.
 
+حساب‌های `sup_*` سرپرست هر واحدند و فقط آن‌ها می‌توانند تیکت تخصیص دهند؛ حساب‌های `op_*` اپراتور عادی‌اند.
+
 **یا به‌صورت دستی** از طریق Django Admin (`/admin/`) با کاربر Superuser:
 
 1. یک یا چند **Department** بسازید (مثلاً نظافت، فنی)
@@ -368,6 +377,7 @@ python manage.py seed_demo_data
 3. یک **Room** بسازید و وضعیتش را **OCCUPIED** کنید (پیش‌نیاز ورود مهمان)
 4. یک **Guest** بسازید و آن را به همان اتاق وصل کنید (کد ملی وارد‌شده برای ورود لازم است)
 5. یک کاربر با نقش **OPERATOR** بسازید و حتماً فیلد **Department** آن را پر کنید (بدون این فیلد، اپراتور هیچ تیکتی نمی‌بیند)
+6. دست‌کم یک اپراتور در هر واحد را با تیک **is_supervisor** سرپرست کنید — بدون سرپرست، هیچ‌کس نمی‌تواند در آن واحد تیکت تخصیص دهد
 
 ---
 
@@ -427,14 +437,15 @@ python manage.py seed_demo_data
 | `/operator/tickets/` | GET | لیست تیکت‌های واحد اپراتور؛ فیلتر `status`, `priority`, `assigned_to`, `search`, `ordering` |
 | `/operator/tickets/new-count/` | GET | شمارش تیکت‌های جدید (برای زنگولهٔ Polling) |
 | `/operator/tickets/overdue-count/` | GET | شمارش تیکت‌های از SLA گذشته |
-| `/operator/tickets/{id}/` | GET, PATCH | جزئیات/ویرایش (status، priority، resolution، assigned_to) |
-| `/operator/tickets/{id}/assign/` | POST | اختصاص به خودِ اپراتور فراخوان؛ status خودکار `IN_PROGRESS` |
+| `/operator/tickets/{id}/` | GET, PATCH | جزئیات (همهٔ اپراتورهای واحد). ویرایش: status و resolution برای مسئول تیکت یا سرپرست؛ priority و assigned_to فقط سرپرست |
+| `/operator/tickets/{id}/assign/` | POST | فقط سرپرست: تیکت را به خودش اختصاص می‌دهد؛ OPEN خودکار `IN_PROGRESS` می‌شود. تیکت بسته (RESOLVED/CANCELLED) با ۴۰۰ رد می‌شود |
 | `/operator/tickets/{id}/history/` | GET | تایم‌لاین تیکت (تاریخچهٔ سیستمی + یادداشت‌ها) |
 | `/operator/tickets/{id}/notes/` | POST | ثبت یادداشت داخلی (مهمان هرگز نمی‌بیند) |
 | `/operator/tickets/{id}/attachments/` | POST | آپلود تصویر توسط اپراتور (multipart) |
 | `/operator/colleagues/` | GET | لیست اپراتورهای هم‌واحد (برای اختصاص/تغییر اختصاص) |
+| `/operator/stats/summary/` | GET | خلاصهٔ آمار **واحد خودِ فراخوان** (اپراتور و سرپرست): وضعیت‌ها، معوق، میانگین رسیدگی، بار کاری اپراتورها. ادمین ۴۰۳ می‌گیرد و از `/admin/stats/summary/` استفاده می‌کند |
 | `/operator/me/status/` | GET, PATCH | وضعیت «در دسترس بودن» اپراتور |
-| `/admin/stats/summary/` | GET | آمار تجمیعی بین‌واحدی — فقط ادمین |
+| `/admin/stats/summary/` | GET | آمار تجمیعی کل هتل — فقط ادمین؛ هم در Django Admin و هم در صفحهٔ «خلاصه»ی پنل اپراتور نمایش داده می‌شود |
 | `/schema/` `/docs/` `/redoc/` | GET | مستندات OpenAPI |
 
 خروجی لیست‌ها صفحه‌بندی‌شده است (`PageNumberPagination`، `PAGE_SIZE=10`)، یعنی به شکل `{"count": ..., "results": [...]}` برمی‌گردد.
@@ -489,7 +500,7 @@ https://<host>/guest/login?room=305
 # 🗄 مدل داده
 
 ### User
-`username`, `password`, `role` (GUEST/OPERATOR/ADMIN), `department` (FK، فقط برای OPERATOR)، `is_available`
+`username`, `password`, `role` (GUEST/OPERATOR/ADMIN), `department` (FK، فقط برای OPERATOR)، `is_available`، `is_supervisor` (سرپرست واحد — فقط برای OPERATOR)
 
 ### Guest
 `user` (OneToOne)، `full_name`، `national_id` (unique)، `phone`، `room` (FK)
@@ -527,12 +538,14 @@ https://<host>/guest/login?room=305
 
 # 🛡 Permission و Authorization
 
-چهار کلاس مشترک در `apps/core/permissions.py`:
+شش کلاس مشترک در `apps/core/permissions.py`:
 
 - **IsGuest** — فقط نقش GUEST
 - **IsOperator** — فقط نقش OPERATOR
 - **IsAdminRole** — خواندن برای همه‌ی احرازهویت‌شده‌ها، نوشتن فقط ADMIN/superuser
 - **IsAdminOnly** — حتی خواندن هم فقط ADMIN/superuser
+- **IsSupervisor** — فقط اپراتوری که `is_supervisor` دارد. همیشه از دیتابیس خوانده می‌شود، نه از claim توکن
+- **CanWorkOnOperatorTicket** — (سطح شیء) ویرایش تیکت: سرپرست هر چیز را؛ اپراتور عادی فقط status و resolution تیکت‌های اختصاص‌یافته به خودش را
 
 > ⚠️ تفاوت `IsAdminRole` و `IsAdminOnly` حیاتی است: اولی GET را برای هر کاربر لاگین‌شده باز می‌گذارد. هر endpointی که دادهٔ بین‌واحدی برمی‌گرداند (مثل `/admin/stats/summary/`) باید `IsAdminOnly` باشد، وگرنه اپراتور آمار واحدهای دیگر را هم می‌بیند.
 
@@ -540,6 +553,8 @@ https://<host>/guest/login?room=305
 - مهمان فقط تیکت‌های خودش را می‌بیند
 - اپراتور فقط تیکت‌های Department خودش را می‌بیند
 - اختصاص تیکت فقط به اپراتوری با همان Department مجاز است
+- تخصیص و تغییر اولویت فقط با سرپرست همان واحد؛ تیکت بسته (RESOLVED/CANCELLED) قابل تخصیص نیست
+- اپراتور عادی همهٔ تیکت‌های واحد را می‌بیند، ولی فقط تیکت‌های اختصاص‌یافته به خودش را پیش می‌برد
 
 ---
 
@@ -547,7 +562,7 @@ https://<host>/guest/login?room=305
 
 ## Backend
 
-۱۵۶ تست یکپارچگی/واحد (Django Test Runner، نه pytest) — علیه PostgreSQL واقعی، نه SQLite:
+۱۸۵ تست یکپارچگی/واحد (Django Test Runner، نه pytest) — علیه PostgreSQL واقعی، نه SQLite:
 
 ```bash
 python manage.py test                # کل تست‌ها
@@ -560,7 +575,7 @@ python manage.py test apps.tickets   # فقط یک اپ
 
 ## Frontend
 
-۴۰ تست خودکار با Vitest + React Testing Library:
+۶۲ تست خودکار با Vitest + React Testing Library:
 
 ```bash
 cd frontend
@@ -647,6 +662,9 @@ cmd /c rmdir /s /q .next
 **اپراتور هیچ تیکتی نمی‌بیند**
 فیلد `department` کاربر Operator را در Django Admin چک کنید — بدون این فیلد، هیچ تیکتی به او نشان داده نمی‌شود.
 
+**هیچ‌کس نمی‌تواند تیکت تخصیص دهد**
+تخصیص فقط کار سرپرست واحد است. بعد از migration `accounts/0004` همهٔ اپراتورهای موجود عادی‌اند؛ در Django Admin دست‌کم یک اپراتور در هر واحد را با تیک **is_supervisor** سرپرست کنید. تغییر سطح دسترسی بلافاصله در سرور اعمال می‌شود، ولی دکمه‌های رابط کاربری آن کاربر تا ورود بعدی‌اش به‌روز نمی‌شوند.
+
 **مهمان نمی‌تواند وارد شود**
 اتاق مرتبط با آن مهمان باید وضعیت `OCCUPIED` داشته باشد.
 
@@ -668,7 +686,7 @@ cmd /c rmdir /s /q .next
 - نمای کانبان با درگ‌اند‌دراپ برای اپراتور
 - تاریخچهٔ خودکار وضعیت اتاق، خروجی PDF فارسی تیکت، و حالت تیره
 
-**تست‌ها** — ۱۵۶ تست بک‌اند (Django Test Runner) و ۳۳ تست فرانت‌اند (Vitest).
+**تست‌ها** — ۱۸۵ تست بک‌اند (Django Test Runner) و ۶۲ تست فرانت‌اند (Vitest).
 
 **فاز ۳ (شروع‌نشده)** — Celery + Redis + Django Channels برای پیامک، اعلان لحظه‌ای، وب‌هوک PMS و IPTV.
 
@@ -681,7 +699,6 @@ cmd /c rmdir /s /q .next
 - آماده‌سازی برای استقرار Production (تنظیمات production، دامنه، HTTPS، سرو کردن `MEDIA_ROOT` پشت nginx)
 - پایپ‌لاین CI/CD
 - تست End-to-End در فرانت‌اند
-- تست خودکار برای کامپوننت‌های تازهٔ فرانت (کلید حالت تیره، دکمهٔ خروجی PDF)
 
 موارد زیر **صراحتاً خارج از دامنه‌ی فاز فعلی** هستند: AI Routing، Analytics پیشرفته، Docker، اپلیکیشن موبایل، و معماری Multi-Tenant. اعلان پیامکی/لحظه‌ای، اتصال PMS/IPTV، Redis و Celery به فاز ۳ موکول شده‌اند.
 
@@ -701,3 +718,4 @@ cmd /c rmdir /s /q .next
 - **پالت قهوه‌ای/برنزی به‌جای سبزآبی/برنجی اولیه** — از روی `arazhotels.com` نمونه‌برداری شد تا اپ هم‌خانوادهٔ برند هتل دیده شود، نه یک ابزار عمومی کنارش. همراهش گوشه‌های کاملاً تیز (`--radius: 0`) و تیترهای سبک با tracking منفی. قواعد کامل و محدودیت‌های کنتراست در `CLAUDE.md`، بخش «زبان بصری»
 - **فونت AbarMid سایت آراز برداشته نشد** چون تجاری است؛ همان حس با تنظیم وزن و فاصلهٔ حروف روی Vazirmatn بازسازی شد
 - **یک عدد SLA به‌ازای هر Category** (نه جدول جدا به‌ازای هر اولویت) — همان عدد هم به مهمان نشان داده می‌شود و هم مبنای «معوق» است، پس فقط یک مقدار برای هماهنگ نگه‌داشتن وجود دارد
+- **سرپرست به‌صورت فلگ `is_supervisor`، نه نقش جدید** — سرپرست همان اپراتور واحد است با اختیار تخصیص و تعیین اولویت. نقش جدید باید در همهٔ چک‌های `role == "OPERATOR"` دست می‌خورد و سرپرست دیگر خودش قابل تخصیص نمی‌بود

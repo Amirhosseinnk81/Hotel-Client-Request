@@ -599,6 +599,33 @@ paths:
               schema:
                 $ref: '#/components/schemas/OperatorAvailability'
           description: ''
+  /api/v1/operator/stats/summary/:
+    get:
+      operationId: api_v1_operator_stats_summary_retrieve
+      description: |-
+        GET /api/v1/operator/stats/summary/
+
+        The operator panel's version of the admin Stats Summary, scoped to the
+        caller's own department: ticket counts by status, average resolution
+        time, the overdue count, and each operator's workload. Any operator of
+        the department may read it, regular or supervisor.
+
+        Admins keep using /admin/stats/summary/ for the whole hotel. Two
+        endpoints with one fixed scope each, rather than one endpoint whose
+        scope widens or narrows depending on who asks — and the department
+        always comes from request.user, never from a query parameter a client
+        could change.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepartmentStatsSummary'
+          description: ''
   /api/v1/operator/tickets/:
     get:
       operationId: api_v1_operator_tickets_list
@@ -748,6 +775,11 @@ paths:
   /api/v1/operator/tickets/{id}/assign/:
     post:
       operationId: api_v1_operator_tickets_assign_create
+      description: |-
+        POST /api/v1/operator/tickets/{id}/assign/ — a supervisor takes a
+        ticket for themselves. Handing it to someone else goes through PATCH
+        assigned_to on the detail endpoint instead. Regular operators can no
+        longer self-assign: assignment is a supervisor decision.
       parameters:
       - in: path
         name: id
@@ -1636,6 +1668,66 @@ components:
       required:
       - code
       - name
+    DepartmentStatsByOperator:
+      type: object
+      description: One operator's workload in the department summary.
+      properties:
+        operator_id:
+          type: integer
+        username:
+          type: string
+        is_supervisor:
+          type: boolean
+        active:
+          type: integer
+          description: Assigned tickets still OPEN or IN_PROGRESS.
+        resolved_recent:
+          type: integer
+          description: Assigned tickets resolved within resolution_window_days.
+      required:
+      - active
+      - is_supervisor
+      - operator_id
+      - resolved_recent
+      - username
+    DepartmentStatsSummary:
+      type: object
+      description: |-
+        GET /operator/stats/summary/ — the admin Stats Summary, scoped to the
+        caller's own department. Same by_status / average resolution / overdue
+        figures; by_department is replaced by by_operator, since a
+        one-department report broken down by department would be a single row.
+      properties:
+        department_id:
+          type: integer
+        department_name:
+          type: string
+        by_status:
+          $ref: '#/components/schemas/AdminStatsByStatus'
+        by_operator:
+          type: array
+          items:
+            $ref: '#/components/schemas/DepartmentStatsByOperator'
+        avg_resolution_minutes:
+          type: number
+          format: double
+          nullable: true
+        overdue_count:
+          type: integer
+        resolution_window_days:
+          type: integer
+        generated_at:
+          type: string
+          format: date-time
+      required:
+      - avg_resolution_minutes
+      - by_operator
+      - by_status
+      - department_id
+      - department_name
+      - generated_at
+      - overdue_count
+      - resolution_window_days
     GuestLoginRequest:
       type: object
       description: Guest login by national_id + room number (no password).

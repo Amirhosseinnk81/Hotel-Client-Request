@@ -31,6 +31,13 @@ export interface AccessTokenPayload {
   user_id: number;
   /** Only present on operator/admin tokens — guest tokens don't carry this claim. */
   username?: string;
+  /**
+   * Operator/admin tokens only. A UI hint for which controls to show,
+   * never an authorization decision: the backend re-reads is_supervisor
+   * from the database on every request, and this claim can lag behind a
+   * promotion or demotion until the operator next logs in.
+   */
+  is_supervisor?: boolean;
 }
 
 export interface GuestProfile {
@@ -159,4 +166,48 @@ export type TicketTimelineEntry = TicketHistoryEntry | TicketNoteEntry;
 
 export interface OperatorAvailability {
   is_available: boolean;
+}
+
+/** Ticket count per status — every status always present (0, never missing). */
+export type StatsByStatus = Record<TicketStatus, number>;
+
+/** GET /admin/stats/summary/ — the whole hotel, admins only. */
+export interface AdminStatsSummary {
+  by_status: StatsByStatus;
+  by_department: {
+    department_id: number;
+    department_name: string;
+    open: number;
+    in_progress: number;
+    resolved: number;
+    cancelled: number;
+    total: number;
+  }[];
+  avg_resolution_minutes: number | null;
+  overdue_count: number;
+  resolution_window_days: number;
+  generated_at: string;
+}
+
+/** One operator's workload in a department summary. */
+export interface DepartmentOperatorLoad {
+  operator_id: number;
+  username: string;
+  is_supervisor: boolean;
+  /** Assigned tickets still OPEN or IN_PROGRESS. */
+  active: number;
+  /** Assigned tickets resolved within resolution_window_days. */
+  resolved_recent: number;
+}
+
+/** GET /operator/stats/summary/ — the caller's own department. */
+export interface DepartmentStatsSummary {
+  department_id: number;
+  department_name: string;
+  by_status: StatsByStatus;
+  by_operator: DepartmentOperatorLoad[];
+  avg_resolution_minutes: number | null;
+  overdue_count: number;
+  resolution_window_days: number;
+  generated_at: string;
 }

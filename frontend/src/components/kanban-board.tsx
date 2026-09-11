@@ -10,6 +10,7 @@ import { ResolveTicketDialog } from "@/components/resolve-ticket-dialog";
 import { RelativeTime } from "@/components/relative-time";
 import { toast } from "@/hooks/use-toast";
 import { updateOperatorTicket, ApiError } from "@/lib/api/client";
+import { canWorkOnTicket, getOperatorViewer } from "@/lib/ticket-permissions";
 import {
   allowedNextStatuses,
   statusLabels,
@@ -36,6 +37,7 @@ export function KanbanBoard({
   const [draggedId, setDraggedId] = useState<number | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<TicketStatus | null>(null);
   const [resolveDialogTicketId, setResolveDialogTicketId] = useState<number | null>(null);
+  const viewer = getOperatorViewer();
 
   const ticketsInColumn = (column: TicketStatus) =>
     tickets.filter((ticket) => ticket.status === column);
@@ -45,6 +47,19 @@ export function KanbanBoard({
     const ticket = tickets.find((t) => t.id === draggedId);
     setDraggedId(null);
     if (!ticket || ticket.status === targetStatus) return;
+
+    // Mirrors the backend's CanWorkOnOperatorTicket: only the assignee or
+    // a supervisor may move a ticket. Cards the viewer can't act on aren't
+    // draggable in the first place, so this only catches a drop that
+    // somehow still gets here.
+    if (!canWorkOnTicket(ticket, viewer)) {
+      toast({
+        title: "این جابه‌جایی مجاز نیست",
+        description: "فقط اپراتور مسئول این درخواست یا سرپرست واحد می‌تواند وضعیتش را تغییر دهد.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     // Same rule the detail page's status Select enforces — see
     // lib/ticket-labels.ts for why this is imported, not redefined here.
@@ -117,7 +132,7 @@ export function KanbanBoard({
               {columnTickets.map((ticket) => (
                 <div
                   key={ticket.id}
-                  draggable
+                  draggable={canWorkOnTicket(ticket, viewer)}
                   onDragStart={() => setDraggedId(ticket.id)}
                   onDragEnd={() => setDraggedId(null)}
                 >
@@ -127,7 +142,10 @@ export function KanbanBoard({
                   >
                     <Card
                       className={
-                        "cursor-grab gap-2 py-3 transition-colors hover:bg-secondary/40 active:cursor-grabbing " +
+                        (canWorkOnTicket(ticket, viewer)
+                          ? "cursor-grab active:cursor-grabbing "
+                          : "cursor-pointer ") +
+                        "gap-2 py-3 transition-colors hover:bg-secondary/40 " +
                         (ticket.is_overdue ? "border-destructive/60 bg-destructive/5" : "")
                       }
                     >
@@ -170,6 +188,10 @@ export function KanbanBoard({
       {resolveDialogTicketId !== null && (
         <ResolveTicketDialog
           ticketId={resolveDialogTicketId}
+          canAttachPhoto={
+            viewer.userId !== null &&
+            tickets.find((t) => t.id === resolveDialogTicketId)?.assigned_to === viewer.userId
+          }
           open={resolveDialogTicketId !== null}
           onOpenChange={(open) => {
             if (!open) setResolveDialogTicketId(null);

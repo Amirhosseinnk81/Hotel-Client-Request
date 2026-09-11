@@ -115,6 +115,29 @@ class OperatorLoginTests(APITestCase):
 
         self.assertEqual(decoded["role"], "OPERATOR")
 
+    def test_access_token_carries_is_supervisor_claim(self):
+        # A UI hint for the frontend (which controls to show). The backend
+        # never trusts it for authorization — see IsSupervisor, and
+        # OperatorAccessLevelTests for the stale-claim case.
+        def login_and_decode():
+            response = self.client.post(
+                self.login_url,
+                {"username": "operator_login_test", "password": "Test123456!"},
+                format="json",
+            )
+            return jwt.decode(
+                response.data["access"],
+                settings.SECRET_KEY,
+                algorithms=["HS256"],
+            )
+
+        self.assertIs(login_and_decode()["is_supervisor"], False)
+
+        self.operator.is_supervisor = True
+        self.operator.save(update_fields=["is_supervisor"])
+
+        self.assertIs(login_and_decode()["is_supervisor"], True)
+
     def test_access_token_contains_username_claim(self):
         response = self.client.post(
             self.login_url,

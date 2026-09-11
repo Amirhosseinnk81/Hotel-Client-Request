@@ -3,10 +3,11 @@ from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 from rest_framework.test import APITestCase
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from apps.departments.models import Department
 from apps.guests.models import Guest
@@ -54,7 +55,7 @@ class GuestTicketAPITests(APITestCase):
             code="TOWELS",
         )
 
-        self.url = "/api/v1/tickets/"
+        self.url = reverse("tickets:guest-ticket-list-create")
 
     def authenticate(self):
         refresh = RefreshToken.for_user(self.user)
@@ -183,7 +184,7 @@ class GuestTicketAPITests(APITestCase):
 
         self.authenticate()
 
-        response = self.client.get(f"{self.url}{ticket.id}/")
+        response = self.client.get(reverse("tickets:guest-ticket-detail", kwargs={"pk": ticket.id}))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["id"], ticket.id)
@@ -219,7 +220,7 @@ class GuestTicketAPITests(APITestCase):
 
         self.authenticate()
 
-        response = self.client.get(f"{self.url}{ticket.id}/")
+        response = self.client.get(reverse("tickets:guest-ticket-detail", kwargs={"pk": ticket.id}))
 
         self.assertEqual(response.status_code, 404)
 
@@ -236,7 +237,7 @@ class GuestTicketAPITests(APITestCase):
         self.authenticate()
 
         response = self.client.patch(
-            f"{self.url}{ticket.id}/",
+            reverse("tickets:guest-ticket-detail", kwargs={"pk": ticket.id}),
             {
                 "title": "Updated Title",
                 "description": "Updated description",
@@ -267,7 +268,7 @@ class GuestTicketAPITests(APITestCase):
         self.authenticate()
 
         response = self.client.patch(
-            f"{self.url}{ticket.id}/",
+            reverse("tickets:guest-ticket-detail", kwargs={"pk": ticket.id}),
             {
                 "status": Ticket.Status.RESOLVED,
             },
@@ -325,6 +326,11 @@ class OperatorTicketAPITests(APITestCase):
             password="testpassword",
             role=User.Role.OPERATOR,
             department=self.department,
+            # These tests exercise the status machine and field validation,
+            # which do not depend on access level, so they run as a
+            # supervisor (who may change anything). What a regular operator
+            # may and may not do is covered by OperatorAccessLevelTests.
+            is_supervisor=True,
         )
 
         self.other_operator_user = User.objects.create_user(
@@ -354,7 +360,7 @@ class OperatorTicketAPITests(APITestCase):
             priority=Ticket.Priority.HIGH,
         )
 
-        self.list_url = "/api/v1/operator/tickets/"
+        self.list_url = reverse("tickets:operator-ticket-list")
 
     def authenticate_operator(self):
         refresh = RefreshToken.for_user(self.operator_user)
@@ -376,7 +382,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_can_retrieve_own_department_ticket(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.get(url)
 
@@ -386,7 +392,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_can_update_ticket_status(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -408,7 +414,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_can_update_ticket_priority(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -430,7 +436,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_cannot_access_other_department_ticket(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.other_ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.other_ticket.id})
 
         response = self.client.get(url)
 
@@ -439,7 +445,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_cannot_update_other_department_ticket(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.other_ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.other_ticket.id})
 
         response = self.client.patch(
             url,
@@ -473,7 +479,7 @@ class OperatorTicketAPITests(APITestCase):
         self.assertEqual(response.status_code, 401)
 
     def test_unauthenticated_user_cannot_retrieve_operator_ticket(self):
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.get(url)
 
@@ -482,7 +488,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_cannot_change_ticket_guest(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -504,7 +510,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_cannot_change_ticket_department(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -529,7 +535,7 @@ class OperatorTicketAPITests(APITestCase):
         self.ticket.status = Ticket.Status.IN_PROGRESS
         self.ticket.save(update_fields=["status"])
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -553,7 +559,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_can_assign_ticket_to_self(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/assign/"
+        url = reverse("tickets:operator-ticket-assign", kwargs={"pk": self.ticket.id})
 
         response = self.client.post(url)
 
@@ -576,7 +582,7 @@ class OperatorTicketAPITests(APITestCase):
         STATUS_CHANGED entries so the Stage 2.1 timeline is accurate."""
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/assign/"
+        url = reverse("tickets:operator-ticket-assign", kwargs={"pk": self.ticket.id})
         response = self.client.post(url)
 
         self.assertEqual(response.status_code, 200)
@@ -610,7 +616,7 @@ class OperatorTicketAPITests(APITestCase):
         )
 
         self.authenticate_operator()
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url, {"assigned_to": other_operator_same_dept.id}, format="json"
@@ -628,7 +634,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_updating_unrelated_field_does_not_log_assigned_history(self):
         """No assigned_to in the payload → no spurious ASSIGNED entry."""
         self.authenticate_operator()
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(url, {"priority": Ticket.Priority.HIGH}, format="json")
 
@@ -642,7 +648,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_cannot_assign_other_department_ticket(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.other_ticket.id}/assign/"
+        url = reverse("tickets:operator-ticket-assign", kwargs={"pk": self.other_ticket.id})
 
         response = self.client.post(url)
 
@@ -664,7 +670,7 @@ class OperatorTicketAPITests(APITestCase):
 
         self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {refresh.access_token}")
 
-        url = f"{self.list_url}{self.ticket.id}/assign/"
+        url = reverse("tickets:operator-ticket-assign", kwargs={"pk": self.ticket.id})
 
         response = self.client.post(url)
 
@@ -677,7 +683,7 @@ class OperatorTicketAPITests(APITestCase):
         )
 
     def test_unauthenticated_user_cannot_assign_ticket(self):
-        url = f"{self.list_url}{self.ticket.id}/assign/"
+        url = reverse("tickets:operator-ticket-assign", kwargs={"pk": self.ticket.id})
 
         response = self.client.post(url)
 
@@ -692,7 +698,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_can_move_open_ticket_to_in_progress(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -713,7 +719,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_can_cancel_open_ticket(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -737,7 +743,7 @@ class OperatorTicketAPITests(APITestCase):
 
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -758,7 +764,7 @@ class OperatorTicketAPITests(APITestCase):
     def test_operator_cannot_resolve_open_ticket_directly(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -782,7 +788,7 @@ class OperatorTicketAPITests(APITestCase):
 
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -806,7 +812,7 @@ class OperatorTicketAPITests(APITestCase):
 
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.ticket.id}/"
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id})
 
         response = self.client.patch(
             url,
@@ -1091,9 +1097,8 @@ class TicketTimelineAPITests(APITestCase):
             priority=Ticket.Priority.HIGH,
         )
 
-        self.list_url = "/api/v1/operator/tickets/"
-        self.history_url = f"{self.list_url}{self.ticket.id}/history/"
-        self.notes_url = f"{self.list_url}{self.ticket.id}/notes/"
+        self.history_url = reverse("tickets:operator-ticket-history", kwargs={"pk": self.ticket.id})
+        self.notes_url = reverse("tickets:operator-ticket-notes", kwargs={"pk": self.ticket.id})
 
     def authenticate_operator(self):
         self.client.force_authenticate(self.operator_user)
@@ -1108,7 +1113,7 @@ class TicketTimelineAPITests(APITestCase):
     def test_operator_cannot_view_timeline_of_other_department_ticket(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.other_ticket.id}/history/"
+        url = reverse("tickets:operator-ticket-history", kwargs={"pk": self.other_ticket.id})
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 404)
@@ -1138,7 +1143,7 @@ class TicketTimelineAPITests(APITestCase):
     def test_operator_cannot_add_note_to_other_department_ticket(self):
         self.authenticate_operator()
 
-        url = f"{self.list_url}{self.other_ticket.id}/notes/"
+        url = reverse("tickets:operator-ticket-notes", kwargs={"pk": self.other_ticket.id})
         response = self.client.post(url, {"text": "Should not work."}, format="json")
 
         self.assertEqual(response.status_code, 404)
@@ -1148,9 +1153,13 @@ class TicketTimelineAPITests(APITestCase):
         # (created via ORM directly, not the API, so no CREATED entry
         # actually exists here — assign + note are enough to prove merging
         # and ordering work).
+        # Assigning is supervisor-only; this test is about the timeline,
+        # not access levels, so the operator is promoted for it.
+        self.operator_user.is_supervisor = True
+        self.operator_user.save(update_fields=["is_supervisor"])
         self.authenticate_operator()
 
-        assign_response = self.client.post(f"{self.list_url}{self.ticket.id}/assign/")
+        assign_response = self.client.post(reverse("tickets:operator-ticket-assign", kwargs={"pk": self.ticket.id}))
         self.assertEqual(assign_response.status_code, 200)
 
         note_response = self.client.post(
@@ -1226,8 +1235,8 @@ class OperatorProductivityAPITests(APITestCase):
             is_available=False,
         )
 
-        self.colleagues_url = "/api/v1/operator/colleagues/"
-        self.new_count_url = "/api/v1/operator/tickets/new-count/"
+        self.colleagues_url = reverse("tickets:operator-colleagues-list")
+        self.new_count_url = reverse("tickets:operator-ticket-new-count")
 
     def authenticate_operator(self):
         self.client.force_authenticate(self.operator_user)
@@ -1391,7 +1400,7 @@ class TicketSlaTests(APITestCase):
         self.make_ticket(minutes_ago=20)
         self.client.force_authenticate(self.operator_user)
 
-        response = self.client.get("/api/v1/operator/tickets/")
+        response = self.client.get(reverse("tickets:operator-ticket-list"))
 
         self.assertEqual(response.status_code, 200)
         results = response.data.get("results", response.data)
@@ -1402,7 +1411,7 @@ class TicketSlaTests(APITestCase):
         guest_user = self.guest.user
         self.client.force_authenticate(guest_user)
 
-        response = self.client.get("/api/v1/categories/")
+        response = self.client.get(reverse("tickets:category-list"))
 
         self.assertEqual(response.status_code, 200)
         results = response.data.get("results", response.data)
@@ -1430,13 +1439,13 @@ class TicketSlaTests(APITestCase):
         )
 
         self.client.force_authenticate(self.operator_user)
-        response = self.client.get("/api/v1/operator/tickets/overdue-count/")
+        response = self.client.get(reverse("tickets:operator-ticket-overdue-count"))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 1)
 
     def test_overdue_count_requires_authentication(self):
-        response = self.client.get("/api/v1/operator/tickets/overdue-count/")
+        response = self.client.get(reverse("tickets:operator-ticket-overdue-count"))
 
         self.assertEqual(response.status_code, 401)
 
@@ -1515,7 +1524,7 @@ class TicketGuestExperienceTests(APITestCase):
         self.authenticate()
 
         response = self.client.post(
-            f"/api/v1/tickets/{ticket.pk}/rate/",
+            reverse("tickets:guest-ticket-rate", kwargs={"pk": ticket.pk}),
             {"rating": 5, "feedback": "Great, fast service!"},
         )
 
@@ -1528,7 +1537,7 @@ class TicketGuestExperienceTests(APITestCase):
         ticket = self.make_ticket(status=Ticket.Status.OPEN)
         self.authenticate()
 
-        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/rate/", {"rating": 4})
+        response = self.client.post(reverse("tickets:guest-ticket-rate", kwargs={"pk": ticket.pk}), {"rating": 4})
 
         self.assertEqual(response.status_code, 400)
 
@@ -1538,7 +1547,7 @@ class TicketGuestExperienceTests(APITestCase):
         ticket.save(update_fields=["guest_rating"])
         self.authenticate()
 
-        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/rate/", {"rating": 5})
+        response = self.client.post(reverse("tickets:guest-ticket-rate", kwargs={"pk": ticket.pk}), {"rating": 5})
 
         self.assertEqual(response.status_code, 400)
         ticket.refresh_from_db()
@@ -1548,7 +1557,7 @@ class TicketGuestExperienceTests(APITestCase):
         ticket = self.make_ticket(status=Ticket.Status.RESOLVED, resolved_minutes_ago=10)
         self.authenticate()
 
-        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/rate/", {"rating": 6})
+        response = self.client.post(reverse("tickets:guest-ticket-rate", kwargs={"pk": ticket.pk}), {"rating": 6})
 
         self.assertEqual(response.status_code, 400)
 
@@ -1560,7 +1569,7 @@ class TicketGuestExperienceTests(APITestCase):
         )
         self.authenticate()  # authenticated as self.user, not the ticket's owner
 
-        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/rate/", {"rating": 5})
+        response = self.client.post(reverse("tickets:guest-ticket-rate", kwargs={"pk": ticket.pk}), {"rating": 5})
 
         self.assertEqual(response.status_code, 404)
 
@@ -1570,7 +1579,7 @@ class TicketGuestExperienceTests(APITestCase):
         ticket = self.make_ticket(status=Ticket.Status.RESOLVED, resolved_minutes_ago=60)
         self.authenticate()
 
-        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/reopen/")
+        response = self.client.post(reverse("tickets:guest-ticket-reopen", kwargs={"pk": ticket.pk}))
 
         self.assertEqual(response.status_code, 200)
         ticket.refresh_from_db()
@@ -1590,7 +1599,7 @@ class TicketGuestExperienceTests(APITestCase):
         )
         self.authenticate()
 
-        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/reopen/")
+        response = self.client.post(reverse("tickets:guest-ticket-reopen", kwargs={"pk": ticket.pk}))
 
         self.assertEqual(response.status_code, 400)
         ticket.refresh_from_db()
@@ -1599,7 +1608,7 @@ class TicketGuestExperienceTests(APITestCase):
     def test_cannot_reopen_twice(self):
         ticket = self.make_ticket(status=Ticket.Status.RESOLVED, resolved_minutes_ago=10)
         self.authenticate()
-        first = self.client.post(f"/api/v1/tickets/{ticket.pk}/reopen/")
+        first = self.client.post(reverse("tickets:guest-ticket-reopen", kwargs={"pk": ticket.pk}))
         self.assertEqual(first.status_code, 200)
 
         # Resolve it again, then try to reopen a second time.
@@ -1608,14 +1617,14 @@ class TicketGuestExperienceTests(APITestCase):
         ticket.resolved_at = timezone.now()
         ticket.save(update_fields=["status", "resolved_at"])
 
-        second = self.client.post(f"/api/v1/tickets/{ticket.pk}/reopen/")
+        second = self.client.post(reverse("tickets:guest-ticket-reopen", kwargs={"pk": ticket.pk}))
         self.assertEqual(second.status_code, 400)
 
     def test_cannot_reopen_a_non_resolved_ticket(self):
         ticket = self.make_ticket(status=Ticket.Status.OPEN)
         self.authenticate()
 
-        response = self.client.post(f"/api/v1/tickets/{ticket.pk}/reopen/")
+        response = self.client.post(reverse("tickets:guest-ticket-reopen", kwargs={"pk": ticket.pk}))
 
         self.assertEqual(response.status_code, 400)
 
@@ -1623,7 +1632,7 @@ class TicketGuestExperienceTests(APITestCase):
         ticket = self.make_ticket(status=Ticket.Status.RESOLVED, resolved_minutes_ago=10)
         self.authenticate()
 
-        response = self.client.get(f"/api/v1/tickets/{ticket.pk}/")
+        response = self.client.get(reverse("tickets:guest-ticket-detail", kwargs={"pk": ticket.pk}))
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.data["can_reopen"])
@@ -1654,14 +1663,14 @@ class TicketGuestExperienceTests(APITestCase):
         )
         self.authenticate()
 
-        response = self.client.get("/api/v1/quick-templates/")
+        response = self.client.get(reverse("tickets:quick-template-list"))
 
         self.assertEqual(response.status_code, 200)
         titles = [item["title"] for item in response.data]
         self.assertEqual(titles, ["Extra pillow", "Towels"])
 
     def test_quick_templates_require_authentication(self):
-        response = self.client.get("/api/v1/quick-templates/")
+        response = self.client.get(reverse("tickets:quick-template-list"))
 
         self.assertEqual(response.status_code, 401)
 
@@ -1761,9 +1770,9 @@ class TicketAttachmentAPITests(APITestCase):
             description="Please send towels.",
         )
 
-        self.guest_attachments_url = f"/api/v1/tickets/{self.ticket.id}/attachments/"
+        self.guest_attachments_url = reverse("tickets:guest-ticket-attachment-create", kwargs={"pk": self.ticket.id})
         self.operator_attachments_url = (
-            f"/api/v1/operator/tickets/{self.ticket.id}/attachments/"
+            reverse("tickets:operator-ticket-attachment-create", kwargs={"pk": self.ticket.id})
         )
 
     def authenticate_guest(self, user=None):
@@ -1906,7 +1915,7 @@ class TicketAttachmentAPITests(APITestCase):
         )
         self.authenticate_guest()
 
-        response = self.client.get(f"/api/v1/tickets/{self.ticket.id}/")
+        response = self.client.get(reverse("tickets:guest-ticket-detail", kwargs={"pk": self.ticket.id}))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["attachments"]), 1)
@@ -1920,7 +1929,7 @@ class TicketAttachmentAPITests(APITestCase):
         )
         self.authenticate_operator()
 
-        response = self.client.get(f"/api/v1/operator/tickets/{self.ticket.id}/")
+        response = self.client.get(reverse("tickets:operator-ticket-detail", kwargs={"pk": self.ticket.id}))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data["attachments"]), 1)
@@ -1957,7 +1966,7 @@ class AdminStatsSummaryAPITests(APITestCase):
             department=self.dept_a,
         )
 
-        self.url = "/api/v1/admin/stats/summary/"
+        self.url = reverse("tickets:admin-stats-summary")
 
     def make_ticket(self, department, status, created_minutes_ago=0, resolved_minutes_ago=None):
         ticket = Ticket.objects.create(
@@ -2127,7 +2136,7 @@ class TicketPdfExportAPITests(APITestCase):
             description="Please send two extra towels.",
         )
 
-        self.url = f"/api/v1/tickets/{self.ticket.pk}/export/pdf/"
+        self.url = reverse("tickets:ticket-export-pdf", kwargs={"pk": self.ticket.pk})
 
     def test_unauthenticated_cannot_export(self):
         response = self.client.get(self.url)
@@ -2178,5 +2187,508 @@ class TicketPdfExportAPITests(APITestCase):
 
     def test_nonexistent_ticket_returns_404(self):
         self.client.force_authenticate(self.admin_user)
-        response = self.client.get("/api/v1/tickets/999999/export/pdf/")
+        response = self.client.get(reverse("tickets:ticket-export-pdf", kwargs={"pk": 999999}))
         self.assertEqual(response.status_code, 404)
+
+
+class OperatorAccessLevelTests(APITestCase):
+    """
+    Who may do what to the tickets in a department.
+
+    - A regular operator sees every ticket in their department, but may
+      only work on the ones assigned to them, and then only status and
+      resolution.
+    - A supervisor (User.is_supervisor) may also assign, reassign and set
+      priority, on any ticket in their own department.
+    - Closed tickets (RESOLVED/CANCELLED) cannot be assigned at all.
+
+    Enforced by IsSupervisor and CanWorkOnOperatorTicket in
+    apps/core/permissions.py; frontend/src/lib/ticket-permissions.ts
+    mirrors the same rules to decide which controls to show.
+    """
+
+    def setUp(self):
+        self.department = Department.objects.create(name="Housekeeping", code="HOUSEKEEPING")
+        self.other_department = Department.objects.create(name="Maintenance", code="MAINTENANCE")
+        self.category = Category.objects.create(name="Towels", code="TOWELS")
+        self.room = Room.objects.create(number="101", status=Room.Status.OCCUPIED)
+
+        guest_user = User.objects.create_user(username="guest101", role=User.Role.GUEST)
+        self.guest = Guest.objects.create(
+            user=guest_user,
+            full_name="Test Guest",
+            national_id="0012345678",
+            phone="09120000000",
+            room=self.room,
+        )
+
+        self.supervisor = User.objects.create_user(
+            username="supervisor",
+            password="SupervisorPass123!",
+            role=User.Role.OPERATOR,
+            department=self.department,
+            is_supervisor=True,
+        )
+        self.operator = User.objects.create_user(
+            username="operator",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.department,
+        )
+        self.colleague = User.objects.create_user(
+            username="colleague",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.department,
+        )
+        self.other_supervisor = User.objects.create_user(
+            username="other_supervisor",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.other_department,
+            is_supervisor=True,
+        )
+
+        self.unassigned_ticket = self._ticket("Extra towels")
+        self.my_ticket = self._ticket(
+            "Extra pillow", assigned_to=self.operator, status=Ticket.Status.IN_PROGRESS
+        )
+        self.colleagues_ticket = self._ticket(
+            "Room cleaning", assigned_to=self.colleague, status=Ticket.Status.IN_PROGRESS
+        )
+
+    def _ticket(self, title, **extra):
+        return Ticket.objects.create(
+            guest=self.guest,
+            department=self.department,
+            category=self.category,
+            room=self.room,
+            title=title,
+            description=title,
+            **extra,
+        )
+
+    def _detail(self, ticket):
+        return reverse("tickets:operator-ticket-detail", kwargs={"pk": ticket.id})
+
+    def _assign(self, ticket):
+        return reverse("tickets:operator-ticket-assign", kwargs={"pk": ticket.id})
+
+    def _close(self, ticket, status):
+        ticket.status = status
+        if status == Ticket.Status.RESOLVED:
+            ticket.resolution = "Done."
+            ticket.resolved_at = timezone.now()
+        ticket.save()
+
+    # --- a regular operator -------------------------------------------------
+
+    def test_regular_operator_sees_every_ticket_in_their_department(self):
+        self.client.force_authenticate(self.operator)
+
+        response = self.client.get(reverse("tickets:operator-ticket-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["count"], 3)
+
+    def test_regular_operator_can_open_a_colleagues_ticket(self):
+        self.client.force_authenticate(self.operator)
+
+        response = self.client.get(self._detail(self.colleagues_ticket))
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_regular_operator_can_note_any_department_ticket(self):
+        self.client.force_authenticate(self.operator)
+
+        response = self.client.post(
+            reverse("tickets:operator-ticket-notes", kwargs={"pk": self.colleagues_ticket.id}),
+            {"text": "Guest also asked for a bath mat."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 201)
+
+    def test_regular_operator_can_resolve_their_own_ticket(self):
+        self.client.force_authenticate(self.operator)
+
+        response = self.client.patch(
+            self._detail(self.my_ticket),
+            {"status": Ticket.Status.RESOLVED, "resolution": "Delivered the pillow."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.my_ticket.refresh_from_db()
+        self.assertEqual(self.my_ticket.status, Ticket.Status.RESOLVED)
+
+    def test_regular_operator_cannot_self_assign(self):
+        self.client.force_authenticate(self.operator)
+
+        response = self.client.post(self._assign(self.unassigned_ticket))
+
+        self.assertEqual(response.status_code, 403)
+        self.unassigned_ticket.refresh_from_db()
+        self.assertIsNone(self.unassigned_ticket.assigned_to)
+        self.assertEqual(self.unassigned_ticket.status, Ticket.Status.OPEN)
+
+    def test_regular_operator_cannot_reassign_their_own_ticket(self):
+        self.client.force_authenticate(self.operator)
+
+        response = self.client.patch(
+            self._detail(self.my_ticket), {"assigned_to": self.colleague.id}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.my_ticket.refresh_from_db()
+        self.assertEqual(self.my_ticket.assigned_to, self.operator)
+
+    def test_regular_operator_cannot_change_priority_even_on_their_own_ticket(self):
+        self.client.force_authenticate(self.operator)
+
+        response = self.client.patch(
+            self._detail(self.my_ticket), {"priority": Ticket.Priority.URGENT}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.data["message"],
+            "Only a department supervisor can change priority or assignment.",
+        )
+        self.my_ticket.refresh_from_db()
+        self.assertEqual(self.my_ticket.priority, Ticket.Priority.NORMAL)
+
+    def test_regular_operator_cannot_change_status_of_a_colleagues_ticket(self):
+        self.client.force_authenticate(self.operator)
+
+        response = self.client.patch(
+            self._detail(self.colleagues_ticket),
+            {"status": Ticket.Status.RESOLVED, "resolution": "Done."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.colleagues_ticket.refresh_from_db()
+        self.assertEqual(self.colleagues_ticket.status, Ticket.Status.IN_PROGRESS)
+
+    def test_regular_operator_cannot_start_an_unassigned_ticket(self):
+        # An unassigned ticket waits for a supervisor to hand it out.
+        self.client.force_authenticate(self.operator)
+
+        response = self.client.patch(
+            self._detail(self.unassigned_ticket),
+            {"status": Ticket.Status.IN_PROGRESS},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            response.data["message"], "You can only work on tickets assigned to you."
+        )
+
+    # --- a supervisor -------------------------------------------------------
+
+    def test_supervisor_can_assign_a_ticket_to_an_operator(self):
+        self.client.force_authenticate(self.supervisor)
+
+        response = self.client.patch(
+            self._detail(self.unassigned_ticket), {"assigned_to": self.operator.id}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.unassigned_ticket.refresh_from_db()
+        self.assertEqual(self.unassigned_ticket.assigned_to, self.operator)
+
+    def test_supervisor_can_change_priority(self):
+        self.client.force_authenticate(self.supervisor)
+
+        response = self.client.patch(
+            self._detail(self.my_ticket), {"priority": Ticket.Priority.URGENT}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.my_ticket.refresh_from_db()
+        self.assertEqual(self.my_ticket.priority, Ticket.Priority.URGENT)
+
+    def test_supervisor_can_resolve_any_department_ticket(self):
+        self.client.force_authenticate(self.supervisor)
+
+        response = self.client.patch(
+            self._detail(self.colleagues_ticket),
+            {"status": Ticket.Status.RESOLVED, "resolution": "Cleaned by the supervisor."},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+
+    def test_supervisor_power_stops_at_their_own_department(self):
+        self.client.force_authenticate(self.other_supervisor)
+
+        response = self.client.patch(
+            self._detail(self.my_ticket), {"priority": Ticket.Priority.URGENT}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    # --- closed tickets -----------------------------------------------------
+
+    def test_assign_refuses_a_resolved_ticket_and_leaves_it_resolved(self):
+        # Regression: the assign endpoint used to force IN_PROGRESS, which
+        # pulled a terminal RESOLVED ticket back open.
+        self._close(self.my_ticket, Ticket.Status.RESOLVED)
+        self.client.force_authenticate(self.supervisor)
+
+        response = self.client.post(self._assign(self.my_ticket))
+
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.data["message"], "A closed ticket cannot be assigned.")
+        self.my_ticket.refresh_from_db()
+        self.assertEqual(self.my_ticket.status, Ticket.Status.RESOLVED)
+        self.assertEqual(self.my_ticket.assigned_to, self.operator)
+
+    def test_assign_refuses_a_cancelled_ticket(self):
+        self._close(self.unassigned_ticket, Ticket.Status.CANCELLED)
+        self.client.force_authenticate(self.supervisor)
+
+        response = self.client.post(self._assign(self.unassigned_ticket))
+
+        self.assertEqual(response.status_code, 400)
+        self.unassigned_ticket.refresh_from_db()
+        self.assertEqual(self.unassigned_ticket.status, Ticket.Status.CANCELLED)
+        self.assertIsNone(self.unassigned_ticket.assigned_to)
+
+    def test_assign_keeps_an_in_progress_ticket_in_progress(self):
+        self.client.force_authenticate(self.supervisor)
+
+        response = self.client.post(self._assign(self.colleagues_ticket))
+
+        self.assertEqual(response.status_code, 200)
+        self.colleagues_ticket.refresh_from_db()
+        self.assertEqual(self.colleagues_ticket.status, Ticket.Status.IN_PROGRESS)
+        self.assertEqual(self.colleagues_ticket.assigned_to, self.supervisor)
+        self.assertFalse(
+            TicketHistory.objects.filter(
+                ticket=self.colleagues_ticket, action=TicketHistory.Action.STATUS_CHANGED
+            ).exists()
+        )
+
+    def test_closed_ticket_cannot_be_reassigned_via_patch(self):
+        self._close(self.my_ticket, Ticket.Status.RESOLVED)
+        self.client.force_authenticate(self.supervisor)
+
+        response = self.client.patch(
+            self._detail(self.my_ticket), {"assigned_to": self.colleague.id}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("assigned_to", response.data["errors"])
+
+    # --- the token claim is only a UI hint ----------------------------------
+
+    def test_demoting_a_supervisor_takes_effect_despite_a_stale_token_claim(self):
+        # Refresh rotation copies the is_supervisor claim forward and it is
+        # only corrected at the next login, so authorization has to re-read
+        # the flag from the database on every request.
+        login = self.client.post(
+            reverse("accounts:operator-login"),
+            {"username": "supervisor", "password": "SupervisorPass123!"},
+            format="json",
+        )
+        self.assertEqual(login.status_code, 200)
+        access = login.data["access"]
+        self.assertTrue(AccessToken(access)["is_supervisor"])
+
+        self.supervisor.is_supervisor = False
+        self.supervisor.save(update_fields=["is_supervisor"])
+
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+        response = self.client.post(self._assign(self.unassigned_ticket))
+
+        self.assertEqual(response.status_code, 403)
+
+
+class DepartmentStatsSummaryAPITests(APITestCase):
+    """
+    GET /api/v1/operator/stats/summary/ — the admin Stats Summary, scoped
+    to the caller's own department, for its operators and supervisor.
+    """
+
+    def setUp(self):
+        self.dept_a = Department.objects.create(name="Housekeeping", code="HK_DSTATS")
+        self.dept_b = Department.objects.create(name="Maintenance", code="MAINT_DSTATS")
+        self.category = Category.objects.create(
+            name="Towels", code="TOWELS_DSTATS", sla_minutes=15
+        )
+        self.room = Room.objects.create(number="402", status=Room.Status.OCCUPIED)
+
+        guest_user = User.objects.create_user(username="guest402", role=User.Role.GUEST)
+        self.guest = Guest.objects.create(
+            user=guest_user,
+            full_name="Test Guest",
+            national_id="0088888888",
+            phone="09125556666",
+            room=self.room,
+        )
+
+        self.supervisor = User.objects.create_user(
+            username="sup_a",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.dept_a,
+            is_supervisor=True,
+        )
+        self.operator = User.objects.create_user(
+            username="op_a",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.dept_a,
+        )
+        self.other_operator = User.objects.create_user(
+            username="op_b",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.dept_b,
+        )
+        self.admin_user = User.objects.create_user(
+            username="admin_dstats", password="testpassword", role=User.Role.ADMIN
+        )
+
+        self.url = reverse("tickets:operator-stats-summary")
+
+    def make_ticket(
+        self, department, status, assigned_to=None, created_minutes_ago=0, resolved_minutes_ago=None
+    ):
+        ticket = Ticket.objects.create(
+            guest=self.guest,
+            department=department,
+            category=self.category,
+            room=self.room,
+            title="Test ticket",
+            description="...",
+            status=status,
+            assigned_to=assigned_to,
+        )
+        update_fields = {"created_at": timezone.now() - timedelta(minutes=created_minutes_ago)}
+        if resolved_minutes_ago is not None:
+            update_fields["resolved_at"] = timezone.now() - timedelta(minutes=resolved_minutes_ago)
+        Ticket.objects.filter(pk=ticket.pk).update(**update_fields)
+        return ticket
+
+    def test_operator_sees_only_their_own_department(self):
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN)
+        self.make_ticket(self.dept_a, Ticket.Status.IN_PROGRESS, assigned_to=self.operator)
+        self.make_ticket(self.dept_b, Ticket.Status.OPEN)
+        self.make_ticket(self.dept_b, Ticket.Status.OPEN)
+
+        self.client.force_authenticate(self.operator)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["department_name"], "Housekeeping")
+        self.assertEqual(
+            response.data["by_status"],
+            {"OPEN": 1, "IN_PROGRESS": 1, "RESOLVED": 0, "CANCELLED": 0},
+        )
+
+    def test_supervisor_sees_the_same_department_summary(self):
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN)
+
+        self.client.force_authenticate(self.supervisor)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["department_id"], self.dept_a.id)
+        self.assertEqual(response.data["by_status"]["OPEN"], 1)
+
+    def test_by_operator_lists_the_whole_roster_with_workload(self):
+        idle = User.objects.create_user(
+            username="op_idle",
+            password="testpassword",
+            role=User.Role.OPERATOR,
+            department=self.dept_a,
+        )
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN, assigned_to=self.operator)
+        self.make_ticket(self.dept_a, Ticket.Status.IN_PROGRESS, assigned_to=self.operator)
+        self.make_ticket(
+            self.dept_a, Ticket.Status.RESOLVED, assigned_to=self.operator, resolved_minutes_ago=5
+        )
+        # Resolved 40 days ago: outside the 30-day window.
+        old = self.make_ticket(
+            self.dept_a, Ticket.Status.RESOLVED, assigned_to=self.operator, resolved_minutes_ago=5
+        )
+        Ticket.objects.filter(pk=old.pk).update(resolved_at=timezone.now() - timedelta(days=40))
+        self.make_ticket(self.dept_a, Ticket.Status.IN_PROGRESS, assigned_to=self.supervisor)
+        # Another department's operator must not appear at all.
+        self.make_ticket(self.dept_b, Ticket.Status.IN_PROGRESS, assigned_to=self.other_operator)
+
+        self.client.force_authenticate(self.operator)
+        response = self.client.get(self.url)
+
+        rows = response.data["by_operator"]
+        # Supervisors first, then by username; the idle operator is listed too.
+        self.assertEqual([row["username"] for row in rows], ["sup_a", "op_a", "op_idle"])
+        by_name = {row["username"]: row for row in rows}
+        self.assertEqual(by_name["op_a"]["active"], 2)
+        self.assertEqual(by_name["op_a"]["resolved_recent"], 1)
+        self.assertEqual(by_name["sup_a"]["active"], 1)
+        self.assertTrue(by_name["sup_a"]["is_supervisor"])
+        self.assertEqual(by_name[idle.username]["active"], 0)
+
+    def test_overdue_count_is_scoped_to_the_department(self):
+        # sla_minutes=15; 20 minutes ago is overdue.
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN, created_minutes_ago=20)
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN, created_minutes_ago=5)
+        self.make_ticket(self.dept_b, Ticket.Status.OPEN, created_minutes_ago=20)
+
+        self.client.force_authenticate(self.operator)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.data["overdue_count"], 1)
+
+    def test_avg_resolution_minutes_is_scoped_to_the_department(self):
+        self.make_ticket(
+            self.dept_a, Ticket.Status.RESOLVED, created_minutes_ago=40, resolved_minutes_ago=10
+        )
+        self.make_ticket(
+            self.dept_b, Ticket.Status.RESOLVED, created_minutes_ago=100, resolved_minutes_ago=10
+        )
+
+        self.client.force_authenticate(self.operator)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.data["avg_resolution_minutes"], 30.0)
+
+    def test_operator_without_a_department_is_refused_not_shown_the_whole_hotel(self):
+        orphan = User.objects.create_user(
+            username="op_orphan", password="testpassword", role=User.Role.OPERATOR
+        )
+        self.make_ticket(self.dept_a, Ticket.Status.OPEN)
+
+        self.client.force_authenticate(orphan)
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.data["message"], "You are not assigned to a department.")
+
+    def test_admin_uses_the_hotel_wide_endpoint_instead(self):
+        self.client.force_authenticate(self.admin_user)
+
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse("tickets:admin-stats-summary")).status_code, 200
+        )
+
+    def test_guest_cannot_access(self):
+        self.client.force_authenticate(self.guest.user)
+        self.assertEqual(self.client.get(self.url).status_code, 403)
+
+    def test_unauthenticated_cannot_access(self):
+        self.assertEqual(self.client.get(self.url).status_code, 401)
+
+    def test_service_refuses_a_missing_department(self):
+        # The function-level guard behind the 403 above: None must never
+        # be read as "every department".
+        from .services import compute_department_stats_summary
+
+        with self.assertRaises(ValueError):
+            compute_department_stats_summary(None)

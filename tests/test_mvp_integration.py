@@ -6,6 +6,13 @@ all the way to admin oversight), matching the "MVP done" criteria in
 the original spec (section 34): rather than testing each app in
 isolation, this exercises the whole system together the way an actual
 hotel stay would.
+
+The ticket and setup URLs below are deliberately left as literal paths,
+unlike the per-app tests (which use reverse()). The frontend's
+lib/api/client.ts hardcodes these same paths, so a route rename that
+reverse() would silently follow would still break the real client.
+Spelling them out here makes that rename fail a test first — this file
+doubles as the canary for the frontend's URL contract.
 """
 
 from django.urls import reverse
@@ -62,6 +69,10 @@ class MVPIntegrationTest(APITestCase):
             password="OperatorPass123!",
             role=User.Role.OPERATOR,
             department=cls.department,
+            # Also the department's supervisor: in a small hotel the same
+            # person triages and handles tickets, and assigning a ticket
+            # now requires supervisor rights.
+            is_supervisor=True,
         )
 
         # --- A second, unrelated guest + department, for isolation checks ---
@@ -171,8 +182,9 @@ class MVPIntegrationTest(APITestCase):
         response = self.client.get(f"/api/v1/operator/tickets/{ticket_id}/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-        # Operator assigns the ticket to themself (the view auto-assigns to
-        # whichever operator calls it, and moves the ticket to IN_PROGRESS).
+        # The supervisor takes the ticket for themself (the view assigns it
+        # to whoever calls it, supervisors only, and moves an OPEN ticket
+        # to IN_PROGRESS).
         response = self.client.post(f"/api/v1/operator/tickets/{ticket_id}/assign/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["status"], Ticket.Status.IN_PROGRESS)

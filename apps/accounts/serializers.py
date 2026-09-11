@@ -15,6 +15,12 @@ class OperatorTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token["role"] = user.role
         token["username"] = user.username
+        # UI hint only — tells the frontend whether to show assignment and
+        # priority controls. Never used for authorization: IsSupervisor
+        # re-reads the flag from the database on every request, because
+        # refresh rotation copies this claim forward unchanged and it can
+        # lag behind a promotion or demotion until the next login.
+        token["is_supervisor"] = user.is_supervisor
         return token
 
     def validate(self, attrs):

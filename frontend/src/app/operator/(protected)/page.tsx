@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AlertTriangle, ChevronLeft, Inbox, LayoutGrid, List, UserCheck2 } from "lucide-react";
 
 import {
@@ -25,7 +26,8 @@ import { FormError } from "@/components/form-error";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KanbanBoard } from "@/components/kanban-board";
 import { RelativeTime } from "@/components/relative-time";
-import { getOperatorTickets, ApiError } from "@/lib/api/client";
+import { getAccessToken, getOperatorTickets, ApiError } from "@/lib/api/client";
+import { decodeAccessToken } from "@/lib/api/tokens";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { Ticket, TicketPriority, TicketStatus } from "@/lib/api/types";
 import {
@@ -64,7 +66,17 @@ export default function OperatorHomePage() {
   // effect below, and the hidden Select further down).
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
 
+  // Admins have no department, so every operator ticket endpoint refuses
+  // them. Their landing page in this panel is the hotel-wide summary.
+  const router = useRouter();
+  const isAdmin = decodeAccessToken(getAccessToken() ?? "")?.role === "ADMIN";
+
   useEffect(() => {
+    if (isAdmin) router.replace("/operator/summary");
+  }, [isAdmin, router]);
+
+  useEffect(() => {
+    if (isAdmin) return;
     let cancelled = false;
     // Deferred (not called synchronously in the effect body) to satisfy
     // react-hooks/set-state-in-effect — see the identical fix in
@@ -90,7 +102,7 @@ export default function OperatorHomePage() {
     return () => {
       cancelled = true;
     };
-  }, [statusFilter, priorityFilter, debouncedSearch, viewMode]);
+  }, [statusFilter, priorityFilter, debouncedSearch, viewMode, isAdmin]);
 
   const hasActiveFilters =
     statusFilter !== "ALL" || priorityFilter !== "ALL" || searchInput.trim() !== "";
@@ -106,6 +118,8 @@ export default function OperatorHomePage() {
       prev ? prev.map((t) => (t.id === updated.id ? updated : t)) : prev
     );
   };
+
+  if (isAdmin) return null;
 
   return (
     <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-4">

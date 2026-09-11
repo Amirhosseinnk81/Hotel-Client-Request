@@ -183,6 +183,18 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
         return value
 
     def validate_assigned_to(self, value):
+        # RESOLVED/CANCELLED are terminal. Reassigning one is meaningless
+        # at best, and it's the same hole the assign endpoint used to have
+        # (it would pull a closed ticket back to IN_PROGRESS). Resending
+        # the current assignee is a harmless no-op, so only a change is
+        # refused.
+        if (
+            self.instance is not None
+            and self.instance.status in (Ticket.Status.RESOLVED, Ticket.Status.CANCELLED)
+            and value != self.instance.assigned_to
+        ):
+            raise serializers.ValidationError("A closed ticket cannot be reassigned.")
+
         if value is not None and value.role != "OPERATOR":
             raise serializers.ValidationError(
                 "Ticket can only be assigned to an operator."
@@ -346,6 +358,38 @@ class AdminStatsSummarySerializer(serializers.Serializer):
 
     by_status = AdminStatsByStatusSerializer()
     by_department = AdminStatsByDepartmentSerializer(many=True)
+    avg_resolution_minutes = serializers.FloatField(allow_null=True)
+    overdue_count = serializers.IntegerField()
+    resolution_window_days = serializers.IntegerField()
+    generated_at = serializers.DateTimeField()
+
+
+class DepartmentStatsByOperatorSerializer(serializers.Serializer):
+    """One operator's workload in the department summary."""
+
+    operator_id = serializers.IntegerField()
+    username = serializers.CharField()
+    is_supervisor = serializers.BooleanField()
+    active = serializers.IntegerField(
+        help_text="Assigned tickets still OPEN or IN_PROGRESS."
+    )
+    resolved_recent = serializers.IntegerField(
+        help_text="Assigned tickets resolved within resolution_window_days."
+    )
+
+
+class DepartmentStatsSummarySerializer(serializers.Serializer):
+    """
+    GET /operator/stats/summary/ — the admin Stats Summary, scoped to the
+    caller's own department. Same by_status / average resolution / overdue
+    figures; by_department is replaced by by_operator, since a
+    one-department report broken down by department would be a single row.
+    """
+
+    department_id = serializers.IntegerField()
+    department_name = serializers.CharField()
+    by_status = AdminStatsByStatusSerializer()
+    by_operator = DepartmentStatsByOperatorSerializer(many=True)
     avg_resolution_minutes = serializers.FloatField(allow_null=True)
     overdue_count = serializers.IntegerField()
     resolution_window_days = serializers.IntegerField()

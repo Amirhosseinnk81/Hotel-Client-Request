@@ -28,24 +28,10 @@ urlpatterns = [
     path("api/v1/", include("apps.departments.urls")),
     path("api/v1/", include("apps.rooms.urls")),
     path("api/v1/", include("apps.tickets.urls")),
-
-    path(
-        "api/schema/",
-        SpectacularAPIView.as_view(),
-        name="schema",
-    ),
-
-    path(
-        "api/docs/",
-        SpectacularSwaggerView.as_view(url_name="schema"),
-        name="swagger-ui",
-    ),
-
-    path(
-        "api/redoc/",
-        SpectacularRedocView.as_view(url_name="schema"),
-        name="redoc",
-    ),
+    path("api/schema/",SpectacularAPIView.as_view(),name="schema",),
+    path("api/docs/",SpectacularSwaggerView.as_view(url_name="schema"),name="swagger-ui",),
+    path("api/redoc/",SpectacularRedocView.as_view(url_name="schema"),name="redoc",),
+    path("api/it-ops/", include("apps.it_ops.urls")),
 ]
 
 # Local-disk media (Stage 2.8 ticket attachments) — Django only serves

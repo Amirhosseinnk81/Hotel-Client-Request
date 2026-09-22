@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, ChevronLeft, Inbox, LayoutGrid, List, UserCheck2 } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Inbox, LayoutGrid, List, Timer, UserCheck2 } from "lucide-react";
 
 import {
   Card,
@@ -28,6 +28,7 @@ import { KanbanBoard } from "@/components/kanban-board";
 import { RelativeTime } from "@/components/relative-time";
 import { getAccessToken, getOperatorTickets, ApiError } from "@/lib/api/client";
 import { OFFLINE_SYNCED_EVENT } from "@/lib/offline";
+import { TICKET_EVENT } from "@/lib/realtime";
 import { decodeAccessToken } from "@/lib/api/tokens";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { Ticket, TicketPriority, TicketStatus } from "@/lib/api/types";
@@ -72,8 +73,13 @@ export default function OperatorHomePage() {
 
   useEffect(() => {
     const onSynced = () => setSyncTick((tick) => tick + 1);
+    // Also when a live event says a ticket arrived or was assigned (Stage 3.2).
     window.addEventListener(OFFLINE_SYNCED_EVENT, onSynced);
-    return () => window.removeEventListener(OFFLINE_SYNCED_EVENT, onSynced);
+    window.addEventListener(TICKET_EVENT, onSynced);
+    return () => {
+      window.removeEventListener(OFFLINE_SYNCED_EVENT, onSynced);
+      window.removeEventListener(TICKET_EVENT, onSynced);
+    };
   }, []);
 
   // Admins have no department, so every operator ticket endpoint refuses
@@ -297,6 +303,12 @@ export default function OperatorHomePage() {
                       <Badge variant="destructive" className="gap-1">
                         <AlertTriangle className="size-3" />
                         معوق
+                      </Badge>
+                    )}
+                    {ticket.is_response_overdue && (
+                      <Badge variant="warning" className="gap-1">
+                        <Timer className="size-3" />
+                        بدون پاسخ
                       </Badge>
                     )}
                     <span className="flex items-center gap-1 text-xs text-muted-foreground">

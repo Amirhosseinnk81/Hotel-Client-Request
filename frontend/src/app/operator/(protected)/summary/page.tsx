@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, Clock } from "lucide-react";
+import { AlertTriangle, Clock, Target, Timer } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -24,6 +24,9 @@ import { formatDurationMinutes, formatNumber } from "@/lib/format";
 import { statusLabels } from "@/lib/ticket-labels";
 
 const STATUS_ORDER: TicketStatus[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CANCELLED"];
+
+/** SLA share, e.g. 87.5 -> "۸۷٫۵٪"; "—" when nothing was due in the window. */
+const formatPercent = (value: number | null) => (value === null ? "—" : `${formatNumber(value)}٪`);
 
 type Summary =
   | { scope: "hotel"; data: AdminStatsSummary }
@@ -125,6 +128,34 @@ export default function StatsSummaryPage() {
                     : formatDurationMinutes(summary.data.avg_resolution_minutes)
                 }
                 icon={<Clock className="size-3.5" />}
+              />
+            </div>
+            {/* Two-stage SLA: first response (someone starts on it) and resolution. */}
+            <div className="grid grid-cols-2 gap-px sm:grid-cols-4">
+              <StatTile
+                label="منتظر اولین پاسخ"
+                value={formatNumber(summary.data.response_overdue_count)}
+                tone={summary.data.response_overdue_count > 0 ? "alert" : "normal"}
+                icon={<Timer className="size-3.5" />}
+              />
+              <StatTile
+                label="میانگین زمان اولین پاسخ"
+                value={
+                  summary.data.avg_first_response_minutes === null
+                    ? "—"
+                    : formatDurationMinutes(summary.data.avg_first_response_minutes)
+                }
+                icon={<Clock className="size-3.5" />}
+              />
+              <StatTile
+                label="اولین پاسخ به‌موقع"
+                value={formatPercent(summary.data.response_sla_met_percent)}
+                icon={<Target className="size-3.5" />}
+              />
+              <StatTile
+                label="حل به‌موقع"
+                value={formatPercent(summary.data.resolution_sla_met_percent)}
+                icon={<Target className="size-3.5" />}
               />
             </div>
           </section>

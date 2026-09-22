@@ -12,12 +12,12 @@ from .models import (
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ("name", "code", "sla_minutes", "is_active", "created_at")
+    list_display = ("name", "code", "response_sla_minutes", "sla_minutes", "is_active", "created_at")
     list_display_links = ("name",)
-    # Editable straight from the list — sla_minutes is meant to be tuned
-    # per category as an ongoing operational knob (Stage 2.9), not a
-    # one-time setup value buried in the detail form.
-    list_editable = ("sla_minutes", "is_active")
+    # Editable straight from the list — both SLA targets (first response,
+    # resolution) are meant to be tuned per category as an ongoing
+    # operational knob, not a one-time setup value buried in the detail form.
+    list_editable = ("response_sla_minutes", "sla_minutes", "is_active")
     list_filter = ("is_active",)
     search_fields = ("name", "code")
     ordering = ("name",)

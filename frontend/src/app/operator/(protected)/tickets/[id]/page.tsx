@@ -10,6 +10,7 @@ import {
   ImagePlus,
   Loader2,
   MessageSquarePlus,
+  Timer,
   UserPlus,
 } from "lucide-react";
 
@@ -440,6 +441,16 @@ export default function OperatorTicketDetailPage({
                   <Badge variant="destructive" className="gap-1">
                     <AlertTriangle className="size-3" />
                     معوق
+                  </Badge>
+                )}
+                {ticket.is_response_overdue && (
+                  <Badge
+                    variant="warning"
+                    className="gap-1"
+                    title="هنوز کسی شروعش نکرده و از مهلت اولین پاسخ گذشته است."
+                  >
+                    <Timer className="size-3" />
+                    بدون پاسخ
                   </Badge>
                 )}
               </div>

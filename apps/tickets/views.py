@@ -28,6 +28,7 @@ from .pdf import generate_ticket_pdf
 from .permissions import IsOperator
 from .services import (
     active_tickets_count,
+    auto_assign,
     compute_admin_stats_summary,
     compute_department_stats_summary,
 )
@@ -140,6 +141,10 @@ class GuestTicketListCreateView(generics.ListCreateAPIView):
             action=TicketHistory.Action.CREATED,
             new_value=Ticket.Status.OPEN,
         )
+
+        # Straight to the least-busy operator with the panel open, if the
+        # department has auto-assignment on (services.auto_assign).
+        auto_assign(ticket)
 
         # Stage 3.1: only queues the SMS; it is sent later, outside this
         # request, and can never fail the ticket (queue_ticket_sms).

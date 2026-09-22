@@ -11,6 +11,10 @@ Ticket statistics and derived operator workload.
   definition of an operator being "busy". Availability is derived from
   assignments rather than stored, and every surface that shows it counts
   through here.
+- mark_operator_seen() / auto_assign() — presence ("panel open") and
+  workload-based auto-assignment of new guest tickets.
+- The two-stage SLA figures (first response, resolution) that both
+  summaries report.
 
 Plain functions (not tied to DRF or Django Admin) so every surface shares
 one implementation instead of copies drifting apart.
@@ -18,13 +22,14 @@ one implementation instead of copies drifting apart.
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
 from django.utils import timezone
 
 from apps.departments.models import Department
 
-from .models import Ticket
+from .models import Ticket, TicketHistory
 
 # How far back "average resolution time" (and each operator's "resolved
 # recently" count) looks. A fixed 30-day window rather than "all time" so
@@ -71,6 +76,72 @@ def active_ticket_count(operator):
     ).count()
 
 
+# -- presence and auto-assignment ---------------------------------------------
+
+
+def presence_window():
+    return timedelta(seconds=getattr(settings, "OPERATOR_PRESENCE_SECONDS", 120))
+
+
+def mark_operator_seen(user):
+    """Record that this operator's panel is open right now (cheap UPDATE, no save())."""
+    get_user_model().objects.filter(pk=user.pk).update(last_seen_at=timezone.now())
+
+
+def pick_auto_assignee(department):
+    """
+    The operator a new ticket in `department` should go to, or None.
+
+    Only operators whose panel is open count (last_seen_at within the
+    presence window) — the system has no shift roster, and handing a
+    ticket to someone who has gone home is worse than leaving it for the
+    supervisor. Among those: fewest active tickets first (the same count as
+    "busy"), then regular operators before the supervisor, who is also
+    the one triaging.
+    """
+    return (
+        get_user_model()
+        .objects.filter(
+            role="OPERATOR",
+            is_active=True,
+            department=department,
+            last_seen_at__gte=timezone.now() - presence_window(),
+        )
+        .annotate(active_tickets=active_tickets_count())
+        .order_by("active_tickets", "is_supervisor", "username")
+        .first()
+    )
+
+
+def auto_assign(ticket):
+    """
+    Hand a new ticket to pick_auto_assignee() if its department has
+    auto_assign on and nobody holds it yet. The ticket stays OPEN — the
+    operator still has to start on it, which is what the first-response
+    SLA measures. Logged as an ASSIGNED history entry with no user
+    (the system did it). Returns the operator, or None.
+    """
+    if ticket.assigned_to_id is not None or not ticket.department.auto_assign:
+        return None
+    operator = pick_auto_assignee(ticket.department)
+    if operator is None:
+        return None
+
+    ticket.assigned_to = operator
+    ticket.save(update_fields=["assigned_to", "updated_at"])
+    TicketHistory.objects.create(
+        ticket=ticket,
+        user=None,
+        action=TicketHistory.Action.ASSIGNED,
+        old_value=None,
+        new_value=operator.username,
+    )
+    return operator
+
+
+# -- statistics -----------------------------------------------------------------
+
+
 def _by_status(tickets):
     counts = {
         row["status"]: row["count"]
@@ -108,6 +179,56 @@ def _overdue_count(tickets):
     # the model decide, so the overdue rule stays defined in one place.
     open_tickets = tickets.filter(status__in=ACTIVE_STATUSES).select_related("category")
     return sum(1 for ticket in open_tickets if ticket.is_overdue)
+
+
+def _percent(met, due):
+    return round(met / due * 100, 1) if due else None
+
+
+def _sla_performance(tickets, window_start):
+    """
+    Two-stage SLA over the tickets created in the window:
+
+    - first response: responded in time / all that were due (responded,
+      or still waiting past the deadline). A ticket cancelled before
+      anyone started on it is not counted either way.
+    - resolution: resolved in time / all that were due (resolved, or
+      still active past the deadline).
+
+    Plus the average time to first response, and — for right now, not the
+    window — how many tickets are still waiting past their response target.
+    Computed in Python off each ticket's own deadline properties, so the
+    SLA rules stay defined in one place (the model), like _overdue_count.
+    """
+    now = timezone.now()
+    response_met = response_due = resolution_met = resolution_due = 0
+    response_minutes = []
+
+    for ticket in tickets.filter(created_at__gte=window_start).select_related("category"):
+        if ticket.first_response_at is not None:
+            response_due += 1
+            response_met += ticket.first_response_at <= ticket.response_deadline
+            response_minutes.append((ticket.first_response_at - ticket.created_at).total_seconds() / 60)
+        elif ticket.status == Ticket.Status.OPEN and now > ticket.response_deadline:
+            response_due += 1
+
+        if ticket.status == Ticket.Status.RESOLVED and ticket.resolved_at is not None:
+            resolution_due += 1
+            resolution_met += ticket.resolved_at <= ticket.sla_deadline
+        elif ticket.status in ACTIVE_STATUSES and now > ticket.sla_deadline:
+            resolution_due += 1
+
+    waiting = tickets.filter(status=Ticket.Status.OPEN, first_response_at__isnull=True).select_related(
+        "category"
+    )
+    return {
+        "avg_first_response_minutes": (
+            round(sum(response_minutes) / len(response_minutes), 1) if response_minutes else None
+        ),
+        "response_sla_met_percent": _percent(response_met, response_due),
+        "resolution_sla_met_percent": _percent(resolution_met, resolution_due),
+        "response_overdue_count": sum(1 for ticket in waiting if ticket.is_response_overdue),
+    }
 
 
 def compute_admin_stats_summary():
@@ -149,6 +270,7 @@ def compute_admin_stats_summary():
         ],
         "avg_resolution_minutes": _avg_resolution_minutes(tickets, window_start),
         "overdue_count": _overdue_count(tickets),
+        **_sla_performance(tickets, window_start),
         "resolution_window_days": RESOLUTION_WINDOW.days,
         "generated_at": timezone.now(),
     }
@@ -203,6 +325,7 @@ def compute_department_stats_summary(department):
         ],
         "avg_resolution_minutes": _avg_resolution_minutes(tickets, window_start),
         "overdue_count": _overdue_count(tickets),
+        **_sla_performance(tickets, window_start),
         "resolution_window_days": RESOLUTION_WINDOW.days,
         "generated_at": timezone.now(),
     }

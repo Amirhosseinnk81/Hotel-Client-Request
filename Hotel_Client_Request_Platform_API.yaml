@@ -1834,6 +1834,42 @@ paths:
                 items:
                   $ref: '#/components/schemas/OperatorColleague'
           description: ''
+  /api/v1/operator/events/:
+    get:
+      operationId: api_v1_operator_events_retrieve
+      description: |-
+        GET /api/v1/operator/events/ — live notifications for the operator panel
+        (Stage 3.2). See apps/notifications/stream.py for the events. Operators
+        with a department only; admins have no department and get no stream.
+      parameters:
+      - in: query
+        name: after_history
+        schema:
+          type: integer
+        description: Resume cursor from the last event.
+      - in: query
+        name: after_ticket
+        schema:
+          type: integer
+        description: Resume cursor from the last event.
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - sse
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            text/event-stream:
+              schema:
+                type: string
+          description: ''
   /api/v1/operator/me/status/:
     get:
       operationId: api_v1_operator_me_status_retrieve
@@ -2809,18 +2845,40 @@ components:
           nullable: true
         overdue_count:
           type: integer
+        response_overdue_count:
+          type: integer
+          description: Tickets still waiting for anyone to start on them, past their
+            first-response target.
+        avg_first_response_minutes:
+          type: number
+          format: double
+          nullable: true
+        response_sla_met_percent:
+          type: number
+          format: double
+          nullable: true
+          description: Share of due tickets started within the first-response target.
+        resolution_sla_met_percent:
+          type: number
+          format: double
+          nullable: true
+          description: Share of due tickets resolved within the resolution target.
         resolution_window_days:
           type: integer
         generated_at:
           type: string
           format: date-time
       required:
+      - avg_first_response_minutes
       - avg_resolution_minutes
       - by_department
       - by_status
       - generated_at
       - overdue_count
+      - resolution_sla_met_percent
       - resolution_window_days
+      - response_overdue_count
+      - response_sla_met_percent
     Category:
       type: object
       properties:
@@ -2843,6 +2901,14 @@ components:
             (e.g. towels: 15, power outage: 10). Drives both the guest-facing "estimated
             response time" and the operator overdue highlight — there is deliberately
             only one number to configure, not a separate one for each.'
+        response_sla_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: 'First-response target, in minutes: how soon an operator must
+            start on a ticket (move it to IN_PROGRESS). Separate from sla_minutes
+            (the resolution target): a guest mostly wants to know quickly that someone
+            is on it. Capped at sla_minutes.'
         created_at:
           type: string
           format: date-time
@@ -2878,6 +2944,14 @@ components:
             (e.g. towels: 15, power outage: 10). Drives both the guest-facing "estimated
             response time" and the operator overdue highlight — there is deliberately
             only one number to configure, not a separate one for each.'
+        response_sla_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: 'First-response target, in minutes: how soon an operator must
+            start on a ticket (move it to IN_PROGRESS). Separate from sla_minutes
+            (the resolution target): a guest mostly wants to know quickly that someone
+            is on it. Capped at sla_minutes.'
       required:
       - code
       - name
@@ -2971,12 +3045,31 @@ components:
           nullable: true
         overdue_count:
           type: integer
+        response_overdue_count:
+          type: integer
+          description: Tickets still waiting for anyone to start on them, past their
+            first-response target.
+        avg_first_response_minutes:
+          type: number
+          format: double
+          nullable: true
+        response_sla_met_percent:
+          type: number
+          format: double
+          nullable: true
+          description: Share of due tickets started within the first-response target.
+        resolution_sla_met_percent:
+          type: number
+          format: double
+          nullable: true
+          description: Share of due tickets resolved within the resolution target.
         resolution_window_days:
           type: integer
         generated_at:
           type: string
           format: date-time
       required:
+      - avg_first_response_minutes
       - avg_resolution_minutes
       - by_operator
       - by_status
@@ -2984,7 +3077,10 @@ components:
       - department_name
       - generated_at
       - overdue_count
+      - resolution_sla_met_percent
       - resolution_window_days
+      - response_overdue_count
+      - response_sla_met_percent
     FrequencyEnum:
       enum:
       - NONE
@@ -3433,6 +3529,21 @@ components:
           type: string
           format: date-time
           readOnly: true
+        first_response_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: When the ticket first moved to IN_PROGRESS — the first-response
+            SLA's finish line. Set once by save(), never cleared, even if the ticket
+            is handed back to OPEN later.
+        response_deadline:
+          type: string
+          format: date-time
+          readOnly: true
+        is_response_overdue:
+          type: boolean
+          readOnly: true
         attachments:
           type: array
           items:
@@ -3460,10 +3571,13 @@ components:
       - department
       - department_name
       - description
+      - first_response_at
       - id
       - is_overdue
+      - is_response_overdue
       - overdue_since
       - resolved_at
+      - response_deadline
       - room_number
       - title
       - updated_at
@@ -3875,6 +3989,14 @@ components:
             (e.g. towels: 15, power outage: 10). Drives both the guest-facing "estimated
             response time" and the operator overdue highlight — there is deliberately
             only one number to configure, not a separate one for each.'
+        response_sla_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          description: 'First-response target, in minutes: how soon an operator must
+            start on a ticket (move it to IN_PROGRESS). Separate from sla_minutes
+            (the resolution target): a guest mostly wants to know quickly that someone
+            is on it. Capped at sla_minutes.'
     PatchedDepartmentRequest:
       type: object
       properties:

@@ -47,5 +47,16 @@ class User(AbstractUser):
         ),
     )
 
+    last_seen_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Last time this operator's panel was open (refreshed by the live "
+            "notification stream's heartbeat and by the status endpoint). "
+            "Auto-assignment only picks operators seen recently — being "
+            "logged in to the panel is what \"on shift\" means here."
+        ),
+    )
+
     def __str__(self):
         return f"{self.username} ({self.role})"

@@ -168,6 +168,22 @@ REST_FRAMEWORK = {
 IT_DEPARTMENT_CODE = config("IT_DEPARTMENT_CODE", default="IT")
 
 # ---------------------------------------------------------------------------
+# Operator presence, auto-assignment and live notifications (Stage 3.2)
+# ---------------------------------------------------------------------------
+# An operator counts as "on shift" for auto-assignment while their panel has
+# been seen within this many seconds (the live stream beats every
+# SSE_HEARTBEAT_SECONDS, so keep this comfortably above that).
+OPERATOR_PRESENCE_SECONDS = config("OPERATOR_PRESENCE_SECONDS", default=120, cast=int)
+# Live stream (GET /operator/events/): how often it checks for new tickets,
+# how often it sends a heartbeat, and after how long it ends so the browser
+# reconnects with a fresh access token. Each open stream holds one server
+# thread for its lifetime — size the production server's thread pool to
+# the number of operators logged in at once, plus headroom.
+SSE_POLL_SECONDS = config("SSE_POLL_SECONDS", default=2, cast=float)
+SSE_HEARTBEAT_SECONDS = config("SSE_HEARTBEAT_SECONDS", default=25, cast=float)
+SSE_MAX_SECONDS = config("SSE_MAX_SECONDS", default=300, cast=float)
+
+# ---------------------------------------------------------------------------
 # SMS (Stage 3.1) — see apps/notifications
 # ---------------------------------------------------------------------------
 # Messages are queued in the database and sent by `send_pending_sms`

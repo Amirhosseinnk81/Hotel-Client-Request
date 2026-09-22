@@ -24,9 +24,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Frontend | **Next.js 16.3.2** (App Router) + React 19.2 + TypeScript + Tailwind v4 |
 | UI Kit | shadcn/ui **دستی‌ساز** (بدون CLI) در `frontend/src/components/ui/` روی Radix |
 | فونت | `@fontsource-variable/vazirmatn` در UI؛ TTF کامل Vazirmatn برای PDF |
-| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۲۵۳ تست** |
-| تست فرانت | Vitest + React Testing Library — **۹۷ تست** |
-| Deployment | مستقیم روی هاست ویندوز، بدون Docker/Redis/Celery؛ کار زمان‌بندی‌شده با Windows Task Scheduler (`send_pending_sms` هر دقیقه، `snapshot_room_stats` هر شب) |
+| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۲۸۲ تست** |
+| تست فرانت | Vitest + React Testing Library — **۱۰۵ تست** |
+| Deployment | مستقیم روی هاست ویندوز، بدون Docker/Redis/Celery؛ کار زمان‌بندی‌شده با Windows Task Scheduler (`send_pending_sms` هر دقیقه، `snapshot_room_stats` هر شب). هر جریان زندهٔ اپراتور یک thread سرور نگه می‌دارد — بخش «اعلان لحظه‌ای» |
 
 ## دستورهای رایج
 
@@ -36,7 +36,7 @@ python manage.py migrate
 python manage.py runserver localhost:8000      # localhost، نه 127.0.0.1 — بخش «دو تلهٔ همیشگی»
 python manage.py seed_demo_data                # دادهٔ دموی فارسی: واحدها، دسته‌ها، اتاق، اپراتور، سرپرست، مهمان
 python manage.py seed_demo_data --reset-passwords
-python manage.py test                          # کل ۲۵۳ تست
+python manage.py test                          # کل ۲۸۲ تست
 python manage.py test apps.tickets             # فقط یک اپ
 python manage.py spectacular --file Hotel_Client_Request_Platform_API.yaml
 ```
@@ -84,13 +84,13 @@ npx vitest run -t "relative"                   # فیلتر روی نام تست
 - `config/settings/` — `base.py` (مشترک) + `development.py` / `production.py`
 - `apps/` — هر اپ با الگوی ثابت: `models.py` → `serializers.py` → `views.py` (DRF generics) → `urls.py` → `admin.py` → `tests.py`
   - `core/` — پرمیشن‌های مشترک، `jwt_cookies.py`، `throttling.py`، `exceptions.py`، health check، `seed_demo_data`
-  - `accounts/` — User سفارشی (`role`، `department`، `is_supervisor`)، لاگین اپراتور، refresh، logout، وضعیت اپراتور (`/operator/me/status/`، محاسبه‌شده)
+  - `accounts/` — User سفارشی (`role`، `department`، `is_supervisor`)، لاگین اپراتور، refresh، logout، وضعیت اپراتور (`/operator/me/status/`، محاسبه‌شده)، و `last_seen_at` (حضور در پنل، برای تخصیص خودکار)
   - `guests/` — Guest و لاگین مهمان
   - `rooms/` — Room و `RoomStatusLog` (لاگ append-only که خودِ `Room.save()` می‌نویسد)
   - `departments/` — CRUD ادمین
   - `tickets/` — هستهٔ پروژه: `Category`، `Ticket`، `TicketHistory`، `TicketNote`، `TicketAttachment`، `QuickRequestTemplate`، و `pdf.py`
   - `it_ops/` — عملیات داخلی واحد IT (`Process`، `Project`، `DepartmentRequest`، `Goal`، `Task`، `RoomDailyStat`) — بخش «IT Ops». **تنها اپی که ViewSet + Router دارد** نه generics؛ عمدی است (شش منبع CRUD هم‌شکل)
-  - `notifications/` — صف پیامک مهمان (`SmsMessage`) و درایورهای ارسال — بخش «پیامک»
+  - `notifications/` — صف پیامک مهمان (`SmsMessage`) و درایورهای ارسال — بخش «پیامک»؛ و جریان زندهٔ اپراتور (`stream.py`) — بخش «اعلان لحظه‌ای»
 - `tests/test_mvp_integration.py` — سناریوی end-to-end بین اپ‌ها. تست واحد هر اپ داخل خود اپ می‌ماند.
 - `frontend/src/` — `app/` با Route Groupهای `guest/(protected)` و `operator/(protected)`، `components/ui/`، `contexts/`، `hooks/`، `lib/api/`
 
@@ -118,7 +118,11 @@ CANCELLED    → (نهایی)
 
 ## SLA و «معوق»
 
-`Category.sla_minutes` (پیش‌فرض ۶۰) تنها عدد قابل تنظیم است و **دو کاربرد همزمان** دارد: «زمان تخمینی پاسخ» که به مهمان نشان داده می‌شود، و هایلایت «معوق» در داشبورد اپراتور. عمداً یک عدد است نه دو تا، که از هم درنروند. تیکت `RESOLVED`/`CANCELLED` هرگز معوق حساب نمی‌شود (`Ticket.is_overdue`).
+SLA دو مرحله دارد، هر دو به ازای هر دسته و قابل‌ویرایش از لیست دسته‌ها در Django Admin:
+
+- **حل — `Category.sla_minutes`** (پیش‌فرض ۶۰). **دو کاربرد همزمان** دارد: «زمان تخمینی پاسخ» که به مهمان نشان داده می‌شود، و هایلایت «معوق» در داشبورد اپراتور — عمداً یک عدد، که از هم درنروند. تیکت `RESOLVED`/`CANCELLED` هرگز معوق حساب نمی‌شود (`Ticket.is_overdue`).
+- **اولین پاسخ — `Category.response_sla_minutes`** (پیش‌فرض ۱۰، و هرگز بیشتر از `sla_minutes`). مهلتِ «کسی شروعش کند». «شروع» یعنی اولین رفتن به `IN_PROGRESS` که `Ticket.save()` در `first_response_at` ثبت می‌کند — پس PATCH، endpoint تخصیص، کانبان و Django Admin همه حساب می‌شوند — و یک‌بار ثبت می‌شود، حتی اگر تیکت بعداً به OPEN برگردد. تخصیص (دستی یا خودکار) پاسخ حساب **نمی‌شود**. `is_response_overdue` = هنوز OPEN، بدون پاسخ، از مهلت گذشته؛ در پنل برچسب «بدون پاسخ». migration `tickets/0011` این زمان را برای تیکت‌های قدیمی از `TicketHistory` پر کرد.
+- هر دو خلاصهٔ آمار حالا `response_overdue_count`، `avg_first_response_minutes`، `response_sla_met_percent` و `resolution_sla_met_percent` هم دارند (`_sla_performance` در `services.py`). درصد وقتی چیزی سررسید نشده `null` است، نه صفر. تیکتی که پیش از شروع لغو شد در هیچ‌کدام حساب نمی‌شود.
 
 ## خروجی PDF تیکت
 
@@ -164,6 +168,27 @@ CANCELLED    → (نهایی)
 - **واحدهای دیگر هم به IT درخواست می‌دهند**، ولی نه از مسیرهای IT: `/it-ops/outgoing-requests/` (`OutgoingITRequestViewSet`) با پرمیشن `IsOperatorWithDepartment`. هر اپراتورِ واحددار فقط درخواست‌های واحد خودش را می‌بیند، واحد و درخواست‌دهنده همیشه از `request.user` می‌آیند نه از بدنه، و بعد از ثبت نمی‌تواند تغییرش دهد (PATCH/DELETE ۴۰۵) — وضعیت و مسئول کار IT است. `requested_by` روی `DepartmentRequest` را فقط همین ویو پر می‌کند. صفحهٔ فرانتش `/operator/it-requests` است.
 - **فرم‌های صفحهٔ IT** (`components/it-ops/item-dialog.tsx` + `resource-panel.tsx`) یک دیالوگ مشترک‌اند که با field spec کار می‌کنند. دو قاعده که شکستنشان ۴۰۳ می‌سازد: در ویرایش **فقط فیلدهای تغییرکرده** فرستاده می‌شوند (`changedFields`) — چون `CanWorkOnITItem` صرفِ حضور یک فیلد سرپرستی در بدنه را رد می‌کند، حتی با مقدار دست‌نخورده؛ و فیلدهایی که بیننده اجازه‌شان را ندارد اصلاً نمایش داده نمی‌شوند (`isItFieldEditable`). در ساخت، فیلد خالی فرستاده نمی‌شود تا پیش‌فرض سرور اعمال شود.
 - `DepartmentRequestSerializer` در schema با نام `ITDepartmentRequest` است، چون `DepartmentSerializer` با `COMPONENT_SPLIT_REQUEST` خودش کامپوننتی به نام `DepartmentRequest` می‌سازد. enumهای وضعیت/اولویت IT هم در `ENUM_NAME_OVERRIDES` نام گرفته‌اند؛ اگر enum تازه‌ای با نام تکراری اضافه شد، spectacular اسم هش‌دار می‌سازد — همان‌جا نامش بده.
+
+## تخصیص خودکار
+
+الهام از Odoo Helpdesk («بار کاری متوازن»). هر تیکت تازهٔ مهمان — اگر `Department.auto_assign` روشن باشد (پیش‌فرض خاموش؛ از لیست واحدها در Django Admin، و در دادهٔ دمو روشن) — مستقیم به کم‌کارترین اپراتور **حاضر** همان واحد می‌رسد: `auto_assign` / `pick_auto_assignee` در `apps/tickets/services.py`، صدا زده از `GuestTicketListCreateView.perform_create`.
+
+- **«حاضر» یعنی پنلش باز است**، نه «در شیفت» — شیفت در سیستم وجود ندارد و دادن تیکت به کسی که رفته خانه بدتر از گذاشتنش برای سرپرست است. `User.last_seen_at` را ضربان جریان زنده و `GET /operator/me/status/` به‌روز می‌کنند؛ پنجره `OPERATOR_PRESENCE_SECONDS` (پیش‌فرض ۱۲۰). کسی حاضر نیست ← تیکت بی‌صاحب می‌ماند مثل قبل.
+- ترتیب: کمترین تیکت فعال (همان تعریف «مشغول»)، بعد اپراتور عادی پیش از سرپرست، بعد نام کاربری.
+- تیکت **OPEN می‌ماند** — اپراتور هنوز باید شروعش کند، که همان اولین پاسخ SLA است. ثبت در تایم‌لاین: `ASSIGNED` با `user=None` (سیستم).
+- سرپرست همچنان می‌تواند بازتخصیص دهد؛ تیکتِ از قبل تخصیص‌یافته دست نمی‌خورد.
+
+## اعلان لحظه‌ای (Stage 3.2)
+
+`GET /api/v1/operator/events/` — جریان Server-Sent Events؛ جای polling زنگوله را گرفته، نه کنارش (فراخوانی `getNewTicketCount` از فرانت حذف شد؛ endpoint `new-count/` بک‌اند برای سازگاری مانده). منطق در `apps/notifications/stream.py`، کلاینت در `frontend/src/lib/realtime.ts`.
+
+- رویدادها: `ticket.created` (تیکت تازه در واحد)، `ticket.assigned` (به من سپرده شد — از `TicketHistory`)، `heartbeat` (هر `SSE_HEARTBEAT_SECONDS`: وضعیت مشغول/در دسترس من + ثبت حضور)، `reconnect` (جریان بعد از `SSE_MAX_SECONDS` تمام می‌شود). هر رویداد `cursor` دارد و کلاینت در اتصال دوباره `?after_ticket=&after_history=` می‌فرستد تا چیزی جا نماند.
+- **چرا SSE و نه Channels:** یک‌طرفه است، روی همین سرور WSGI بدون Redis و بدون ASGI کار می‌کند. سرور هر `SSE_POLL_SECONDS` با cursor شناسه دیتابیس را نگاه می‌کند — ساده، و بعد از ری‌استارت هم درست.
+- **چرا `fetch` و نه `EventSource`:** `EventSource` هدر Authorization نمی‌فرستد؛ توکن نباید در URL یا کوکی خواندنی برود. `getFreshAccessToken()` در `client.ts` توکن را فقط برای هدر برمی‌گرداند و جای دیگری نگهش نمی‌دارد — چهار بند بخش امنیت دست‌نخورده‌اند. پایان دوره‌ای جریان باعث می‌شود هر اتصال تازه با توکن تازه برود.
+- `renderer_classes` شامل `EventStreamRenderer` است تا `Accept: text/event-stream` با ۴۰۶ رد نشود.
+- **هزینه:** هر جریان باز یک thread سرور را تا `SSE_MAX_SECONDS` نگه می‌دارد. سرور production باید thread pool به اندازهٔ اپراتورهای هم‌زمان به‌علاوهٔ حاشیه داشته باشد — در تصمیم استقرار لحاظ شود.
+- فرانت (`layout.tsx` اپراتور): تیکت تازه ← شمارندهٔ زنگوله، صدای کوتاه (`lib/chime.ts`، Web Audio، بدون فایل صوتی)، toast، و رویداد `TICKET_EVENT` که لیست را دوباره می‌خواند. صدا فقط بعد از اولین کلیک کار می‌کند (قانون مرورگر) و دکمهٔ بی‌صدا دارد. ادمین جریان ندارد (۴۰۳ ← کلاینت برای همیشه قطع می‌کند).
+- تست generator با `sleep`/`clock` جعلی بدون انتظار واقعی اجرا می‌شود (`apps/notifications/tests_stream.py`).
 
 ## پیامک (Stage 3.1)
 
@@ -290,7 +315,7 @@ CANCELLED    → (نهایی)
 
 - **شفافیت هویت در چت** (اگر روزی Live Chat اضافه شد). در تست‌های کاربری هتل‌های ۵ ستاره، کاربرها گیج می‌شدند که با آدم حرف می‌زنند یا ربات. اگر چت اضافه شد، همیشه باید صریح بگوید «اپراتور [نام]» — نه یک حباب چت بی‌نام.
 
-جمع‌بندی همان تحقیق: بیشتر چک‌لیست «ضروری» صنعت را داریم (SLA و معوق، بازخورد مهمان، داشبورد ادمین، تایم‌لاین، پیوست، آفلاین، دوزبانگی مهمان). از دریافت چندکاناله، QR کد اتاق و پیامک پیاده شده‌اند؛ اعلان لحظه‌ای (3.2)، وب‌هوک PMS (3.3) و IPTV (3.4) مانده‌اند.
+جمع‌بندی همان تحقیق: بیشتر چک‌لیست «ضروری» صنعت را داریم (SLA و معوق، بازخورد مهمان، داشبورد ادمین، تایم‌لاین، پیوست، آفلاین، دوزبانگی مهمان). از دریافت چندکاناله، QR کد اتاق و پیامک پیاده شده‌اند؛ اعلان لحظه‌ای (3.2) و تخصیص خودکار و SLA دومرحله‌ای (الهام از Odoo Helpdesk) هم پیاده شده‌اند؛ وب‌هوک PMS (3.3) و IPTV (3.4) مانده‌اند.
 
 ## QR کد اتاق
 

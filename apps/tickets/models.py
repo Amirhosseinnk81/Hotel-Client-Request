@@ -35,6 +35,15 @@ class Category(models.Model):
             "configure, not a separate one for each."
         ),
     )
+    response_sla_minutes = models.PositiveIntegerField(
+        default=10,
+        help_text=(
+            "First-response target, in minutes: how soon an operator must "
+            "start on a ticket (move it to IN_PROGRESS). Separate from "
+            "sla_minutes (the resolution target): a guest mostly wants to "
+            "know quickly that someone is on it. Capped at sla_minutes."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -102,6 +111,38 @@ class Ticket(models.Model):
     @property
     def overdue_since(self):
         return self.sla_deadline if self.is_overdue else None
+
+    # --- First-response SLA -------------------------------------------
+    # The first half of a two-stage SLA: how soon someone starts on the
+    # ticket. "Started" means the first move to IN_PROGRESS, recorded in
+    # first_response_at by save() — so every path that changes the status
+    # (PATCH, the assign endpoint, the Kanban, Django Admin) counts.
+
+    @property
+    def response_sla_minutes(self):
+        category = self.category
+        return min(category.response_sla_minutes, category.sla_minutes)
+
+    @property
+    def response_deadline(self):
+        return self.created_at + timedelta(minutes=self.response_sla_minutes)
+
+    @property
+    def is_response_overdue(self):
+        """Still waiting for anyone to start on it, past the response target."""
+        return (
+            self.status == self.Status.OPEN
+            and self.first_response_at is None
+            and timezone.now() > self.response_deadline
+        )
+
+    def save(self, *args, **kwargs):
+        if self.status == self.Status.IN_PROGRESS and self.first_response_at is None:
+            self.first_response_at = timezone.now()
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None:
+                kwargs["update_fields"] = {*update_fields, "first_response_at"}
+        super().save(*args, **kwargs)
 
     guest = models.ForeignKey(
         Guest,
@@ -173,6 +214,16 @@ class Ticket(models.Model):
     resolved_at = models.DateTimeField(
         null=True,
         blank=True,
+    )
+
+    first_response_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text=(
+            "When the ticket first moved to IN_PROGRESS — the first-response "
+            "SLA's finish line. Set once by save(), never cleared, even if "
+            "the ticket is handed back to OPEN later."
+        ),
     )
 
     # --- Guest experience (Stage 2.3) ----------------------------------

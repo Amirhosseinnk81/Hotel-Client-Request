@@ -16,6 +16,15 @@ class Department(models.Model):
         default=True,
     )
 
+    auto_assign = models.BooleanField(
+        default=False,
+        help_text=(
+            "Hand each new guest ticket straight to the least-busy operator "
+            "of this department who has the panel open. Off: new tickets "
+            "wait for a supervisor to assign them."
+        ),
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )

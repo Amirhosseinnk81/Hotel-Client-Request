@@ -3,22 +3,22 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, LogOut } from "lucide-react";
+import { Bell, LogOut, Volume2, VolumeX } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/auth-context";
+import { toast } from "@/hooks/use-toast";
 import { useRequireRole } from "@/hooks/use-require-role";
-import { getAccessToken, getMyOperatorStatus, getNewTicketCount } from "@/lib/api/client";
+import { getAccessToken, getMyOperatorStatus } from "@/lib/api/client";
 import { decodeAccessToken } from "@/lib/api/tokens";
 import type { OperatorAvailability } from "@/lib/api/types";
 import { formatNumber } from "@/lib/format";
 import { getITViewer, isITStaff } from "@/lib/it-ops";
-
-/** Halfway through the 30-60s range the Stage 2.2 spec asks for. */
-const POLL_INTERVAL_MS = 45_000;
+import { isChimeMuted, playChime, setChimeMuted, unlockChime } from "@/lib/chime";
+import { runOperatorEventStream, TICKET_EVENT, type OperatorEvent } from "@/lib/realtime";
 
 export default function OperatorLayout({ children }: { children: React.ReactNode }) {
   const canRender = useRequireRole(["OPERATOR", "ADMIN"], "/operator/login");
@@ -26,6 +26,7 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
 
   const [myStatus, setMyStatus] = useState<OperatorAvailability | null>(null);
   const [newCount, setNewCount] = useState(0);
+  const [muted, setMuted] = useState(false);
 
   const payload = decodeAccessToken(getAccessToken() ?? "");
   const role = payload?.role ?? null;
@@ -42,7 +43,7 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
   // until every one is RESOLVED or CANCELLED — so this header only shows
   // it; there is nothing to toggle. Re-read on every navigation (e.g. after
   // resolving a ticket and going back to the list) and on every poll tick
-  // below (e.g. a supervisor assigning one in the meantime).
+  // (the live stream's heartbeat below keeps it current in between).
   useEffect(() => {
     if (!canRender || role !== "OPERATOR") return;
 
@@ -60,46 +61,69 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
     };
   }, [canRender, role, pathname]);
 
-  // Lightweight polling for the notification bell (Stage 2.2). Each tick
-  // only asks for tickets created since the previous tick, so counts
-  // accumulate correctly without double-counting. Replaced by real-time
-  // push in Stage 3.2 (Django Channels/SSE).
+  // Stage 3.2 — live notifications (lib/realtime.ts), replacing the Stage
+  // 2.2 polling bell: a new ticket in the department or one assigned to
+  // me arrives within seconds, with a sound and a toast; the heartbeat
+  // keeps the busy/available indicator current without polling. Admins
+  // have no department and get no stream.
   useEffect(() => {
-    // Both endpoints below are operator-only (admins have no department),
-    // so admins simply don't poll.
     if (!canRender || role !== "OPERATOR") return;
 
-    let cancelled = false;
-    let lastChecked = new Date().toISOString();
+    const controller = new AbortController();
+    const announce = () => window.dispatchEvent(new Event(TICKET_EVENT));
 
-    const poll = () => {
-      const since = lastChecked;
-      getNewTicketCount(since)
-        .then((count) => {
-          if (cancelled) return;
-          lastChecked = new Date().toISOString();
-          if (count > 0) setNewCount((prev) => prev + count);
-        })
-        .catch(() => {
-          // Silent — a missed poll just means we check again next interval,
-          // still anchored to the same `since` so nothing is lost.
-        });
-
-      getMyOperatorStatus()
-        .then((status) => {
-          if (!cancelled) setMyStatus(status);
-        })
-        .catch(() => {
-          // Same as above: keep the last known value until the next tick.
-        });
+    const onEvent = (event: OperatorEvent) => {
+      switch (event.type) {
+        case "ticket.created":
+          setNewCount((count) => count + 1);
+          playChime();
+          toast({
+            title: "درخواست جدید",
+            description: `«${event.title}» — اتاق ${event.room_number} · ${event.category_name}`,
+          });
+          announce();
+          break;
+        case "ticket.assigned":
+          playChime();
+          toast({
+            title: "درخواستی به شما سپرده شد",
+            description: event.by
+              ? `«${event.title}» — توسط ${event.by}`
+              : `«${event.title}» — خودکار، بر اساس بار کاری`,
+            variant: "success",
+          });
+          announce();
+          // Now busy — don't wait for the next heartbeat to say so.
+          getMyOperatorStatus()
+            .then(setMyStatus)
+            .catch(() => {});
+          break;
+        case "heartbeat":
+          setMyStatus({ is_available: event.is_available, active_tickets: event.active_tickets });
+          break;
+      }
     };
 
-    const interval = setInterval(poll, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    void runOperatorEventStream(onEvent, controller.signal);
+    return () => controller.abort();
   }, [canRender, role]);
+
+  // Browsers only allow sound after the user has interacted with the page.
+  useEffect(() => {
+    queueMicrotask(() => setMuted(isChimeMuted()));
+    window.addEventListener("pointerdown", unlockChime, { once: true });
+    window.addEventListener("keydown", unlockChime, { once: true });
+    return () => {
+      window.removeEventListener("pointerdown", unlockChime);
+      window.removeEventListener("keydown", unlockChime);
+    };
+  }, []);
+
+  const toggleSound = () => {
+    setChimeMuted(!muted);
+    setMuted(!muted);
+    unlockChime();
+  };
 
   // Operator offline mode: the service worker makes the panel load without
   // a connection. Production only — in `next dev` it would serve stale code.
@@ -177,6 +201,18 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
                 ? "در دسترس"
                 : `مشغول — ${formatNumber(myStatus.active_tickets)} درخواست فعال`}
             </span>
+          )}
+
+          {role === "OPERATOR" && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleSound}
+              aria-label={muted ? "روشن‌کردن صدای اعلان" : "بی‌صدا کردن اعلان"}
+              title={muted ? "صدای اعلان خاموش است" : "صدای اعلان روشن است"}
+            >
+              {muted ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
+            </Button>
           )}
 
           {role === "OPERATOR" && (

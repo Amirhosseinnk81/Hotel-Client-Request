@@ -14,7 +14,7 @@ from apps.core.jwt_cookies import (
     set_refresh_cookie,
 )
 from apps.core.permissions import IsOperator
-from apps.tickets.services import active_ticket_count
+from apps.tickets.services import active_ticket_count, mark_operator_seen
 
 from .serializers import OperatorAvailabilitySerializer, OperatorTokenObtainPairSerializer
 
@@ -134,6 +134,9 @@ class OperatorAvailabilityView(APIView):
     permission_classes = [IsOperator]
 
     def get(self, request):
+        # The panel asks for this on every page change, so it doubles as a
+        # presence signal for auto-assignment (with the live stream's heartbeat).
+        mark_operator_seen(request.user)
         active = active_ticket_count(request.user)
         return Response(
             OperatorAvailabilitySerializer(

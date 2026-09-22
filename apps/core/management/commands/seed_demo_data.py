@@ -141,8 +141,10 @@ class Command(BaseCommand):
     def _seed_departments(self):
         departments = {}
         for entry in DEPARTMENTS:
+            # Auto-assignment on in the demo, so a new guest ticket goes
+            # straight to whichever demo operator has the panel open.
             dept, created = Department.objects.get_or_create(
-                code=entry["code"], defaults={"name": entry["name"]}
+                code=entry["code"], defaults={"name": entry["name"], "auto_assign": True}
             )
             departments[entry["code"]] = dept
             self._log(created, "Department", dept.name)

@@ -30,7 +30,7 @@ import type {
 
 import { enqueue, findCachedTicket, isNetworkError, readThrough } from "@/lib/offline";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
 export class ApiError extends Error {
   status: number;
@@ -113,6 +113,25 @@ async function refreshAccessToken(): Promise<string> {
   const data = (await response.json()) as RefreshResponse;
   setAccessToken(data.access);
   return data.access;
+}
+
+/**
+ * The current access token, refreshed first if it has expired (or `force`
+ * is set, e.g. after a 401). For callers that can't go through apiFetch —
+ * the live event stream (lib/realtime.ts) reads a streaming body. Returns
+ * the token for the Authorization header only; it is still kept nowhere
+ * but the module variable above. Null means "not logged in any more".
+ */
+export async function getFreshAccessToken(force = false): Promise<string | null> {
+  if (!force && currentAccessToken && !isTokenExpired(currentAccessToken)) {
+    return currentAccessToken;
+  }
+  try {
+    return await refreshAccessToken();
+  } catch (err) {
+    if (!isNetworkError(err)) setAccessToken(null);
+    return null;
+  }
 }
 
 /**
@@ -536,18 +555,6 @@ export async function getMyOperatorStatus(): Promise<OperatorAvailability> {
   return readThrough("operator/me/status", () =>
     apiFetch<OperatorAvailability>("/operator/me/status/")
   );
-}
-
-/**
- * Polling-based check for new OPEN tickets in the operator's department
- * since the given ISO timestamp — feeds the notification bell (Stage 2.2).
- * Real-time push replaces this in Stage 3.2.
- */
-export async function getNewTicketCount(sinceIso: string): Promise<number> {
-  const { count } = await apiFetch<{ count: number }>(
-    `/operator/tickets/new-count/?since=${encodeURIComponent(sinceIso)}`
-  );
-  return count;
 }
 
 /** Count of currently-overdue tickets in the operator's department (Stage 2.9). */

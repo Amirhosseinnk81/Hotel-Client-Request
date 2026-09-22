@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Timer } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -173,6 +173,12 @@ export function KanbanBoard({
                             <Badge variant="destructive" className="gap-1 text-xs">
                               <AlertTriangle className="size-3" />
                               معوق
+                            </Badge>
+                          )}
+                          {ticket.is_response_overdue && (
+                            <Badge variant="warning" className="gap-1 text-xs">
+                              <Timer className="size-3" />
+                              بدون پاسخ
                             </Badge>
                           )}
                         </div>

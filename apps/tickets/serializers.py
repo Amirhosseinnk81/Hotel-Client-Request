@@ -33,7 +33,16 @@ class TicketAttachmentSerializer(serializers.ModelSerializer):
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ["id", "name", "code", "is_active", "sla_minutes", "created_at", "updated_at"]
+        fields = [
+            "id",
+            "name",
+            "code",
+            "is_active",
+            "sla_minutes",
+            "response_sla_minutes",
+            "created_at",
+            "updated_at",
+        ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
 
@@ -127,6 +136,8 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
 
     is_overdue = serializers.BooleanField(read_only=True)
     overdue_since = serializers.DateTimeField(read_only=True)
+    response_deadline = serializers.DateTimeField(read_only=True)
+    is_response_overdue = serializers.BooleanField(read_only=True)
 
     attachments = TicketAttachmentSerializer(many=True, read_only=True)
 
@@ -148,6 +159,9 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             "resolution",
             "is_overdue",
             "overdue_since",
+            "first_response_at",
+            "response_deadline",
+            "is_response_overdue",
             "attachments",
             "created_at",
             "updated_at",
@@ -162,6 +176,9 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             "room_number",
             "is_overdue",
             "overdue_since",
+            "first_response_at",
+            "response_deadline",
+            "is_response_overdue",
             "created_at",
             "updated_at",
             "resolved_at",
@@ -372,6 +389,16 @@ class AdminStatsSummarySerializer(serializers.Serializer):
     by_department = AdminStatsByDepartmentSerializer(many=True)
     avg_resolution_minutes = serializers.FloatField(allow_null=True)
     overdue_count = serializers.IntegerField()
+    response_overdue_count = serializers.IntegerField(
+        help_text="Tickets still waiting for anyone to start on them, past their first-response target."
+    )
+    avg_first_response_minutes = serializers.FloatField(allow_null=True)
+    response_sla_met_percent = serializers.FloatField(
+        allow_null=True, help_text="Share of due tickets started within the first-response target."
+    )
+    resolution_sla_met_percent = serializers.FloatField(
+        allow_null=True, help_text="Share of due tickets resolved within the resolution target."
+    )
     resolution_window_days = serializers.IntegerField()
     generated_at = serializers.DateTimeField()
 
@@ -404,5 +431,15 @@ class DepartmentStatsSummarySerializer(serializers.Serializer):
     by_operator = DepartmentStatsByOperatorSerializer(many=True)
     avg_resolution_minutes = serializers.FloatField(allow_null=True)
     overdue_count = serializers.IntegerField()
+    response_overdue_count = serializers.IntegerField(
+        help_text="Tickets still waiting for anyone to start on them, past their first-response target."
+    )
+    avg_first_response_minutes = serializers.FloatField(allow_null=True)
+    response_sla_met_percent = serializers.FloatField(
+        allow_null=True, help_text="Share of due tickets started within the first-response target."
+    )
+    resolution_sla_met_percent = serializers.FloatField(
+        allow_null=True, help_text="Share of due tickets resolved within the resolution target."
+    )
     resolution_window_days = serializers.IntegerField()
     generated_at = serializers.DateTimeField()

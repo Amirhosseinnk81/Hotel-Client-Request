@@ -69,6 +69,8 @@ export interface Category {
   is_active: boolean;
   /** Expected response time in minutes for tickets in this category (Stage 2.9). */
   sla_minutes: number;
+  /** First-response target in minutes (someone starts on it); capped at sla_minutes. */
+  response_sla_minutes: number;
 }
 
 export type TicketStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CANCELLED";
@@ -99,6 +101,14 @@ export interface Ticket {
   /** Operator endpoints only (Stage 2.9) — past category.sla_minutes and still OPEN/IN_PROGRESS. */
   is_overdue?: boolean;
   overdue_since?: string | null;
+  /**
+   * Operator endpoints only — the first-response half of the SLA: when
+   * someone first started on it (moved it to IN_PROGRESS), the deadline for
+   * that, and whether it is still waiting past it.
+   */
+  first_response_at?: string | null;
+  response_deadline?: string;
+  is_response_overdue?: boolean;
   /** Guest-facing fields (Stage 2.3). */
   guest_rating?: number | null;
   guest_feedback?: string;
@@ -201,6 +211,12 @@ export interface AdminStatsSummary {
   }[];
   avg_resolution_minutes: number | null;
   overdue_count: number;
+  /** Still waiting for anyone to start on them, past their first-response target (right now). */
+  response_overdue_count: number;
+  /** Over the resolution window. Null when there was nothing to measure. */
+  avg_first_response_minutes: number | null;
+  response_sla_met_percent: number | null;
+  resolution_sla_met_percent: number | null;
   resolution_window_days: number;
   generated_at: string;
 }
@@ -224,6 +240,12 @@ export interface DepartmentStatsSummary {
   by_operator: DepartmentOperatorLoad[];
   avg_resolution_minutes: number | null;
   overdue_count: number;
+  /** Still waiting for anyone to start on them, past their first-response target (right now). */
+  response_overdue_count: number;
+  /** Over the resolution window. Null when there was nothing to measure. */
+  avg_first_response_minutes: number | null;
+  response_sla_met_percent: number | null;
+  resolution_sla_met_percent: number | null;
   resolution_window_days: number;
   generated_at: string;
 }

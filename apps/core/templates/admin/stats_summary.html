@@ -62,6 +62,32 @@
       {% blocktranslate with days=stats.resolution_window_days %}Avg. resolution time (last {{ days }} days){% endblocktranslate %}
     </div>
   </div>
+  <div class="stats-card overdue">
+    <div class="stats-card-number">{{ stats.response_overdue_count }}</div>
+    <div class="stats-card-label">{% translate 'Waiting for a first response' %}</div>
+  </div>
+  <div class="stats-card">
+    <div class="stats-card-number">
+      {% if stats.avg_first_response_minutes is not None %}
+        {{ stats.avg_first_response_minutes }} {% translate 'min' %}
+      {% else %}
+        &mdash;
+      {% endif %}
+    </div>
+    <div class="stats-card-label">{% translate 'Avg. time to first response' %}</div>
+  </div>
+  <div class="stats-card">
+    <div class="stats-card-number">
+      {% if stats.response_sla_met_percent is not None %}{{ stats.response_sla_met_percent }}%{% else %}&mdash;{% endif %}
+    </div>
+    <div class="stats-card-label">{% translate 'First-response SLA met' %}</div>
+  </div>
+  <div class="stats-card">
+    <div class="stats-card-number">
+      {% if stats.resolution_sla_met_percent is not None %}{{ stats.resolution_sla_met_percent }}%{% else %}&mdash;{% endif %}
+    </div>
+    <div class="stats-card-label">{% translate 'Resolution SLA met' %}</div>
+  </div>
 </div>
 
 <h2>{% translate 'By department' %}</h2>

@@ -10,13 +10,11 @@ import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/auth-context";
 import { useRequireRole } from "@/hooks/use-require-role";
-import {
-  getAccessToken,
-  getNewTicketCount,
-  getOperatorColleagues,
-  updateOperatorAvailability,
-} from "@/lib/api/client";
+import { getAccessToken, getMyOperatorStatus, getNewTicketCount } from "@/lib/api/client";
 import { decodeAccessToken } from "@/lib/api/tokens";
+import type { OperatorAvailability } from "@/lib/api/types";
+import { formatNumber } from "@/lib/format";
+import { getITViewer, isITStaff } from "@/lib/it-ops";
 
 /** Halfway through the 30-60s range the Stage 2.2 spec asks for. */
 const POLL_INTERVAL_MS = 45_000;
@@ -25,13 +23,11 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
   const canRender = useRequireRole(["OPERATOR", "ADMIN"], "/operator/login");
   const { logout } = useAuth();
 
-  const [isAvailable, setIsAvailable] = useState<boolean | null>(null);
-  const [isTogglingAvailability, setIsTogglingAvailability] = useState(false);
+  const [myStatus, setMyStatus] = useState<OperatorAvailability | null>(null);
   const [newCount, setNewCount] = useState(0);
 
   const payload = decodeAccessToken(getAccessToken() ?? "");
   const role = payload?.role ?? null;
-  const userId = payload?.user_id ?? null;
 
   const pathname = usePathname();
   const navClass = (active: boolean) =>
@@ -41,30 +37,35 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
         : "text-muted-foreground hover:text-foreground"
     }`;
 
-  // The colleagues endpoint (department roster) is the only place that
-  // already exposes is_available, so it doubles as "get my own status" —
-  // no separate "me" endpoint needed. Only OPERATOR accounts appear in it,
-  // so the toggle simply stays hidden for ADMIN.
+  // Availability is derived on the server from assigned tickets — busy
+  // until every one is RESOLVED or CANCELLED — so this header only shows
+  // it; there is nothing to toggle. Re-read on every navigation (e.g. after
+  // resolving a ticket and going back to the list) and on every poll tick
+  // below (e.g. a supervisor assigning one in the meantime).
   useEffect(() => {
-    if (!canRender || role !== "OPERATOR" || userId === null) return;
+    if (!canRender || role !== "OPERATOR") return;
 
-    getOperatorColleagues()
-      .then((colleagues) => {
-        const me = colleagues.find((colleague) => colleague.id === userId);
-        if (me) setIsAvailable(me.is_available);
+    let cancelled = false;
+    getMyOperatorStatus()
+      .then((status) => {
+        if (!cancelled) setMyStatus(status);
       })
       .catch(() => {
-        // Non-critical — the toggle just stays hidden until it can load.
+        // Non-critical — the indicator keeps its last known value.
       });
-  }, [canRender, role, userId]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [canRender, role, pathname]);
 
   // Lightweight polling for the notification bell (Stage 2.2). Each tick
   // only asks for tickets created since the previous tick, so counts
   // accumulate correctly without double-counting. Replaced by real-time
   // push in Stage 3.2 (Django Channels/SSE).
   useEffect(() => {
-    // The new-ticket count endpoint is operator-only (admins have no
-    // department), so admins simply don't poll.
+    // Both endpoints below are operator-only (admins have no department),
+    // so admins simply don't poll.
     if (!canRender || role !== "OPERATOR") return;
 
     let cancelled = false;
@@ -82,6 +83,14 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
           // Silent — a missed poll just means we check again next interval,
           // still anchored to the same `since` so nothing is lost.
         });
+
+      getMyOperatorStatus()
+        .then((status) => {
+          if (!cancelled) setMyStatus(status);
+        })
+        .catch(() => {
+          // Same as above: keep the last known value until the next tick.
+        });
     };
 
     const interval = setInterval(poll, POLL_INTERVAL_MS);
@@ -90,20 +99,6 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
       clearInterval(interval);
     };
   }, [canRender, role]);
-
-  const handleToggleAvailability = async () => {
-    if (isAvailable === null || isTogglingAvailability) return;
-    setIsTogglingAvailability(true);
-    try {
-      const result = await updateOperatorAvailability(!isAvailable);
-      setIsAvailable(result.is_available);
-    } catch {
-      // Silent failure: the toggle simply won't have moved, which is
-      // itself accurate feedback that nothing changed.
-    } finally {
-      setIsTogglingAvailability(false);
-    }
-  };
 
   if (!canRender) {
     return (
@@ -139,41 +134,45 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
           <Link href="/operator/summary" className={navClass(pathname === "/operator/summary")}>
             خلاصه
           </Link>
+          {isITStaff(getITViewer()) && (
+            <Link href="/operator/it" className={navClass(pathname === "/operator/it")}>
+              IT
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
-          {role === "OPERATOR" && isAvailable !== null && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              disabled={isTogglingAvailability}
-              onClick={handleToggleAvailability}
+          {role === "OPERATOR" && myStatus !== null && (
+            <span
+              className="flex items-center gap-1.5 border px-3 py-1 text-xs text-muted-foreground"
+              title="خودکار: تا وقتی درخواست باز یا در حال بررسی‌ای به شما اختصاص دارد، مشغول نمایش داده می‌شوید."
             >
               <span
                 aria-hidden
                 className={`size-2 rounded-full ${
-                  isAvailable ? "bg-emerald-500" : "bg-muted-foreground/50"
+                  myStatus.is_available ? "bg-emerald-500" : "bg-muted-foreground/50"
                 }`}
               />
-              {isAvailable ? "در دسترس" : "مشغول"}
-            </Button>
+              {myStatus.is_available
+                ? "در دسترس"
+                : `مشغول — ${formatNumber(myStatus.active_tickets)} درخواست فعال`}
+            </span>
           )}
 
           {role === "OPERATOR" && (
-          <Button variant="ghost" size="sm" className="relative gap-1.5" asChild>
-            <Link href="/operator" onClick={() => setNewCount(0)}>
-              <Bell className="size-3.5" />
-              {newCount > 0 && (
-                <Badge
-                  variant="destructive"
-                  className="absolute -end-1 -top-1 h-4 min-w-4 justify-center rounded-full p-0 text-[10px]"
-                >
-                  {newCount > 9 ? "۹+" : newCount}
-                </Badge>
-              )}
-            </Link>
-          </Button>
+            <Button variant="ghost" size="sm" className="relative gap-1.5" asChild>
+              <Link href="/operator" onClick={() => setNewCount(0)}>
+                <Bell className="size-3.5" />
+                {newCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -end-1 -top-1 h-4 min-w-4 justify-center rounded-full p-0 text-[10px]"
+                  >
+                    {newCount > 9 ? "۹+" : newCount}
+                  </Badge>
+                )}
+              </Link>
+            </Button>
           )}
 
           <ThemeToggle />

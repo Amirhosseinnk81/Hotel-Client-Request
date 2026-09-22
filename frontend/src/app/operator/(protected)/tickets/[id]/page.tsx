@@ -55,6 +55,7 @@ import {
   ApiError,
 } from "@/lib/api/client";
 import { canTriage, canWorkOnTicket, getOperatorViewer } from "@/lib/ticket-permissions";
+import { formatNumber } from "@/lib/format";
 import type {
   OperatorColleague,
   Ticket,
@@ -496,6 +497,11 @@ export default function OperatorTicketDetailPage({
                               title={colleague.is_available ? "در دسترس" : "مشغول"}
                             />
                             {colleague.username}
+                            {colleague.active_tickets > 0 && (
+                              <span className="text-xs text-muted-foreground">
+                                ({formatNumber(colleague.active_tickets)} فعال)
+                              </span>
+                            )}
                             {colleague.id === currentUserId ? " (خودم)" : ""}
                           </span>
                         </SelectItem>

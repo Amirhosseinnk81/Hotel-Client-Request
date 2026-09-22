@@ -1,4 +1,7 @@
+from drf_spectacular.utils import extend_schema_serializer
 from rest_framework import serializers
+
+from apps.core.permissions import is_it_operator, is_it_staff
 
 from .models import (
     DepartmentRequest,
@@ -10,18 +13,38 @@ from .models import (
 )
 
 
+def validate_it_assignee(user, allow_admin=False):
+    """
+    Work can only be handed to IT operators — never to a housekeeping
+    operator, a guest, or (for day-to-day work) an admin. Project and goal
+    owners may also be admins, since hotel management can own those.
+    """
+    if user is None:
+        return user
+    allowed = is_it_staff(user) if allow_admin else is_it_operator(user)
+    if not allowed:
+        raise serializers.ValidationError(
+            "Can only be assigned to IT staff." if allow_admin
+            else "Can only be assigned to an IT operator."
+        )
+    return user
+
+
 class ProcessSerializer(serializers.ModelSerializer):
     process_type_display = serializers.CharField(
         source="get_process_type_display", read_only=True
     )
-    department_display = serializers.CharField(
-        source="get_department_display", read_only=True
+    department_name = serializers.CharField(
+        source="department.name", read_only=True, default=None
     )
     frequency_display = serializers.CharField(
         source="get_frequency_display", read_only=True
     )
     status_display = serializers.CharField(source="get_status_display", read_only=True)
-    responsible_name = serializers.SerializerMethodField()
+    responsible_username = serializers.CharField(
+        source="responsible.username", read_only=True, default=None
+    )
+    is_overdue = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = Process
@@ -32,22 +55,23 @@ class ProcessSerializer(serializers.ModelSerializer):
             "process_type",
             "process_type_display",
             "department",
-            "department_display",
+            "department_name",
             "frequency",
             "frequency_display",
             "status",
             "status_display",
             "responsible",
-            "responsible_name",
+            "responsible_username",
             "last_done_at",
             "next_due_at",
+            "is_overdue",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
-    def get_responsible_name(self, obj):
-        return str(obj.responsible) if obj.responsible_id else None
+    def validate_responsible(self, value):
+        return validate_it_assignee(value)
 
 
 class ProjectSerializer(serializers.ModelSerializer):
@@ -55,7 +79,9 @@ class ProjectSerializer(serializers.ModelSerializer):
     priority_display = serializers.CharField(
         source="get_priority_display", read_only=True
     )
-    owner_name = serializers.SerializerMethodField()
+    owner_username = serializers.CharField(
+        source="owner.username", read_only=True, default=None
+    )
 
     class Meta:
         model = Project
@@ -68,27 +94,39 @@ class ProjectSerializer(serializers.ModelSerializer):
             "priority",
             "priority_display",
             "owner",
-            "owner_name",
+            "owner_username",
             "start_date",
             "due_date",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
-    def get_owner_name(self, obj):
-        return str(obj.owner) if obj.owner_id else None
+    def validate_owner(self, value):
+        return validate_it_assignee(value, allow_admin=True)
+
+    def validate(self, attrs):
+        start = attrs.get("start_date", getattr(self.instance, "start_date", None))
+        due = attrs.get("due_date", getattr(self.instance, "due_date", None))
+        if start and due and due < start:
+            raise serializers.ValidationError({"due_date": "Due date cannot be before the start date."})
+        return attrs
 
 
+# Named explicitly: with COMPONENT_SPLIT_REQUEST the departments app's
+# DepartmentSerializer already produces a "DepartmentRequest" component.
+@extend_schema_serializer(component_name="ITDepartmentRequest")
 class DepartmentRequestSerializer(serializers.ModelSerializer):
-    requesting_department_display = serializers.CharField(
-        source="get_requesting_department_display", read_only=True
+    requesting_department_name = serializers.CharField(
+        source="requesting_department.name", read_only=True, default=None
     )
     priority_display = serializers.CharField(
         source="get_priority_display", read_only=True
     )
     status_display = serializers.CharField(source="get_status_display", read_only=True)
-    assigned_to_name = serializers.SerializerMethodField()
+    assigned_to_username = serializers.CharField(
+        source="assigned_to.username", read_only=True, default=None
+    )
 
     class Meta:
         model = DepartmentRequest
@@ -97,22 +135,27 @@ class DepartmentRequestSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "requesting_department",
-            "requesting_department_display",
+            "requesting_department_name",
             "requested_by_name",
             "priority",
             "priority_display",
             "status",
             "status_display",
             "assigned_to",
-            "assigned_to_name",
+            "assigned_to_username",
             "resolved_at",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        # resolved_at follows the status (DepartmentRequest.save()).
+        read_only_fields = ["id", "resolved_at", "created_at", "updated_at"]
+        extra_kwargs = {
+            # Nullable in the DB only for legacy rows; new requests need one.
+            "requesting_department": {"required": True, "allow_null": False},
+        }
 
-    def get_assigned_to_name(self, obj):
-        return str(obj.assigned_to) if obj.assigned_to_id else None
+    def validate_assigned_to(self, value):
+        return validate_it_assignee(value)
 
 
 class GoalSerializer(serializers.ModelSerializer):
@@ -120,8 +163,12 @@ class GoalSerializer(serializers.ModelSerializer):
         source="get_goal_type_display", read_only=True
     )
     status_display = serializers.CharField(source="get_status_display", read_only=True)
-    owner_name = serializers.SerializerMethodField()
-    related_project_title = serializers.SerializerMethodField()
+    owner_username = serializers.CharField(
+        source="owner.username", read_only=True, default=None
+    )
+    related_project_title = serializers.CharField(
+        source="related_project.title", read_only=True, default=None
+    )
 
     class Meta:
         model = Goal
@@ -135,19 +182,16 @@ class GoalSerializer(serializers.ModelSerializer):
             "status_display",
             "target_date",
             "owner",
-            "owner_name",
+            "owner_username",
             "related_project",
             "related_project_title",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at"]
 
-    def get_owner_name(self, obj):
-        return str(obj.owner) if obj.owner_id else None
-
-    def get_related_project_title(self, obj):
-        return obj.related_project.title if obj.related_project_id else None
+    def validate_owner(self, value):
+        return validate_it_assignee(value, allow_admin=True)
 
 
 class TaskSerializer(serializers.ModelSerializer):
@@ -155,8 +199,12 @@ class TaskSerializer(serializers.ModelSerializer):
     priority_display = serializers.CharField(
         source="get_priority_display", read_only=True
     )
-    assigned_to_name = serializers.SerializerMethodField()
-    assigned_by_name = serializers.SerializerMethodField()
+    assigned_to_username = serializers.CharField(
+        source="assigned_to.username", read_only=True, default=None
+    )
+    assigned_by_username = serializers.CharField(
+        source="assigned_by.username", read_only=True, default=None
+    )
 
     class Meta:
         model = Task
@@ -169,9 +217,9 @@ class TaskSerializer(serializers.ModelSerializer):
             "priority",
             "priority_display",
             "assigned_to",
-            "assigned_to_name",
+            "assigned_to_username",
             "assigned_by",
-            "assigned_by_name",
+            "assigned_by_username",
             "due_date",
             "related_process",
             "related_project",
@@ -179,17 +227,17 @@ class TaskSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        # assigned_by is whoever created the task (set by TaskViewSet).
+        read_only_fields = ["id", "assigned_by", "created_at", "updated_at"]
 
-    def get_assigned_to_name(self, obj):
-        return str(obj.assigned_to) if obj.assigned_to_id else None
-
-    def get_assigned_by_name(self, obj):
-        return str(obj.assigned_by) if obj.assigned_by_id else None
+    def validate_assigned_to(self, value):
+        return validate_it_assignee(value)
 
 
 class RoomDailyStatSerializer(serializers.ModelSerializer):
-    occupancy_rate = serializers.ReadOnlyField()
+    """Read-only: every figure is computed from Room data (it_ops.services)."""
+
+    occupancy_rate = serializers.FloatField(read_only=True)
 
     class Meta:
         model = RoomDailyStat
@@ -204,4 +252,33 @@ class RoomDailyStatSerializer(serializers.ModelSerializer):
             "notes",
             "recorded_at",
         ]
-        read_only_fields = ["recorded_at"]
+        read_only_fields = fields
+
+
+class RoomStatsSnapshotRequestSerializer(serializers.Serializer):
+    """POST /it-ops/room-stats/snapshot/ — which day to (re)compute; default today."""
+
+    date = serializers.DateField(required=False)
+
+
+class RoomStatsTodaySerializer(serializers.Serializer):
+    date = serializers.DateField()
+    total_rooms = serializers.IntegerField()
+    occupied_rooms = serializers.IntegerField()
+    vacant_rooms = serializers.IntegerField()
+    out_of_order_rooms = serializers.IntegerField()
+    occupancy_rate = serializers.SerializerMethodField()
+
+    def get_occupancy_rate(self, obj) -> float:
+        total = obj["total_rooms"]
+        return round(obj["occupied_rooms"] / total * 100, 1) if total else 0
+
+
+class TodayDashboardSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    generated_at = serializers.DateTimeField()
+    tasks_due_or_overdue = TaskSerializer(many=True)
+    processes_due_or_overdue = ProcessSerializer(many=True)
+    open_department_requests = DepartmentRequestSerializer(many=True)
+    room_stats_today = RoomStatsTodaySerializer()
+    my_open_tasks_count = serializers.IntegerField()

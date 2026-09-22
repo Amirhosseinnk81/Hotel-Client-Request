@@ -4,6 +4,7 @@ from django.db import transaction
 from apps.accounts.models import User
 from apps.departments.models import Department
 from apps.guests.models import Guest
+from apps.it_ops.models import Process
 from apps.rooms.models import Room
 from apps.tickets.models import Category, QuickRequestTemplate
 
@@ -13,6 +14,10 @@ DEPARTMENTS = [
     {"name": "فنی و تعمیرات", "code": "MAINTENANCE"},
     {"name": "خدمات اتاق و رستوران", "code": "ROOM_SERVICE"},
     {"name": "کنسیرژ", "code": "CONCIERGE"},
+    # A normal department (guests can send it tech problems like any other),
+    # and its operators are also the IT staff of the IT Ops module
+    # (settings.IT_DEPARTMENT_CODE).
+    {"name": "فناوری اطلاعات", "code": "IT"},
 ]
 
 # (name, code, sla_minutes, department_code) — department_code is only used
@@ -63,6 +68,7 @@ OPERATORS = [
     ("op_maintenance", "ZZzz123!@#", "MAINTENANCE"),
     ("op_roomservice", "ZZzz123!@#", "ROOM_SERVICE"),
     ("op_concierge", "ZZzz123!@#", "CONCIERGE"),
+    ("op_it", "ZZzz123!@#", "IT"),
 ]
 
 # (username, password, department_code) — one supervisor per department,
@@ -75,7 +81,15 @@ SUPERVISORS = [
     ("sup_maintenance", "ZZzz123!@#", "MAINTENANCE"),
     ("sup_roomservice", "ZZzz123!@#", "ROOM_SERVICE"),
     ("sup_concierge", "ZZzz123!@#", "CONCIERGE"),
+    ("sup_it", "ZZzz123!@#", "IT"),
 ]
+# IT Ops sample processes: (title, process_type, frequency, responsible).
+# Recurring ones get next_due_at automatically (Process.save()).
+IT_PROCESSES = [
+    ("بکاپ روزانهٔ سرور", "PERIODIC_SERVICE", "DAILY", "op_it"),
+    ("بررسی ماهانهٔ UPS و رک شبکه", "PERIODIC_CHECK", "MONTHLY", "sup_it"),
+]
+
 ADMIN_USERNAME = "hotel_admin"
 ADMIN_PASSWORD = "Demo!Pass123"
 
@@ -93,8 +107,9 @@ GUESTS = [
 class Command(BaseCommand):
     help = (
         "Seeds demo data for local/staging use: departments, categories "
-        "(with SLA minutes), rooms, one admin + one operator per "
-        "department, sample guests, and quick-request templates. Safe to "
+        "(with SLA minutes), rooms, one admin + one operator and one "
+        "supervisor per department (including IT), sample guests, "
+        "quick-request templates and sample IT Ops processes. Safe to "
         "run more than once — every record is get_or_create'd, so re-runs "
         "only fill in whatever's still missing."
     )
@@ -117,6 +132,7 @@ class Command(BaseCommand):
         self._seed_users(departments, options["reset_passwords"])
         self._seed_guests()
         self._seed_quick_templates(departments, categories)
+        self._seed_it_processes()
 
         self.stdout.write(self.style.SUCCESS("Demo data seeded."))
 
@@ -188,7 +204,6 @@ class Command(BaseCommand):
                 defaults={
                     "role": User.Role.OPERATOR,
                     "department": departments[dept_code],
-                    "is_available": True,
                 },
             )
             if created or reset_passwords:
@@ -265,6 +280,20 @@ class Command(BaseCommand):
                 },
             )
             self._log(created, "Quick template", template.title)
+
+    # -- IT Ops -------------------------------------------------------------
+
+    def _seed_it_processes(self):
+        for title, process_type, frequency, username in IT_PROCESSES:
+            process, created = Process.objects.get_or_create(
+                title=title,
+                defaults={
+                    "process_type": process_type,
+                    "frequency": frequency,
+                    "responsible": User.objects.filter(username=username).first(),
+                },
+            )
+            self._log(created, "IT process", process.title)
 
     # -- helpers -------------------------------------------------------------
 

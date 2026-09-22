@@ -507,6 +507,1167 @@ paths:
                 - success
                 - status
           description: ''
+  /api/v1/it-ops/department-requests/:
+    get:
+      operationId: api_v1_it_ops_department_requests_list
+      parameters:
+      - in: query
+        name: assigned_to
+        schema:
+          type: number
+      - in: query
+        name: department
+        schema:
+          type: number
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: priority
+        schema:
+          type: string
+          enum:
+          - CRITICAL
+          - HIGH
+          - LOW
+          - MEDIUM
+        description: |-
+          * `LOW` - Low
+          * `MEDIUM` - Medium
+          * `HIGH` - High
+          * `CRITICAL` - Critical
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - COMPLETED
+          - IN_PROGRESS
+          - PENDING
+          - REJECTED
+        description: |-
+          * `PENDING` - Pending
+          * `IN_PROGRESS` - In Progress
+          * `COMPLETED` - Completed
+          * `REJECTED` - Rejected
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedITDepartmentRequestList'
+          description: ''
+    post:
+      operationId: api_v1_it_ops_department_requests_create
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ITDepartmentRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ITDepartmentRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ITDepartmentRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ITDepartmentRequest'
+          description: ''
+  /api/v1/it-ops/department-requests/{id}/:
+    get:
+      operationId: api_v1_it_ops_department_requests_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this department request.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ITDepartmentRequest'
+          description: ''
+    put:
+      operationId: api_v1_it_ops_department_requests_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this department request.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ITDepartmentRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ITDepartmentRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ITDepartmentRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ITDepartmentRequest'
+          description: ''
+    patch:
+      operationId: api_v1_it_ops_department_requests_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this department request.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedITDepartmentRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedITDepartmentRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedITDepartmentRequestRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ITDepartmentRequest'
+          description: ''
+    delete:
+      operationId: api_v1_it_ops_department_requests_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this department request.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/it-ops/goals/:
+    get:
+      operationId: api_v1_it_ops_goals_list
+      parameters:
+      - in: query
+        name: goal_type
+        schema:
+          type: string
+          enum:
+          - LONG_TERM
+          - SHORT_TERM
+        description: |-
+          * `SHORT_TERM` - Short Term
+          * `LONG_TERM` - Long Term
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: owner
+        schema:
+          type: number
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: related_project
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - ACHIEVED
+          - IN_PROGRESS
+          - MISSED
+          - NOT_STARTED
+        description: |-
+          * `NOT_STARTED` - Not Started
+          * `IN_PROGRESS` - In Progress
+          * `ACHIEVED` - Achieved
+          * `MISSED` - Missed
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedGoalList'
+          description: ''
+    post:
+      operationId: api_v1_it_ops_goals_create
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoalRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoalRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+          description: ''
+  /api/v1/it-ops/goals/{id}/:
+    get:
+      operationId: api_v1_it_ops_goals_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this goal.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+          description: ''
+    put:
+      operationId: api_v1_it_ops_goals_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this goal.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoalRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoalRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoalRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+          description: ''
+    patch:
+      operationId: api_v1_it_ops_goals_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this goal.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGoalRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGoalRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGoalRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Goal'
+          description: ''
+    delete:
+      operationId: api_v1_it_ops_goals_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this goal.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/it-ops/processes/:
+    get:
+      operationId: api_v1_it_ops_processes_list
+      parameters:
+      - in: query
+        name: department
+        schema:
+          type: integer
+      - in: query
+        name: due_after
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: due_before
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: frequency
+        schema:
+          type: string
+          enum:
+          - DAILY
+          - MONTHLY
+          - NONE
+          - QUARTERLY
+          - WEEKLY
+          - YEARLY
+        description: |-
+          * `NONE` - N/A
+          * `DAILY` - Daily
+          * `WEEKLY` - Weekly
+          * `MONTHLY` - Monthly
+          * `QUARTERLY` - Quarterly
+          * `YEARLY` - Yearly
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: process_type
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - PASSIVE
+          - PERIODIC_CHECK
+          - PERIODIC_SERVICE
+        description: |-
+          * `ACTIVE` - Active
+          * `PASSIVE` - Passive
+          * `PERIODIC_CHECK` - Periodic Check
+          * `PERIODIC_SERVICE` - Periodic Service
+      - in: query
+        name: responsible
+        schema:
+          type: number
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - ARCHIVED
+          - PAUSED
+        description: |-
+          * `ACTIVE` - Active
+          * `PAUSED` - Paused
+          * `ARCHIVED` - Archived
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProcessList'
+          description: ''
+    post:
+      operationId: api_v1_it_ops_processes_create
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProcessRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProcessRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Process'
+          description: ''
+  /api/v1/it-ops/processes/{id}/:
+    get:
+      operationId: api_v1_it_ops_processes_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this process.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Process'
+          description: ''
+    put:
+      operationId: api_v1_it_ops_processes_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this process.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProcessRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProcessRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProcessRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Process'
+          description: ''
+    patch:
+      operationId: api_v1_it_ops_processes_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this process.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProcessRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProcessRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProcessRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Process'
+          description: ''
+    delete:
+      operationId: api_v1_it_ops_processes_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this process.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/it-ops/processes/{id}/mark-done/:
+    post:
+      operationId: api_v1_it_ops_processes_mark_done_create
+      description: |-
+        POST /it-ops/processes/{id}/mark-done/ — the process was just carried
+        out. Sets last_done_at to now; for a recurring process next_due_at
+        moves one period on (Process.save()).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this process.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Process'
+          description: ''
+  /api/v1/it-ops/projects/:
+    get:
+      operationId: api_v1_it_ops_projects_list
+      parameters:
+      - in: query
+        name: due_after
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: due_before
+        schema:
+          type: string
+          format: date
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - in: query
+        name: owner
+        schema:
+          type: number
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: priority
+        schema:
+          type: string
+          enum:
+          - CRITICAL
+          - HIGH
+          - LOW
+          - MEDIUM
+        description: |-
+          * `LOW` - Low
+          * `MEDIUM` - Medium
+          * `HIGH` - High
+          * `CRITICAL` - Critical
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - CANCELLED
+          - DONE
+          - IN_PROGRESS
+          - ON_HOLD
+          - PLANNING
+        description: |-
+          * `PLANNING` - Planning
+          * `IN_PROGRESS` - In Progress
+          * `ON_HOLD` - On Hold
+          * `DONE` - Done
+          * `CANCELLED` - Cancelled
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedProjectList'
+          description: ''
+    post:
+      operationId: api_v1_it_ops_projects_create
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+  /api/v1/it-ops/projects/{id}/:
+    get:
+      operationId: api_v1_it_ops_projects_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+    put:
+      operationId: api_v1_it_ops_projects_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ProjectRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+    patch:
+      operationId: api_v1_it_ops_projects_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProjectRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+          description: ''
+    delete:
+      operationId: api_v1_it_ops_projects_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this project.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/it-ops/room-stats/:
+    get:
+      operationId: api_v1_it_ops_room_stats_list
+      description: |-
+        Daily occupancy snapshots. Read-only: the figures are computed from the
+        real Room data, never entered by hand (the old manual create/edit is
+        gone). New rows come from the nightly `snapshot_room_stats` command or
+        from the snapshot action below.
+      parameters:
+      - in: query
+        name: date_from
+        schema:
+          type: string
+          format: date
+      - in: query
+        name: date_to
+        schema:
+          type: string
+          format: date
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedRoomDailyStatList'
+          description: ''
+  /api/v1/it-ops/room-stats/{id}/:
+    get:
+      operationId: api_v1_it_ops_room_stats_retrieve
+      description: |-
+        Daily occupancy snapshots. Read-only: the figures are computed from the
+        real Room data, never entered by hand (the old manual create/edit is
+        gone). New rows come from the nightly `snapshot_room_stats` command or
+        from the snapshot action below.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this room daily stat.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomDailyStat'
+          description: ''
+  /api/v1/it-ops/room-stats/snapshot/:
+    post:
+      operationId: api_v1_it_ops_room_stats_snapshot_create
+      description: |-
+        POST /it-ops/room-stats/snapshot/ — (re)compute one day's row now.
+        Supervisor only. `date` defaults to today; a past day is rebuilt
+        from the room status log. A future day is refused.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoomStatsSnapshotRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RoomStatsSnapshotRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RoomStatsSnapshotRequestRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoomDailyStat'
+          description: ''
+  /api/v1/it-ops/tasks/:
+    get:
+      operationId: api_v1_it_ops_tasks_list
+      parameters:
+      - in: query
+        name: assigned_to
+        schema:
+          type: number
+      - in: query
+        name: due_after
+        schema:
+          type: string
+          format: date-time
+      - in: query
+        name: due_before
+        schema:
+          type: string
+          format: date-time
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: priority
+        schema:
+          type: string
+          enum:
+          - CRITICAL
+          - HIGH
+          - LOW
+          - MEDIUM
+        description: |-
+          * `LOW` - Low
+          * `MEDIUM` - Medium
+          * `HIGH` - High
+          * `CRITICAL` - Critical
+      - in: query
+        name: related_process
+        schema:
+          type: integer
+      - in: query
+        name: related_project
+        schema:
+          type: integer
+      - in: query
+        name: related_request
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - BLOCKED
+          - DONE
+          - IN_PROGRESS
+          - TODO
+        description: |-
+          * `TODO` - To Do
+          * `IN_PROGRESS` - In Progress
+          * `DONE` - Done
+          * `BLOCKED` - Blocked
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedTaskList'
+          description: ''
+    post:
+      operationId: api_v1_it_ops_tasks_create
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+  /api/v1/it-ops/tasks/{id}/:
+    get:
+      operationId: api_v1_it_ops_tasks_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this task.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+    put:
+      operationId: api_v1_it_ops_tasks_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this task.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TaskRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+    patch:
+      operationId: api_v1_it_ops_tasks_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this task.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTaskRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+          description: ''
+    delete:
+      operationId: api_v1_it_ops_tasks_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this task.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/it-ops/today/:
+    get:
+      operationId: api_v1_it_ops_today_retrieve
+      description: GET /api/v1/it-ops/today/ — see it_ops.services.compute_today_dashboard.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodayDashboard'
+          description: ''
   /api/v1/operator/colleagues/:
     get:
       operationId: api_v1_operator_colleagues_list
@@ -543,53 +1704,18 @@ paths:
                   $ref: '#/components/schemas/OperatorColleague'
           description: ''
   /api/v1/operator/me/status/:
-    put:
-      operationId: api_v1_operator_me_status_update
+    get:
+      operationId: api_v1_operator_me_status_retrieve
       description: |-
-        PATCH /api/v1/operator/me/status/ — the logged-in operator toggles
-        their own 'available / busy' status. Deliberately scoped to "me": an
-        operator cannot flip a colleague's availability through this endpoint.
+        GET /api/v1/operator/me/status/ — the logged-in operator's own
+        available/busy status, and how many active tickets they hold.
+
+        This used to be a PATCH, a manual toggle. Availability is now derived
+        from assignments (busy until every assigned ticket is RESOLVED or
+        CANCELLED), so there is nothing to set: a PATCH is answered 405.
+        Deliberately scoped to "me", like before.
       tags:
       - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OperatorAvailabilityRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/OperatorAvailabilityRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/OperatorAvailabilityRequest'
-      security:
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/OperatorAvailability'
-          description: ''
-    patch:
-      operationId: api_v1_operator_me_status_partial_update
-      description: |-
-        PATCH /api/v1/operator/me/status/ — the logged-in operator toggles
-        their own 'available / busy' status. Deliberately scoped to "me": an
-        operator cannot flip a colleague's availability through this endpoint.
-      tags:
-      - api
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedOperatorAvailabilityRequest'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedOperatorAvailabilityRequest'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedOperatorAvailabilityRequest'
       security:
       - jwtAuth: []
       responses:
@@ -1728,6 +2854,111 @@ components:
       - generated_at
       - overdue_count
       - resolution_window_days
+    FrequencyEnum:
+      enum:
+      - NONE
+      - DAILY
+      - WEEKLY
+      - MONTHLY
+      - QUARTERLY
+      - YEARLY
+      type: string
+      description: |-
+        * `NONE` - N/A
+        * `DAILY` - Daily
+        * `WEEKLY` - Weekly
+        * `MONTHLY` - Monthly
+        * `QUARTERLY` - Quarterly
+        * `YEARLY` - Yearly
+    Goal:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        goal_type:
+          $ref: '#/components/schemas/GoalTypeEnum'
+        goal_type_display:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/ITGoalStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        target_date:
+          type: string
+          format: date
+          nullable: true
+        owner:
+          type: integer
+          nullable: true
+        owner_username:
+          type: string
+          readOnly: true
+        related_project:
+          type: integer
+          nullable: true
+        related_project_title:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - goal_type
+      - goal_type_display
+      - id
+      - owner_username
+      - related_project_title
+      - status_display
+      - title
+      - updated_at
+    GoalRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        goal_type:
+          $ref: '#/components/schemas/GoalTypeEnum'
+        status:
+          $ref: '#/components/schemas/ITGoalStatusEnum'
+        target_date:
+          type: string
+          format: date
+          nullable: true
+        owner:
+          type: integer
+          nullable: true
+        related_project:
+          type: integer
+          nullable: true
+      required:
+      - goal_type
+      - title
+    GoalTypeEnum:
+      enum:
+      - SHORT_TERM
+      - LONG_TERM
+      type: string
+      description: |-
+        * `SHORT_TERM` - Short Term
+        * `LONG_TERM` - Long Term
     GuestLoginRequest:
       type: object
       description: Guest login by national_id + room number (no password).
@@ -1778,31 +3009,193 @@ components:
       - national_id
       - phone
       - room_number
+    ITDepartmentRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        requesting_department:
+          type: integer
+        requesting_department_name:
+          type: string
+          readOnly: true
+        requested_by_name:
+          type: string
+          description: Name of the person who filed the request, if not a system user.
+          maxLength: 150
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+        priority_display:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/ITRequestStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        assigned_to:
+          type: integer
+          nullable: true
+        assigned_to_username:
+          type: string
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - assigned_to_username
+      - created_at
+      - id
+      - priority_display
+      - requesting_department
+      - requesting_department_name
+      - resolved_at
+      - status_display
+      - title
+      - updated_at
+    ITDepartmentRequestRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        requesting_department:
+          type: integer
+        requested_by_name:
+          type: string
+          description: Name of the person who filed the request, if not a system user.
+          maxLength: 150
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+        status:
+          $ref: '#/components/schemas/ITRequestStatusEnum'
+        assigned_to:
+          type: integer
+          nullable: true
+      required:
+      - requesting_department
+      - title
+    ITGoalStatusEnum:
+      enum:
+      - NOT_STARTED
+      - IN_PROGRESS
+      - ACHIEVED
+      - MISSED
+      type: string
+      description: |-
+        * `NOT_STARTED` - Not Started
+        * `IN_PROGRESS` - In Progress
+        * `ACHIEVED` - Achieved
+        * `MISSED` - Missed
+    ITPriorityEnum:
+      enum:
+      - LOW
+      - MEDIUM
+      - HIGH
+      - CRITICAL
+      type: string
+      description: |-
+        * `LOW` - Low
+        * `MEDIUM` - Medium
+        * `HIGH` - High
+        * `CRITICAL` - Critical
+    ITProcessStatusEnum:
+      enum:
+      - ACTIVE
+      - PAUSED
+      - ARCHIVED
+      type: string
+      description: |-
+        * `ACTIVE` - Active
+        * `PAUSED` - Paused
+        * `ARCHIVED` - Archived
+    ITProjectStatusEnum:
+      enum:
+      - PLANNING
+      - IN_PROGRESS
+      - ON_HOLD
+      - DONE
+      - CANCELLED
+      type: string
+      description: |-
+        * `PLANNING` - Planning
+        * `IN_PROGRESS` - In Progress
+        * `ON_HOLD` - On Hold
+        * `DONE` - Done
+        * `CANCELLED` - Cancelled
+    ITRequestStatusEnum:
+      enum:
+      - PENDING
+      - IN_PROGRESS
+      - COMPLETED
+      - REJECTED
+      type: string
+      description: |-
+        * `PENDING` - Pending
+        * `IN_PROGRESS` - In Progress
+        * `COMPLETED` - Completed
+        * `REJECTED` - Rejected
+    ITTaskStatusEnum:
+      enum:
+      - TODO
+      - IN_PROGRESS
+      - DONE
+      - BLOCKED
+      type: string
+      description: |-
+        * `TODO` - To Do
+        * `IN_PROGRESS` - In Progress
+        * `DONE` - Done
+        * `BLOCKED` - Blocked
     OperatorAvailability:
       type: object
-      description: PATCH /api/v1/operator/me/status/ — an operator toggling their
-        own availability.
+      description: |-
+        GET /api/v1/operator/me/status/ — the logged-in operator's own status.
+
+        Read-only and derived, never stored: busy while any ticket assigned to
+        them is still OPEN or IN_PROGRESS, available once none are (see
+        apps.tickets.services.active_ticket_count). There is deliberately no
+        way to set it by hand — a manual toggle is exactly what let "busy" and
+        reality drift apart.
       properties:
         is_available:
           type: boolean
-          description: Operator's own 'available / busy' toggle, shown in the reassignment
-            dropdown so a colleague can be picked with the current workload in mind.
-            Meaningless for GUEST/ADMIN roles.
-    OperatorAvailabilityRequest:
-      type: object
-      description: PATCH /api/v1/operator/me/status/ — an operator toggling their
-        own availability.
-      properties:
-        is_available:
-          type: boolean
-          description: Operator's own 'available / busy' toggle, shown in the reassignment
-            dropdown so a colleague can be picked with the current workload in mind.
-            Meaningless for GUEST/ADMIN roles.
+          readOnly: true
+        active_tickets:
+          type: integer
+          readOnly: true
+      required:
+      - active_tickets
+      - is_available
     OperatorColleague:
       type: object
       description: |-
         Minimal representation of a fellow operator in the same department —
-        just enough to populate a "reassign this ticket to..." dropdown.
+        just enough to populate a "reassign this ticket to..." dropdown, with
+        each person's current workload.
+
+        `active_tickets` comes from a queryset annotation
+        (services.active_tickets_count), so this serializer must be given a
+        queryset annotated with it; OperatorColleaguesListView does that.
       properties:
         id:
           type: integer
@@ -1812,13 +3205,14 @@ components:
           readOnly: true
           description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
             only.
+        active_tickets:
+          type: integer
+          readOnly: true
         is_available:
           type: boolean
           readOnly: true
-          description: Operator's own 'available / busy' toggle, shown in the reassignment
-            dropdown so a colleague can be picked with the current workload in mind.
-            Meaningless for GUEST/ADMIN roles.
       required:
+      - active_tickets
       - id
       - is_available
       - username
@@ -1850,7 +3244,7 @@ components:
         status:
           $ref: '#/components/schemas/TicketStatusEnum'
         priority:
-          $ref: '#/components/schemas/PriorityEnum'
+          $ref: '#/components/schemas/TicketPriorityEnum'
         department:
           type: integer
           readOnly: true
@@ -1930,7 +3324,7 @@ components:
         status:
           $ref: '#/components/schemas/TicketStatusEnum'
         priority:
-          $ref: '#/components/schemas/PriorityEnum'
+          $ref: '#/components/schemas/TicketPriorityEnum'
         assigned_to:
           type: integer
           nullable: true
@@ -2004,6 +3398,52 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Department'
+    PaginatedGoalList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Goal'
+    PaginatedITDepartmentRequestList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/ITDepartmentRequest'
     PaginatedOperatorTicketList:
       type: object
       required:
@@ -2027,6 +3467,75 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OperatorTicket'
+    PaginatedProcessList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Process'
+    PaginatedProjectList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Project'
+    PaginatedRoomDailyStatList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoomDailyStat'
     PaginatedRoomList:
       type: object
       required:
@@ -2050,6 +3559,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Room'
+    PaginatedTaskList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
     PaginatedTicketList:
       type: object
       required:
@@ -2107,16 +3639,51 @@ components:
           maxLength: 50
         is_active:
           type: boolean
-    PatchedOperatorAvailabilityRequest:
+    PatchedGoalRequest:
       type: object
-      description: PATCH /api/v1/operator/me/status/ — an operator toggling their
-        own availability.
       properties:
-        is_available:
-          type: boolean
-          description: Operator's own 'available / busy' toggle, shown in the reassignment
-            dropdown so a colleague can be picked with the current workload in mind.
-            Meaningless for GUEST/ADMIN roles.
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        goal_type:
+          $ref: '#/components/schemas/GoalTypeEnum'
+        status:
+          $ref: '#/components/schemas/ITGoalStatusEnum'
+        target_date:
+          type: string
+          format: date
+          nullable: true
+        owner:
+          type: integer
+          nullable: true
+        related_project:
+          type: integer
+          nullable: true
+    PatchedITDepartmentRequestRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        requesting_department:
+          type: integer
+        requested_by_name:
+          type: string
+          description: Name of the person who filed the request, if not a system user.
+          maxLength: 150
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+        status:
+          $ref: '#/components/schemas/ITRequestStatusEnum'
+        assigned_to:
+          type: integer
+          nullable: true
     PatchedOperatorTicketRequest:
       type: object
       properties:
@@ -2130,7 +3697,7 @@ components:
         status:
           $ref: '#/components/schemas/TicketStatusEnum'
         priority:
-          $ref: '#/components/schemas/PriorityEnum'
+          $ref: '#/components/schemas/TicketPriorityEnum'
         assigned_to:
           type: integer
           nullable: true
@@ -2138,6 +3705,63 @@ components:
           type: string
           nullable: true
           description: Filled in by the operator when resolving the ticket.
+    PatchedProcessRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        process_type:
+          $ref: '#/components/schemas/ProcessTypeEnum'
+        department:
+          type: integer
+          nullable: true
+          description: The hotel department this process serves (blank = IT itself).
+        frequency:
+          $ref: '#/components/schemas/FrequencyEnum'
+        status:
+          $ref: '#/components/schemas/ITProcessStatusEnum'
+        responsible:
+          type: integer
+          nullable: true
+        last_done_at:
+          type: string
+          format: date-time
+          nullable: true
+        next_due_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'Filled in automatically for recurring processes: last_done_at
+            (or creation) plus one period. May be moved by hand to postpone a run;
+            recalculated whenever the process is marked done or its frequency changes.'
+    PatchedProjectRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/ITProjectStatusEnum'
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+        owner:
+          type: integer
+          nullable: true
+        start_date:
+          type: string
+          format: date
+          nullable: true
+        due_date:
+          type: string
+          format: date
+          nullable: true
     PatchedRoomRequest:
       type: object
       properties:
@@ -2150,6 +3774,35 @@ components:
           maxLength: 20
         status:
           $ref: '#/components/schemas/RoomStatusEnum'
+    PatchedTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/ITTaskStatusEnum'
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+        assigned_to:
+          type: integer
+          nullable: true
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+        related_process:
+          type: integer
+          nullable: true
+        related_project:
+          type: integer
+          nullable: true
+        related_request:
+          type: integer
+          nullable: true
     PatchedTicketRequest:
       type: object
       properties:
@@ -2161,23 +3814,209 @@ components:
           type: string
           minLength: 1
         priority:
-          $ref: '#/components/schemas/PriorityEnum'
+          $ref: '#/components/schemas/TicketPriorityEnum'
         department:
           type: integer
         category:
           type: integer
-    PriorityEnum:
+    Process:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        process_type:
+          $ref: '#/components/schemas/ProcessTypeEnum'
+        process_type_display:
+          type: string
+          readOnly: true
+        department:
+          type: integer
+          nullable: true
+          description: The hotel department this process serves (blank = IT itself).
+        department_name:
+          type: string
+          readOnly: true
+        frequency:
+          $ref: '#/components/schemas/FrequencyEnum'
+        frequency_display:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/ITProcessStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        responsible:
+          type: integer
+          nullable: true
+        responsible_username:
+          type: string
+          readOnly: true
+        last_done_at:
+          type: string
+          format: date-time
+          nullable: true
+        next_due_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'Filled in automatically for recurring processes: last_done_at
+            (or creation) plus one period. May be moved by hand to postpone a run;
+            recalculated whenever the process is marked done or its frequency changes.'
+        is_overdue:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - department_name
+      - frequency_display
+      - id
+      - is_overdue
+      - process_type
+      - process_type_display
+      - responsible_username
+      - status_display
+      - title
+      - updated_at
+    ProcessRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        process_type:
+          $ref: '#/components/schemas/ProcessTypeEnum'
+        department:
+          type: integer
+          nullable: true
+          description: The hotel department this process serves (blank = IT itself).
+        frequency:
+          $ref: '#/components/schemas/FrequencyEnum'
+        status:
+          $ref: '#/components/schemas/ITProcessStatusEnum'
+        responsible:
+          type: integer
+          nullable: true
+        last_done_at:
+          type: string
+          format: date-time
+          nullable: true
+        next_due_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: 'Filled in automatically for recurring processes: last_done_at
+            (or creation) plus one period. May be moved by hand to postpone a run;
+            recalculated whenever the process is marked done or its frequency changes.'
+      required:
+      - process_type
+      - title
+    ProcessTypeEnum:
       enum:
-      - LOW
-      - NORMAL
-      - HIGH
-      - URGENT
+      - ACTIVE
+      - PASSIVE
+      - PERIODIC_CHECK
+      - PERIODIC_SERVICE
       type: string
       description: |-
-        * `LOW` - Low
-        * `NORMAL` - Normal
-        * `HIGH` - High
-        * `URGENT` - Urgent
+        * `ACTIVE` - Active
+        * `PASSIVE` - Passive
+        * `PERIODIC_CHECK` - Periodic Check
+        * `PERIODIC_SERVICE` - Periodic Service
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/ITProjectStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+        priority_display:
+          type: string
+          readOnly: true
+        owner:
+          type: integer
+          nullable: true
+        owner_username:
+          type: string
+          readOnly: true
+        start_date:
+          type: string
+          format: date
+          nullable: true
+        due_date:
+          type: string
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - owner_username
+      - priority_display
+      - status_display
+      - title
+      - updated_at
+    ProjectRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/ITProjectStatusEnum'
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+        owner:
+          type: integer
+          nullable: true
+        start_date:
+          type: string
+          format: date
+          nullable: true
+        due_date:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - title
     QuickRequestTemplate:
       type: object
       properties:
@@ -2227,6 +4066,50 @@ components:
       required:
       - id
       - number
+    RoomDailyStat:
+      type: object
+      description: 'Read-only: every figure is computed from Room data (it_ops.services).'
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        date:
+          type: string
+          format: date
+          readOnly: true
+        total_rooms:
+          type: integer
+          readOnly: true
+        occupied_rooms:
+          type: integer
+          readOnly: true
+        vacant_rooms:
+          type: integer
+          readOnly: true
+        out_of_order_rooms:
+          type: integer
+          readOnly: true
+        occupancy_rate:
+          type: number
+          format: double
+          readOnly: true
+        notes:
+          type: string
+          readOnly: true
+        recorded_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - date
+      - id
+      - notes
+      - occupancy_rate
+      - occupied_rooms
+      - out_of_order_rooms
+      - recorded_at
+      - total_rooms
+      - vacant_rooms
     RoomRequest:
       type: object
       properties:
@@ -2241,6 +4124,39 @@ components:
           $ref: '#/components/schemas/RoomStatusEnum'
       required:
       - number
+    RoomStatsSnapshotRequestRequest:
+      type: object
+      description: POST /it-ops/room-stats/snapshot/ — which day to (re)compute; default
+        today.
+      properties:
+        date:
+          type: string
+          format: date
+    RoomStatsToday:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        total_rooms:
+          type: integer
+        occupied_rooms:
+          type: integer
+        vacant_rooms:
+          type: integer
+        out_of_order_rooms:
+          type: integer
+        occupancy_rate:
+          type: number
+          format: double
+          readOnly: true
+      required:
+      - date
+      - occupancy_rate
+      - occupied_rooms
+      - out_of_order_rooms
+      - total_rooms
+      - vacant_rooms
     RoomStatusEnum:
       enum:
       - AVAILABLE
@@ -2281,6 +4197,102 @@ components:
       - new_status
       - previous_status
       - room
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/ITTaskStatusEnum'
+        status_display:
+          type: string
+          readOnly: true
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+        priority_display:
+          type: string
+          readOnly: true
+        assigned_to:
+          type: integer
+          nullable: true
+        assigned_to_username:
+          type: string
+          readOnly: true
+        assigned_by:
+          type: integer
+          readOnly: true
+          nullable: true
+        assigned_by_username:
+          type: string
+          readOnly: true
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+        related_process:
+          type: integer
+          nullable: true
+        related_project:
+          type: integer
+          nullable: true
+        related_request:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - assigned_by
+      - assigned_by_username
+      - assigned_to_username
+      - created_at
+      - id
+      - priority_display
+      - status_display
+      - title
+      - updated_at
+    TaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        status:
+          $ref: '#/components/schemas/ITTaskStatusEnum'
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+        assigned_to:
+          type: integer
+          nullable: true
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+        related_process:
+          type: integer
+          nullable: true
+        related_project:
+          type: integer
+          nullable: true
+        related_request:
+          type: integer
+          nullable: true
+      required:
+      - title
     Ticket:
       type: object
       properties:
@@ -2297,7 +4309,7 @@ components:
           - $ref: '#/components/schemas/TicketStatusEnum'
           readOnly: true
         priority:
-          $ref: '#/components/schemas/PriorityEnum'
+          $ref: '#/components/schemas/TicketPriorityEnum'
         department:
           type: integer
         department_name:
@@ -2498,6 +4510,18 @@ components:
           minLength: 1
       required:
       - text
+    TicketPriorityEnum:
+      enum:
+      - LOW
+      - NORMAL
+      - HIGH
+      - URGENT
+      type: string
+      description: |-
+        * `LOW` - Low
+        * `NORMAL` - Normal
+        * `HIGH` - High
+        * `URGENT` - Urgent
     TicketRateRequest:
       type: object
       description: POST /tickets/{id}/rate/ — write-only input, the view returns a
@@ -2523,7 +4547,7 @@ components:
           type: string
           minLength: 1
         priority:
-          $ref: '#/components/schemas/PriorityEnum'
+          $ref: '#/components/schemas/TicketPriorityEnum'
         department:
           type: integer
         category:
@@ -2545,6 +4569,39 @@ components:
         * `IN_PROGRESS` - In Progress
         * `RESOLVED` - Resolved
         * `CANCELLED` - Cancelled
+    TodayDashboard:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        generated_at:
+          type: string
+          format: date-time
+        tasks_due_or_overdue:
+          type: array
+          items:
+            $ref: '#/components/schemas/Task'
+        processes_due_or_overdue:
+          type: array
+          items:
+            $ref: '#/components/schemas/Process'
+        open_department_requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/ITDepartmentRequest'
+        room_stats_today:
+          $ref: '#/components/schemas/RoomStatsToday'
+        my_open_tasks_count:
+          type: integer
+      required:
+      - date
+      - generated_at
+      - my_open_tasks_count
+      - open_department_requests
+      - processes_due_or_overdue
+      - room_stats_today
+      - tasks_due_or_overdue
   securitySchemes:
     jwtAuth:
       type: http

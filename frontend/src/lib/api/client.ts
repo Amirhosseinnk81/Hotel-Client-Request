@@ -8,6 +8,8 @@ import type {
   Department,
   DepartmentStatsSummary,
   GuestProfile,
+  ITProcess,
+  ITTodayDashboard,
   OperatorAvailability,
   OperatorColleague,
   QuickRequestTemplate,
@@ -431,14 +433,13 @@ export async function addOperatorTicketAttachment(
   });
 }
 
-/** Toggles the logged-in operator's own available/busy status. */
-export async function updateOperatorAvailability(
-  isAvailable: boolean
-): Promise<OperatorAvailability> {
-  return apiFetch<OperatorAvailability>("/operator/me/status/", {
-    method: "PATCH",
-    body: JSON.stringify({ is_available: isAvailable }),
-  });
+/**
+ * The logged-in operator's own available/busy status. Read-only: it's
+ * derived on the server from their assigned tickets (busy until every
+ * one is RESOLVED or CANCELLED), so there is nothing to set.
+ */
+export async function getMyOperatorStatus(): Promise<OperatorAvailability> {
+  return apiFetch<OperatorAvailability>("/operator/me/status/");
 }
 
 /**
@@ -467,6 +468,20 @@ export async function getAdminStatsSummary(): Promise<AdminStatsSummary> {
 /** The caller's own department — any operator, regular or supervisor. */
 export async function getDepartmentStatsSummary(): Promise<DepartmentStatsSummary> {
   return apiFetch<DepartmentStatsSummary>("/operator/stats/summary/");
+}
+
+/** IT Ops — today's due work, open requests and live occupancy (IT staff and admins). */
+export async function getItOpsToday(): Promise<ITTodayDashboard> {
+  return apiFetch<ITTodayDashboard>("/it-ops/today/");
+}
+
+/**
+ * Marks a process as carried out now. The server moves next_due_at one
+ * period on for a recurring process; only its responsible person or the
+ * IT supervisor may do this.
+ */
+export async function markItProcessDone(processId: number): Promise<ITProcess> {
+  return apiFetch<ITProcess>(`/it-ops/processes/${processId}/mark-done/`, { method: "POST" });
 }
 
 /**

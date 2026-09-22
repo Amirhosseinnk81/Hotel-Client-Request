@@ -21,6 +21,9 @@ class OperatorTokenObtainPairSerializer(TokenObtainPairSerializer):
         # refresh rotation copies this claim forward unchanged and it can
         # lag behind a promotion or demotion until the next login.
         token["is_supervisor"] = user.is_supervisor
+        # Same kind of UI hint: lets the panel show the IT Ops link to IT
+        # staff. IsITStaff re-reads the department from the database.
+        token["department_code"] = user.department.code if user.department_id else None
         return token
 
     def validate(self, attrs):
@@ -35,9 +38,16 @@ class OperatorTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 
-class OperatorAvailabilitySerializer(serializers.ModelSerializer):
-    """PATCH /api/v1/operator/me/status/ — an operator toggling their own availability."""
+class OperatorAvailabilitySerializer(serializers.Serializer):
+    """
+    GET /api/v1/operator/me/status/ — the logged-in operator's own status.
 
-    class Meta:
-        model = User
-        fields = ["is_available"]
+    Read-only and derived, never stored: busy while any ticket assigned to
+    them is still OPEN or IN_PROGRESS, available once none are (see
+    apps.tickets.services.active_ticket_count). There is deliberately no
+    way to set it by hand — a manual toggle is exactly what let "busy" and
+    reality drift apart.
+    """
+
+    is_available = serializers.BooleanField(read_only=True)
+    active_tickets = serializers.IntegerField(read_only=True)

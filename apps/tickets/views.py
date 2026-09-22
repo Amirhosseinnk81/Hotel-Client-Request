@@ -23,7 +23,11 @@ from apps.core.permissions import (
 from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
 from .pdf import generate_ticket_pdf
 from .permissions import IsOperator
-from .services import compute_admin_stats_summary, compute_department_stats_summary
+from .services import (
+    active_tickets_count,
+    compute_admin_stats_summary,
+    compute_department_stats_summary,
+)
 from .serializers import (
     AdminStatsSummarySerializer,
     CategorySerializer,
@@ -562,6 +566,9 @@ class OperatorColleaguesListView(generics.ListAPIView):
                 role="OPERATOR",
                 department=self.request.user.department,
             )
+            # Each colleague's live workload; OperatorColleagueSerializer
+            # derives is_available from it (0 active tickets = available).
+            .annotate(active_tickets=active_tickets_count())
             .order_by("username")
         )
 

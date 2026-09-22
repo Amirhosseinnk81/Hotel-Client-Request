@@ -24,9 +24,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Frontend | **Next.js 16.3.2** (App Router) + React 19.2 + TypeScript + Tailwind v4 |
 | UI Kit | shadcn/ui **دستی‌ساز** (بدون CLI) در `frontend/src/components/ui/` روی Radix |
 | فونت | `@fontsource-variable/vazirmatn` در UI؛ TTF کامل Vazirmatn برای PDF |
-| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۱۸۵ تست** |
-| تست فرانت | Vitest + React Testing Library — **۶۲ تست** |
-| Deployment | مستقیم روی هاست ویندوز، بدون Docker/Redis/Celery |
+| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۲۳۲ تست** |
+| تست فرانت | Vitest + React Testing Library — **۶۹ تست** |
+| Deployment | مستقیم روی هاست ویندوز، بدون Docker/Redis/Celery؛ کار زمان‌بندی‌شده با Windows Task Scheduler |
 
 ## دستورهای رایج
 
@@ -36,7 +36,7 @@ python manage.py migrate
 python manage.py runserver localhost:8000      # localhost، نه 127.0.0.1 — بخش «دو تلهٔ همیشگی»
 python manage.py seed_demo_data                # دادهٔ دموی فارسی: واحدها، دسته‌ها، اتاق، اپراتور، سرپرست، مهمان
 python manage.py seed_demo_data --reset-passwords
-python manage.py test                          # کل ۱۸۵ تست
+python manage.py test                          # کل ۲۳۲ تست
 python manage.py test apps.tickets             # فقط یک اپ
 python manage.py spectacular --file Hotel_Client_Request_Platform_API.yaml
 ```
@@ -84,11 +84,12 @@ npx vitest run -t "relative"                   # فیلتر روی نام تست
 - `config/settings/` — `base.py` (مشترک) + `development.py` / `production.py`
 - `apps/` — هر اپ با الگوی ثابت: `models.py` → `serializers.py` → `views.py` (DRF generics) → `urls.py` → `admin.py` → `tests.py`
   - `core/` — پرمیشن‌های مشترک، `jwt_cookies.py`، `throttling.py`، `exceptions.py`، health check، `seed_demo_data`
-  - `accounts/` — User سفارشی (`role`، `department`، `is_available`، `is_supervisor`)، لاگین اپراتور، refresh، logout
+  - `accounts/` — User سفارشی (`role`، `department`، `is_supervisor`)، لاگین اپراتور، refresh، logout، وضعیت اپراتور (`/operator/me/status/`، محاسبه‌شده)
   - `guests/` — Guest و لاگین مهمان
   - `rooms/` — Room و `RoomStatusLog` (لاگ append-only که خودِ `Room.save()` می‌نویسد)
   - `departments/` — CRUD ادمین
   - `tickets/` — هستهٔ پروژه: `Category`، `Ticket`، `TicketHistory`، `TicketNote`، `TicketAttachment`، `QuickRequestTemplate`، و `pdf.py`
+  - `it_ops/` — عملیات داخلی واحد IT (`Process`، `Project`، `DepartmentRequest`، `Goal`، `Task`، `RoomDailyStat`) — بخش «IT Ops». **تنها اپی که ViewSet + Router دارد** نه generics؛ عمدی است (شش منبع CRUD هم‌شکل)
 - `tests/test_mvp_integration.py` — سناریوی end-to-end بین اپ‌ها. تست واحد هر اپ داخل خود اپ می‌ماند.
 - `frontend/src/` — `app/` با Route Groupهای `guest/(protected)` و `operator/(protected)`، `components/ui/`، `contexts/`، `hooks/`، `lib/api/`
 
@@ -134,8 +135,32 @@ CANCELLED    → (نهایی)
 - **دو endpoint، هرکدام با یک scope ثابت** — نه یک endpoint که بسته به نقش گشاد یا تنگ شود. ادمین: `GET /admin/stats/summary/` (کل هتل، `IsAdminOnly`). اپراتور و سرپرست: `GET /operator/stats/summary/` (فقط واحد خودشان، `IsOperator`). واحد همیشه از `request.user` می‌آید، هرگز از پارامتر کوئری.
 - هر دو از `apps/tickets/services.py` می‌خوانند و منطق وضعیت/میانگین/معوق در helperهای مشترک است. خروجی `compute_admin_stats_summary()` دقیقاً حفظ شده، چون صفحهٔ Django Admin هم از همان می‌خواند.
 - **`compute_department_stats_summary(None)` عمداً `ValueError` می‌دهد** و ویو برای اپراتورِ بی‌واحد ۴۰۳ برمی‌گرداند. «بدون واحد» هرگز نباید بی‌صدا «همهٔ واحدها» شود — این دقیقاً همان نشتی است که باید جلویش را گرفت. `test_operator_without_a_department_is_refused_not_shown_the_whole_hotel` این را pin می‌کند.
-- در نسخهٔ واحد، جدول «به تفکیک واحد» (که فقط یک ردیف می‌شد) جایش را به «بار کاری اپراتورها» داده: کل روستر واحد، حتی اپراتور بی‌کار با ۰، سرپرست‌ها اول. «فعال» یعنی تیکت‌های OPEN/IN_PROGRESS اختصاص‌یافته — همان تعریفی که «مشغول» در مرحلهٔ در دسترس بودن خودکار خواهد داشت.
+- در نسخهٔ واحد، جدول «به تفکیک واحد» (که فقط یک ردیف می‌شد) جایش را به «بار کاری اپراتورها» داده: کل روستر واحد، حتی اپراتور بی‌کار با ۰، سرپرست‌ها اول. «فعال» یعنی تیکت‌های OPEN/IN_PROGRESS اختصاص‌یافته — دقیقاً همان تعریف «مشغول» (`active_tickets_count` در `services.py`).
 - اعداد با `formatNumber` و مدت‌ها با `formatDurationMinutes` از `lib/format.ts`.
+
+## در دسترس بودن خودکار
+
+وضعیت «در دسترس / مشغول» اپراتور **محاسبه می‌شود، ذخیره نمی‌شود**. اپراتور مشغول است تا وقتی دست‌کم یک تیکت OPEN یا IN_PROGRESS در واحد خودش به او اختصاص دارد، و با حل یا لغو آخرینش خودکار در دسترس می‌شود. چند تیکت هم‌زمان مجاز است؛ تا همه تمام نشوند مشغول می‌ماند.
+
+- **یک تعریف، یک جا:** `active_tickets_count()` و `active_ticket_count()` در `apps/tickets/services.py`. دراپ‌داون همکاران، وضعیت خود اپراتور (`GET /operator/me/status/`) و ستون «فعال» خلاصهٔ واحد همه از همین می‌شمارند — نسخهٔ دیگری ننویس.
+- چرا محاسبه‌ای: پنج مسیر وضعیت تیکت را عوض می‌کنند (تخصیص، بازتخصیص، Resolve، Cancel، بازگشایی مهمان). یک فیلد ذخیره‌شده باید در همهٔ آن‌ها به‌روز می‌شد و دیر یا زود یکی جا می‌ماند. بازگشایی مهمان تخصیص را نگه می‌دارد، پس همان اپراتور بدون هیچ کد اضافه‌ای دوباره مشغول می‌شود.
+- فیلد `User.is_available` و دکمهٔ دستی حذف شده‌اند (migration `accounts/0005`). `PATCH /operator/me/status/` حالا ۴۰۵ می‌گیرد.
+- هدر پنل وضعیت را فقط‌خواندنی نشان می‌دهد و در هر جابه‌جایی صفحه و هر تیک polling (۴۵ ثانیه) دوباره می‌خواند.
+- `OperatorColleagueSerializer.is_available` از annotation `active_tickets` می‌خواند؛ هر queryset که به آن داده می‌شود باید `.annotate(active_tickets=active_tickets_count())` داشته باشد، وگرنه با AttributeError می‌شکند.
+
+## IT Ops
+
+ماژول `apps/it_ops` برای کار داخلی واحد IT هتل، زیر `/api/v1/it-ops/`. جدول endpointها در README.
+
+- **کارکنان IT نقش جدید نیستند:** اپراتورهای واحدی با کد `settings.IT_DEPARTMENT_CODE` (پیش‌فرض `IT`)، و سرپرست IT همان اپراتور IT با `is_supervisor`. ادمین هم اختیار سرپرست را دارد. کاربر خواسته بود نقش جدیدی اضافه نشود — همان تصمیم «فلگ نه نقش» سمت تیکت.
+- **پرمیشن‌ها در `apps/core/permissions.py`:** `is_it_operator` / `is_it_staff` / `is_it_supervisor` و کلاس‌های `IsITStaff` و `CanWorkOnITItem`. هر ViewSet رفتارش را با چند attribute تنظیم می‌کند: `it_staff_can_create`، `it_assignee_field`، `it_supervisor_only_fields`، `it_supervisor_only_values`، `it_assignee_actions`. قاعدهٔ جدید را با همین‌ها بساز، نه با if داخل view.
+- **حتی خواندن هم بسته است:** اپراتور هر واحد دیگر (حتی سرپرستش) روی همهٔ endpointها ۴۰۳ می‌گیرد. `IsITStaff` از دیتابیس می‌خواند؛ claim `department_code` در JWT فقط برای نمایش لینک IT در فرانت است (آینه‌اش `lib/it-ops.ts`، که کد `IT` را هاردکد کرده).
+- **فقط یک فهرست واحد:** `Process.department` و `DepartmentRequest.requesting_department` به `departments.Department` واقعی FK می‌زنند. نسخهٔ اول IT Ops یک TextChoices جدا از واحدها داشت؛ migrationهای `0002`–`0004` کدها را به ردیف واقعی نگاشت کردند (`F_AND_B`→`ROOM_SERVICE`، بی‌تطابق→`NULL`). این migrationها عمداً سه فایل‌اند: PostgreSQL وقتی ردیف‌های همان جدول در همان تراکنش آپدیت شده باشند `ALTER TABLE` را با «pending trigger events» رد می‌کند.
+- **`next_due_at` خودکار است** و منطقش در `Process.save()` است (مثل `Room.save()`، نه signal): وقتی خالی باشد، `last_done_at` جابه‌جا شود، یا `frequency` عوض شود، دوباره حساب می‌شود؛ جابه‌جایی دستی بقیهٔ وقت‌ها حفظ می‌شود. فرایند `NONE` هرگز دست نمی‌خورد. `_add_months` طول ماه را رعایت می‌کند (بدون وابستگی `dateutil`).
+- **`RoomDailyStat` ورودی دستی نیست:** `services.snapshot_room_stats` امروز را از `Room.status` زنده و روز گذشته را از `RoomStatusLog` بازسازی می‌کند. ViewSetش `ReadOnly` است (POST روی لیست ۴۰۵)، و ردیف تازه از اکشن `snapshot/` (سرپرست) یا دستور شبانهٔ `snapshot_room_stats` در Task Scheduler می‌آید. داشبورد `today/` اشغال امروز را زنده حساب می‌کند نه از آخرین ردیف ذخیره‌شده.
+- **اولویت رشته‌ای را `order_by("-priority")` نکن** — الفبایی می‌شود (MEDIUM اول، CRITICAL آخر). از `priority_rank()` در `it_ops/models.py` استفاده کن. تست `test_list_puts_the_most_urgent_first_not_alphabetical` این را pin می‌کند.
+- فیلترها با django-filter در `it_ops/filters.py`؛ تاریخ خراب ۴۰۰ می‌گیرد نه ۵۰۰.
+- `DepartmentRequestSerializer` در schema با نام `ITDepartmentRequest` است، چون `DepartmentSerializer` با `COMPONENT_SPLIT_REQUEST` خودش کامپوننتی به نام `DepartmentRequest` می‌سازد. enumهای وضعیت/اولویت IT هم در `ENUM_NAME_OVERRIDES` نام گرفته‌اند؛ اگر enum تازه‌ای با نام تکراری اضافه شد، spectacular اسم هش‌دار می‌سازد — همان‌جا نامش بده.
 
 ## Dark Mode
 
@@ -219,7 +244,8 @@ CANCELLED    → (نهایی)
 - **Pagination:** `PageNumberPagination` با `PAGE_SIZE=10` به‌صورت پیش‌فرض روی همهٔ لیست‌هاست. تستی که فرض کند `response.data` مستقیماً لیست است بی‌صدا فیل می‌شود؛ باید `response.data["results"]` باز شود.
 - **حذف پوشهٔ عمیق در ویندوز:** `cmd /c rmdir /s /q node_modules` — نه `Remove-Item` در PowerShell (قفل‌شدن فایل).
 - **کش `.next`:** بعد از تغییر ساختاری، اگر خطای عجیب TypeScript روی `routes.d.ts` دیدی، `.next` را کامل پاک کن.
-- **مرج دستی:** وقتی Amirhossein خودش یک Stage را پیاده می‌کند، فیچرهای تأییدشدهٔ قبلی دوباره چک شوند — یک‌بار فیچر تأییدشده از بین رفته.
+- **تست زمان‌محور روی ویندوز:** ساعت ویندوز حدود هر ۱۵ میلی‌ثانیه تیک می‌خورد، پس `since = timezone.now()` و `created_at` ردیفی که بلافاصله بعدش ساخته می‌شود می‌توانند دقیقاً برابر باشند و شرط `>` فیل شود. در تست یک فاصلهٔ صریح بگذار (`- timedelta(seconds=1)`)؛ `test_new_count_reflects_tickets_created_after_since` یک‌بار دقیقاً همین‌طور فلیکی بود.
+- **مرج دستی:** وقتی Amirhossein خودش یک Stage را پیاده می‌کند، فیچرهای تأییدشدهٔ قبلی دوباره چک شوند — یک‌بار فیچر تأییدشده از بین رفته — و بار دوم هم: کپی IT Ops فاز ۱ کل Stage 2 (در دسترس بودن خودکار) را به نسخهٔ قبل برگرداند ولی migration `accounts/0005` را روی دیسک گذاشت، یعنی مدل و migration ناسازگار شدند. بعد از هر مرج اول `makemigrations --check` بزن.
 
 ## الهامات محصول / Backlog — پیاده‌سازی نشده
 

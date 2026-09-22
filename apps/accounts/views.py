@@ -1,5 +1,5 @@
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import generics, status
+from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -14,6 +14,7 @@ from apps.core.jwt_cookies import (
     set_refresh_cookie,
 )
 from apps.core.permissions import IsOperator
+from apps.tickets.services import active_ticket_count
 
 from .serializers import OperatorAvailabilitySerializer, OperatorTokenObtainPairSerializer
 
@@ -118,15 +119,24 @@ class LogoutView(APIView):
         return response
 
 
-class OperatorAvailabilityView(generics.UpdateAPIView):
+@extend_schema(responses=OperatorAvailabilitySerializer)
+class OperatorAvailabilityView(APIView):
     """
-    PATCH /api/v1/operator/me/status/ — the logged-in operator toggles
-    their own 'available / busy' status. Deliberately scoped to "me": an
-    operator cannot flip a colleague's availability through this endpoint.
+    GET /api/v1/operator/me/status/ — the logged-in operator's own
+    available/busy status, and how many active tickets they hold.
+
+    This used to be a PATCH, a manual toggle. Availability is now derived
+    from assignments (busy until every assigned ticket is RESOLVED or
+    CANCELLED), so there is nothing to set: a PATCH is answered 405.
+    Deliberately scoped to "me", like before.
     """
 
-    serializer_class = OperatorAvailabilitySerializer
     permission_classes = [IsOperator]
 
-    def get_object(self):
-        return self.request.user
+    def get(self, request):
+        active = active_ticket_count(request.user)
+        return Response(
+            OperatorAvailabilitySerializer(
+                {"is_available": active == 0, "active_tickets": active}
+            ).data
+        )

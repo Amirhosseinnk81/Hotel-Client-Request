@@ -28,14 +28,11 @@ class User(AbstractUser):
         related_name="operators",
     )
 
-    is_available = models.BooleanField(
-        default=True,
-        help_text=(
-            "Operator's own 'available / busy' toggle, shown in the "
-            "reassignment dropdown so a colleague can be picked with the "
-            "current workload in mind. Meaningless for GUEST/ADMIN roles."
-        ),
-    )
+    # Deliberately no stored "available / busy" flag. Availability is
+    # derived from assignments — busy while any assigned ticket is still
+    # OPEN or IN_PROGRESS (apps.tickets.services.active_tickets_count) —
+    # so it can never drift from reality the way the old manual toggle
+    # could. The toggle's column was dropped in migration 0005.
 
     is_supervisor = models.BooleanField(
         default=False,

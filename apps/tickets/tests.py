@@ -1232,7 +1232,6 @@ class OperatorProductivityAPITests(APITestCase):
             password="testpassword",
             role=User.Role.OPERATOR,
             department=self.department,
-            is_available=False,
         )
 
         self.colleagues_url = reverse("tickets:operator-colleagues-list")
@@ -1241,7 +1240,20 @@ class OperatorProductivityAPITests(APITestCase):
     def authenticate_operator(self):
         self.client.force_authenticate(self.operator_user)
 
-    def test_colleagues_list_exposes_is_available(self):
+    def test_colleagues_list_shows_availability_derived_from_assignments(self):
+        # operator202 holds an IN_PROGRESS ticket, so they are busy;
+        # operator201 holds nothing, so they are available. Nobody sets
+        # this by hand any more.
+        Ticket.objects.create(
+            guest=self.guest,
+            department=self.department,
+            category=self.category,
+            room=self.room,
+            title="Extra towels",
+            description="Two towels, please.",
+            status=Ticket.Status.IN_PROGRESS,
+            assigned_to=self.busy_colleague,
+        )
         self.authenticate_operator()
 
         response = self.client.get(self.colleagues_url)
@@ -1249,7 +1261,9 @@ class OperatorProductivityAPITests(APITestCase):
         self.assertEqual(response.status_code, 200)
         by_username = {c["username"]: c for c in response.data}
         self.assertTrue(by_username["operator201"]["is_available"])
+        self.assertEqual(by_username["operator201"]["active_tickets"], 0)
         self.assertFalse(by_username["operator202"]["is_available"])
+        self.assertEqual(by_username["operator202"]["active_tickets"], 1)
 
     def test_new_count_is_zero_with_no_new_tickets(self):
         self.authenticate_operator()
@@ -1262,7 +1276,10 @@ class OperatorProductivityAPITests(APITestCase):
 
     def test_new_count_reflects_tickets_created_after_since(self):
         self.authenticate_operator()
-        since = timezone.now()
+        # A second back, not "now": Windows' clock ticks every ~15ms, so a
+        # ticket created right after could get the very same timestamp and
+        # fail created_at > since.
+        since = timezone.now() - timedelta(seconds=1)
 
         Ticket.objects.create(
             guest=self.guest,

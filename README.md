@@ -27,6 +27,7 @@
 - [Ticket Workflow](#-ticket-workflow)
 - [مدل داده](#-مدل-داده)
 - [Permission و Authorization](#-permission-و-authorization)
+- [IT Ops](#-it-ops)
 - [تست](#-تست)
 - [Django Admin](#-django-admin)
 - [Environment Variables](#-environment-variables)
@@ -149,8 +150,10 @@ Admin از **Django Admin** استفاده می‌کند (هیچ فرانت‌ا
 - ثبت Resolution و پیوست تصویر
 - ثبت یادداشت داخلی (مهمان نمی‌بیند) و مشاهدهٔ تایم‌لاین کامل تیکت
 - نشانهٔ «معوق» برای تیکت‌هایی که از SLA دسته‌شان گذشته‌اند
-- زنگولهٔ اعلان تیکت‌های جدید (Polling) و تعیین وضعیت «در دسترس»
+- زنگولهٔ اعلان تیکت‌های جدید (Polling)
+- وضعیت «در دسترس / مشغول» **خودکار**: تا وقتی درخواست باز یا در حال بررسی به اپراتور اختصاص دارد مشغول است و با حل یا لغو آخرینش خودکار در دسترس می‌شود (دکمهٔ دستی حذف شده)
 - صفحهٔ «خلاصه»: آمار واحد خودش — درخواست‌ها به تفکیک وضعیت، معوق‌ها، میانگین زمان رسیدگی، و بار کاری هر اپراتور
+- صفحهٔ «IT» (فقط کارکنان واحد IT و ادمین): کارها و فرایندهای سررسیدهٔ امروز، درخواست‌های باز واحدها، اشغال زندهٔ اتاق‌ها — بخش [IT Ops](#-it-ops)
 
 ## Admin
 
@@ -254,7 +257,8 @@ Hotel-Client-Request/
 │   ├── guests/                #   پروفایل و ورود مهمان
 │   ├── rooms/                 #   مدیریت اتاق
 │   ├── departments/           #   واحدهای هتل
-│   └── tickets/                #   Category، Ticket، TicketHistory، گردش‌کار
+│   ├── tickets/                #   Category، Ticket، TicketHistory، گردش‌کار
+│   └── it_ops/                 #   عملیات داخلی IT: فرایند، پروژه، درخواست واحدها، هدف، کار، آمار روزانهٔ اتاق
 ├── config/
 │   └── settings/
 │       ├── base.py
@@ -370,6 +374,8 @@ python manage.py seed_demo_data
 
 حساب‌های `sup_*` سرپرست هر واحدند و فقط آن‌ها می‌توانند تیکت تخصیص دهند؛ حساب‌های `op_*` اپراتور عادی‌اند.
 
+واحد «فناوری اطلاعات» (کد `IT`) هم ساخته می‌شود: `op_it` کارشناس IT و `sup_it` سرپرست IT است، به‌علاوهٔ دو فرایند دوره‌ای نمونه تا صفحهٔ IT خالی نباشد.
+
 **یا به‌صورت دستی** از طریق Django Admin (`/admin/`) با کاربر Superuser:
 
 1. یک یا چند **Department** بسازید (مثلاً نظافت، فنی)
@@ -442,10 +448,11 @@ python manage.py seed_demo_data
 | `/operator/tickets/{id}/history/` | GET | تایم‌لاین تیکت (تاریخچهٔ سیستمی + یادداشت‌ها) |
 | `/operator/tickets/{id}/notes/` | POST | ثبت یادداشت داخلی (مهمان هرگز نمی‌بیند) |
 | `/operator/tickets/{id}/attachments/` | POST | آپلود تصویر توسط اپراتور (multipart) |
-| `/operator/colleagues/` | GET | لیست اپراتورهای هم‌واحد (برای اختصاص/تغییر اختصاص) |
+| `/operator/colleagues/` | GET | اپراتورهای هم‌واحد با `active_tickets` و `is_available` (هر دو محاسبه‌شده) — برای دراپ‌داون تخصیص |
 | `/operator/stats/summary/` | GET | خلاصهٔ آمار **واحد خودِ فراخوان** (اپراتور و سرپرست): وضعیت‌ها، معوق، میانگین رسیدگی، بار کاری اپراتورها. ادمین ۴۰۳ می‌گیرد و از `/admin/stats/summary/` استفاده می‌کند |
-| `/operator/me/status/` | GET, PATCH | وضعیت «در دسترس بودن» اپراتور |
+| `/operator/me/status/` | GET | وضعیت اپراتور جاری: `is_available` و `active_tickets` — **محاسبه‌شده، فقط‌خواندنی**. PATCH (دکمهٔ دستی قدیمی) با ۴۰۵ رد می‌شود |
 | `/admin/stats/summary/` | GET | آمار تجمیعی کل هتل — فقط ادمین؛ هم در Django Admin و هم در صفحهٔ «خلاصه»ی پنل اپراتور نمایش داده می‌شود |
+| `/it-ops/...` | — | ماژول IT Ops — جدول کاملش در بخش [IT Ops](#-it-ops) |
 | `/schema/` `/docs/` `/redoc/` | GET | مستندات OpenAPI |
 
 خروجی لیست‌ها صفحه‌بندی‌شده است (`PageNumberPagination`، `PAGE_SIZE=10`)، یعنی به شکل `{"count": ..., "results": [...]}` برمی‌گردد.
@@ -500,7 +507,7 @@ https://<host>/guest/login?room=305
 # 🗄 مدل داده
 
 ### User
-`username`, `password`, `role` (GUEST/OPERATOR/ADMIN), `department` (FK، فقط برای OPERATOR)، `is_available`، `is_supervisor` (سرپرست واحد — فقط برای OPERATOR)
+`username`, `password`, `role` (GUEST/OPERATOR/ADMIN), `department` (FK، فقط برای OPERATOR)، `is_supervisor` (سرپرست واحد — فقط برای OPERATOR). وضعیت «در دسترس / مشغول» فیلد ذخیره‌شده نیست؛ از روی تیکت‌های فعالِ اختصاص‌یافته محاسبه می‌شود
 
 ### Guest
 `user` (OneToOne)، `full_name`، `national_id` (unique)، `phone`، `room` (FK)
@@ -538,7 +545,7 @@ https://<host>/guest/login?room=305
 
 # 🛡 Permission و Authorization
 
-شش کلاس مشترک در `apps/core/permissions.py`:
+هشت کلاس مشترک در `apps/core/permissions.py`:
 
 - **IsGuest** — فقط نقش GUEST
 - **IsOperator** — فقط نقش OPERATOR
@@ -546,6 +553,8 @@ https://<host>/guest/login?room=305
 - **IsAdminOnly** — حتی خواندن هم فقط ADMIN/superuser
 - **IsSupervisor** — فقط اپراتوری که `is_supervisor` دارد. همیشه از دیتابیس خوانده می‌شود، نه از claim توکن
 - **CanWorkOnOperatorTicket** — (سطح شیء) ویرایش تیکت: سرپرست هر چیز را؛ اپراتور عادی فقط status و resolution تیکت‌های اختصاص‌یافته به خودش را
+- **IsITStaff** — فقط اپراتورهای واحد IT و ادمین، حتی برای خواندن
+- **CanWorkOnITItem** — قواعد نوشتن IT Ops؛ همان سه‌سطحی سمت تیکت (بخش [IT Ops](#-it-ops))
 
 > ⚠️ تفاوت `IsAdminRole` و `IsAdminOnly` حیاتی است: اولی GET را برای هر کاربر لاگین‌شده باز می‌گذارد. هر endpointی که دادهٔ بین‌واحدی برمی‌گرداند (مثل `/admin/stats/summary/`) باید `IsAdminOnly` باشد، وگرنه اپراتور آمار واحدهای دیگر را هم می‌بیند.
 
@@ -558,11 +567,46 @@ https://<host>/guest/login?room=305
 
 ---
 
+# 🖧 IT Ops
+
+ماژول عملیات داخلی واحد IT هتل (`apps/it_ops`) — جدا از درخواست‌های مهمان. همهٔ مسیرها زیر `/api/v1/it-ops/`:
+
+| Endpoint | متد | توضیح |
+|---|---|---|
+| `/it-ops/today/` | GET | داشبورد امروز: کارها و فرایندهای سررسیده/معوق، درخواست‌های باز واحدها (به ترتیب فوریت)، اشغال زندهٔ اتاق‌ها، تعداد کارهای باز خودِ فراخوان |
+| `/it-ops/processes/` | CRUD | فرایندهای جاری و دوره‌ای؛ فیلتر `status`, `process_type`, `frequency`, `department`, `responsible`, `due_before`, `due_after` |
+| `/it-ops/processes/{id}/mark-done/` | POST | ثبت انجام فرایند؛ برای فرایند دوره‌ای `next_due_at` خودکار یک دوره جلو می‌رود |
+| `/it-ops/projects/` | CRUD | پروژه‌ها؛ فیلتر `status`, `priority`, `owner`, `due_before`, `due_after` |
+| `/it-ops/department-requests/` | CRUD | درخواست واحدهای دیگر از IT؛ فیلتر `status`, `priority`, `department`, `assigned_to` |
+| `/it-ops/goals/` | CRUD | اهداف کوتاه/بلندمدت |
+| `/it-ops/tasks/` | CRUD | کارها؛ فیلتر `status`, `priority`, `assigned_to`, `due_before`, `due_after`, `related_*` |
+| `/it-ops/room-stats/` | GET | آمار روزانهٔ اشغال اتاق (فقط‌خواندنی)؛ فیلتر `date_from`, `date_to` |
+| `/it-ops/room-stats/snapshot/` | POST | محاسبهٔ دوبارهٔ یک روز (پیش‌فرض امروز) — فقط سرپرست IT |
+
+**دسترسی** — همان سه‌سطحی سمت تیکت، بدون نقش جدید:
+
+| | خواندن | ساخت | کار روی آیتم | تخصیص، اولویت، رد، حذف |
+|---|---|---|---|---|
+| اپراتور واحد IT | همه | کار و درخواست واحد، فقط برای خودش | فقط آنچه به او سپرده شده (فرایند: فقط «انجام شد») | ✗ |
+| سرپرست IT (`is_supervisor`) و ادمین | همه | همه | همه | ✓ |
+| اپراتور هر واحد دیگر، حتی سرپرست | ✗ (۴۰۳) | ✗ | ✗ | ✗ |
+
+**زمان‌بندی خودکار** — برای فرایند دوره‌ای (روزانه/هفتگی/ماهانه/فصلی/سالانه) `next_due_at` خودکار حساب می‌شود: از `last_done_at` (یا زمان ساخت) به‌علاوهٔ یک دوره، با رعایت طول ماه (۳۱ ژانویه + یک ماه = آخر فوریه). جابه‌جایی دستی سررسید حفظ می‌شود تا وقتی فرایند انجام شود یا دوره‌اش عوض شود.
+
+**آمار روزانهٔ اتاق** — از دادهٔ واقعی ساخته می‌شود، نه ورود دستی. برای ثبت شبانه، در Windows Task Scheduler هر شب (مثلاً ۲۳:۵۵) اجرا کنید:
+
+```bash
+python manage.py snapshot_room_stats
+python manage.py snapshot_room_stats --days 30    # پر کردن ۳۰ روز گذشته از روی تاریخچهٔ وضعیت اتاق
+```
+
+---
+
 # 🧪 تست
 
 ## Backend
 
-۱۸۵ تست یکپارچگی/واحد (Django Test Runner، نه pytest) — علیه PostgreSQL واقعی، نه SQLite:
+۲۳۲ تست یکپارچگی/واحد (Django Test Runner، نه pytest) — علیه PostgreSQL واقعی، نه SQLite:
 
 ```bash
 python manage.py test                # کل تست‌ها
@@ -575,7 +619,7 @@ python manage.py test apps.tickets   # فقط یک اپ
 
 ## Frontend
 
-۶۲ تست خودکار با Vitest + React Testing Library:
+۶۹ تست خودکار با Vitest + React Testing Library:
 
 ```bash
 cd frontend
@@ -583,7 +627,7 @@ npm test            # اجرای یک‌باره
 npm run test:watch  # حالت watch
 ```
 
-پوشش شامل: منطق JWT، کامل‌بودن نگاشت لیبل‌های وضعیت/اولویت، هم‌راستایی ماشین‌حالت فرانت با بک‌اند، توابع قالب‌بندی تاریخ، هوک debounce، کامپوننت خطای فرم، و هوک محافظت مسیر (`useRequireRole`).
+پوشش شامل: منطق JWT، کامل‌بودن نگاشت لیبل‌های وضعیت/اولویت، هم‌راستایی ماشین‌حالت فرانت با بک‌اند، توابع قالب‌بندی تاریخ، هوک debounce، کامپوننت خطای فرم، هوک محافظت مسیر (`useRequireRole`)، و آینهٔ قواعد دسترسی تیکت و IT Ops.
 
 > تست End-to-End (مثلاً Playwright) هنوز راه‌اندازی نشده؛ تست دستی کامل هر دو پرتال انجام و تأیید شده است.
 
@@ -593,7 +637,7 @@ npm run test:watch  # حالت watch
 
 آدرس: `/admin/`
 
-مدل‌های ثبت‌شده: `User` (با فیلد Department)، `Room` (با `list_editable` برای status/floor)، `Department`، `Category`، `Ticket` (با Inline برای `TicketHistory` و فیلدهای گردش‌کار read-only).
+مدل‌های ثبت‌شده: `User` (با فیلد Department)، `Room` (با `list_editable` برای status/floor)، `Department`، `Category`، `Ticket` (با Inline برای `TicketHistory` و فیلدهای گردش‌کار read-only)، و مدل‌های IT Ops — با اکشن «انجام شد» روی فرایندها و «محاسبهٔ دوباره» روی آمار روزانهٔ اتاق (اعداد آمار اتاق در ادمین فقط‌خواندنی‌اند).
 
 ---
 
@@ -627,6 +671,7 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 | `JWT_COOKIE_SECURE` | فقط برای توسعهٔ محلی روی `http` مقدار `False` بگذارید؛ در هر محیط واقعی `True` |
 | `GUEST_LOGIN_THROTTLE_RATE` | سقف نرخ تلاش ورود مهمان (پیش‌فرض `10/min`) |
 | `MAX_ATTACHMENT_SIZE_MB` | بیشینهٔ حجم تصویر پیوست تیکت (پیش‌فرض ۵) |
+| `IT_DEPARTMENT_CODE` | کد واحدی که اپراتورهایش کارکنان IT حساب می‌شوند (پیش‌فرض `IT`) |
 
 ---
 
@@ -685,8 +730,10 @@ cmd /c rmdir /s /q .next
 - زمان نسبی فارسی و قالب‌بندی متمرکز تاریخ
 - نمای کانبان با درگ‌اند‌دراپ برای اپراتور
 - تاریخچهٔ خودکار وضعیت اتاق، خروجی PDF فارسی تیکت، و حالت تیره
+- سطح دسترسی سه‌گانه (اپراتور / سرپرست / ادمین)، خلاصهٔ آمار در پنل، و در دسترس بودن خودکار اپراتور
+- ماژول **IT Ops** برای عملیات داخلی واحد IT (بخش [IT Ops](#-it-ops))
 
-**تست‌ها** — ۱۸۵ تست بک‌اند (Django Test Runner) و ۶۲ تست فرانت‌اند (Vitest).
+**تست‌ها** — ۲۳۲ تست بک‌اند (Django Test Runner) و ۶۹ تست فرانت‌اند (Vitest).
 
 **فاز ۳ (شروع‌نشده)** — Celery + Redis + Django Channels برای پیامک، اعلان لحظه‌ای، وب‌هوک PMS و IPTV.
 
@@ -719,3 +766,6 @@ cmd /c rmdir /s /q .next
 - **فونت AbarMid سایت آراز برداشته نشد** چون تجاری است؛ همان حس با تنظیم وزن و فاصلهٔ حروف روی Vazirmatn بازسازی شد
 - **یک عدد SLA به‌ازای هر Category** (نه جدول جدا به‌ازای هر اولویت) — همان عدد هم به مهمان نشان داده می‌شود و هم مبنای «معوق» است، پس فقط یک مقدار برای هماهنگ نگه‌داشتن وجود دارد
 - **سرپرست به‌صورت فلگ `is_supervisor`، نه نقش جدید** — سرپرست همان اپراتور واحد است با اختیار تخصیص و تعیین اولویت. نقش جدید باید در همهٔ چک‌های `role == "OPERATOR"` دست می‌خورد و سرپرست دیگر خودش قابل تخصیص نمی‌بود
+- **کارکنان IT = اپراتورهای واحد IT، سرپرست IT = همان فلگ `is_supervisor`** — نه نقش جدید؛ همان منطق سمت تیکت. فهرست واحدها هم فقط یکی است: IT Ops به مدل `Department` واقعی FK می‌زند نه یک لیست انتخابی جدا
+- **آمار روزانهٔ اتاق محاسبه‌ای است، نه ورودی دستی** — امروز از وضعیت زندهٔ اتاق‌ها، روزهای گذشته از `RoomStatusLog`؛ API دیگر ساخت/ویرایش دستی‌اش را نمی‌پذیرد
+- **در دسترس بودن محاسبه‌ای، نه ذخیره‌شده** — اپراتور مشغول است تا وقتی تیکت OPEN/IN_PROGRESS به او اختصاص دارد. دکمهٔ دستی قبلی حذف شد چون وضعیت را از واقعیت جدا می‌کرد، و یک فیلد ذخیره‌شده باید در پنج مسیر مختلف تغییر وضعیت تیکت هم‌گام نگه داشته می‌شد

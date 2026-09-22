@@ -160,6 +160,13 @@ REST_FRAMEWORK = {
 }
 
 # ---------------------------------------------------------------------------
+# IT Ops
+# ---------------------------------------------------------------------------
+# IT staff are the OPERATORs of the department with this code (and the IT
+# supervisor is the one with is_supervisor) — see apps/core/permissions.py.
+IT_DEPARTMENT_CODE = config("IT_DEPARTMENT_CODE", default="IT")
+
+# ---------------------------------------------------------------------------
 # Simple JWT
 # ---------------------------------------------------------------------------
 SIMPLE_JWT = {
@@ -188,6 +195,15 @@ SPECTACULAR_SETTINGS = {
     "ENUM_NAME_OVERRIDES": {
         "RoomStatusEnum": "apps.rooms.models.Room.Status",
         "TicketStatusEnum": "apps.tickets.models.Ticket.Status",
+        # Tickets and IT Ops both have a "priority" field with different
+        # choice sets; name them so the schema doesn't fall back to hashes.
+        "TicketPriorityEnum": "apps.tickets.models.Ticket.Priority",
+        "ITPriorityEnum": "apps.it_ops.models.Priority",
+        "ITProcessStatusEnum": "apps.it_ops.models.Process.Status",
+        "ITProjectStatusEnum": "apps.it_ops.models.Project.Status",
+        "ITRequestStatusEnum": "apps.it_ops.models.DepartmentRequest.Status",
+        "ITGoalStatusEnum": "apps.it_ops.models.Goal.Status",
+        "ITTaskStatusEnum": "apps.it_ops.models.Task.Status",
     },
 }
 

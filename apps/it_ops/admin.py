@@ -1,6 +1,7 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 
 from .models import DepartmentRequest, Goal, Process, Project, RoomDailyStat, Task
+from .services import mark_process_done, snapshot_room_stats
 
 
 @admin.register(Process)
@@ -12,11 +13,19 @@ class ProcessAdmin(admin.ModelAdmin):
         "frequency",
         "status",
         "responsible",
+        "last_done_at",
         "next_due_at",
     )
     list_filter = ("process_type", "department", "frequency", "status")
     search_fields = ("title", "description")
     ordering = ("next_due_at",)
+    actions = ["mark_done"]
+
+    @admin.action(description="Mark selected processes as done now")
+    def mark_done(self, request, queryset):
+        for process in queryset:
+            mark_process_done(process)
+        self.message_user(request, f"{queryset.count()} process(es) marked done.", messages.SUCCESS)
 
 
 @admin.register(Project)
@@ -35,9 +44,11 @@ class DepartmentRequestAdmin(admin.ModelAdmin):
         "status",
         "assigned_to",
         "created_at",
+        "resolved_at",
     )
     list_filter = ("requesting_department", "priority", "status")
     search_fields = ("title", "description", "requested_by_name")
+    readonly_fields = ("resolved_at",)
 
 
 @admin.register(Goal)
@@ -65,6 +76,12 @@ class TaskAdmin(admin.ModelAdmin):
 
 @admin.register(RoomDailyStat)
 class RoomDailyStatAdmin(admin.ModelAdmin):
+    """
+    The counts are computed from Room data (it_ops.services), so they are
+    read-only here; only the free-text notes can be edited. New rows come
+    from the `snapshot_room_stats` command or the action below.
+    """
+
     list_display = (
         "date",
         "total_rooms",
@@ -72,5 +89,24 @@ class RoomDailyStatAdmin(admin.ModelAdmin):
         "vacant_rooms",
         "out_of_order_rooms",
         "occupancy_rate",
+        "recorded_at",
     )
     ordering = ("-date",)
+    readonly_fields = (
+        "date",
+        "total_rooms",
+        "occupied_rooms",
+        "vacant_rooms",
+        "out_of_order_rooms",
+        "recorded_at",
+    )
+    actions = ["recompute"]
+
+    def has_add_permission(self, request):
+        return False
+
+    @admin.action(description="Recompute selected days from room data")
+    def recompute(self, request, queryset):
+        for stat in queryset:
+            snapshot_room_stats(stat.date)
+        self.message_user(request, f"{queryset.count()} day(s) recomputed.", messages.SUCCESS)

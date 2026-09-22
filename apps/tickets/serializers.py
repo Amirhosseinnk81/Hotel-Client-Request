@@ -238,13 +238,25 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
 class OperatorColleagueSerializer(serializers.ModelSerializer):
     """
     Minimal representation of a fellow operator in the same department —
-    just enough to populate a "reassign this ticket to..." dropdown.
+    just enough to populate a "reassign this ticket to..." dropdown, with
+    each person's current workload.
+
+    `active_tickets` comes from a queryset annotation
+    (services.active_tickets_count), so this serializer must be given a
+    queryset annotated with it; OperatorColleaguesListView does that.
     """
+
+    active_tickets = serializers.IntegerField(read_only=True)
+    is_available = serializers.SerializerMethodField()
 
     class Meta:
         model = get_user_model()
-        fields = ["id", "username", "is_available"]
+        fields = ["id", "username", "active_tickets", "is_available"]
         read_only_fields = fields
+
+    def get_is_available(self, obj) -> bool:
+        # Derived, never stored: available only while holding no active ticket.
+        return obj.active_tickets == 0
 
 
 class TicketHistorySerializer(serializers.ModelSerializer):

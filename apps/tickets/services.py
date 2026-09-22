@@ -1,7 +1,5 @@
 """
-Ticket statistics — the numbers behind every Stats Summary surface.
-
-Two entry points, each with one fixed scope:
+Ticket statistics and derived operator workload.
 
 - compute_admin_stats_summary() — the whole hotel (Stage 2.4). Feeds the
   Django Admin "Stats Summary" page and GET /admin/stats/summary/, which
@@ -9,11 +7,13 @@ Two entry points, each with one fixed scope:
 - compute_department_stats_summary(department) — one department. Feeds
   GET /operator/stats/summary/ for that department's operators and
   supervisor.
+- active_tickets_count() / active_ticket_count(operator) — the single
+  definition of an operator being "busy". Availability is derived from
+  assignments rather than stored, and every surface that shows it counts
+  through here.
 
 Plain functions (not tied to DRF or Django Admin) so every surface shares
-one implementation instead of copies drifting apart. The per-status,
-average-resolution and overdue maths lives in one set of helpers that
-each scope runs over its own queryset.
+one implementation instead of copies drifting apart.
 """
 
 from datetime import timedelta
@@ -33,6 +33,42 @@ from .models import Ticket
 RESOLUTION_WINDOW = timedelta(days=30)
 
 ACTIVE_STATUSES = (Ticket.Status.OPEN, Ticket.Status.IN_PROGRESS)
+
+
+def active_tickets_count():
+    """
+    Aggregate for a queryset of operators: how many tickets assigned to
+    each are still OPEN or IN_PROGRESS, in that operator's own department.
+    Use as `.annotate(active_tickets=active_tickets_count())`.
+
+    This is THE definition of "busy": an operator is busy while it is
+    above 0 and available at 0. There is no stored flag and no manual
+    toggle, so it can't drift from reality — assigning a ticket makes the
+    operator busy, resolving or cancelling their last one frees them, and a
+    guest reopening a resolved ticket (which keeps its assignee) makes the
+    same operator busy again, all without any code having to remember to
+    update anything.
+
+    The colleagues dropdown, the operator's own status
+    (GET /operator/me/status/) and the department summary all count
+    through here, so the three can never disagree.
+    """
+    return Count(
+        "assigned_tickets",
+        filter=Q(
+            assigned_tickets__status__in=ACTIVE_STATUSES,
+            assigned_tickets__department=F("department"),
+        ),
+    )
+
+
+def active_ticket_count(operator):
+    """The same count as active_tickets_count(), for a single operator."""
+    return Ticket.objects.filter(
+        assigned_to=operator,
+        department=operator.department,
+        status__in=ACTIVE_STATUSES,
+    ).count()
 
 
 def _by_status(tickets):
@@ -132,19 +168,17 @@ def compute_department_stats_summary(department):
     # The department's whole roster, not just whoever currently holds a
     # ticket, so an idle operator still shows up with 0 — that's exactly
     # the person a supervisor is looking for. Supervisors listed first.
-    in_department = Q(assigned_tickets__department=department)
+    # Both counts stay in ONE annotate() call over the same relation so
+    # Django uses a single join for them.
     operators = (
         get_user_model().objects
         .filter(role="OPERATOR", department=department)
         .annotate(
-            active=Count(
-                "assigned_tickets",
-                filter=in_department & Q(assigned_tickets__status__in=ACTIVE_STATUSES),
-            ),
+            active_tickets=active_tickets_count(),
             resolved_recent=Count(
                 "assigned_tickets",
-                filter=in_department
-                & Q(
+                filter=Q(
+                    assigned_tickets__department=department,
                     assigned_tickets__status=Ticket.Status.RESOLVED,
                     assigned_tickets__resolved_at__gte=window_start,
                 ),
@@ -162,7 +196,7 @@ def compute_department_stats_summary(department):
                 "operator_id": operator.id,
                 "username": operator.username,
                 "is_supervisor": operator.is_supervisor,
-                "active": operator.active,
+                "active": operator.active_tickets,
                 "resolved_recent": operator.resolved_recent,
             }
             for operator in operators

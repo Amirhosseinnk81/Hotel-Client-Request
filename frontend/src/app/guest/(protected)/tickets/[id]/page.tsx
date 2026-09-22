@@ -29,15 +29,11 @@ import { FormError } from "@/components/form-error";
 import { RelativeTime } from "@/components/relative-time";
 import { TicketPdfExportButton } from "@/components/ticket-pdf-export-button";
 import { toast } from "@/hooks/use-toast";
+import { useLocale } from "@/contexts/locale-context";
+import { priorityMessageKey, statusMessageKey } from "@/lib/i18n";
 import { getTicketDetail, rateTicket, reopenTicket, ApiError } from "@/lib/api/client";
 import type { Ticket } from "@/lib/api/types";
-import {
-  statusLabels,
-  statusBadgeVariant,
-  priorityLabels,
-  priorityBadgeVariant,
-  priorityIcons,
-} from "@/lib/ticket-labels";
+import { statusBadgeVariant, priorityBadgeVariant, priorityIcons } from "@/lib/ticket-labels";
 
 /** Interactive 1-5 star picker, used before a rating has been submitted. */
 function StarPicker({
@@ -47,6 +43,7 @@ function StarPicker({
   value: number;
   onChange: (n: number) => void;
 }) {
+  const { t } = useLocale();
   return (
     <div className="flex gap-1" dir="ltr">
       {[1, 2, 3, 4, 5].map((n) => (
@@ -55,7 +52,7 @@ function StarPicker({
           type="button"
           onClick={() => onChange(n)}
           className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={`${n} ستاره`}
+          aria-label={t("detail.star", { n })}
         >
           <Star
             className={
@@ -101,6 +98,7 @@ export default function GuestTicketDetailPage({
 
   const [isReopening, setIsReopening] = useState(false);
   const [isReopenDialogOpen, setIsReopenDialogOpen] = useState(false);
+  const { t } = useLocale();
 
   const load = () => {
     // Deferred (not synchronous) so calling load() directly from a
@@ -112,10 +110,10 @@ export default function GuestTicketDetailPage({
       .catch((err) => {
         setError(
           err instanceof ApiError && err.status === 404
-            ? "چنین درخواستی یافت نشد."
+            ? t("detail.notFound")
             : err instanceof ApiError
               ? err.message
-              : "خطا در دریافت جزئیات درخواست."
+              : t("detail.loadError")
         );
       });
   };
@@ -132,14 +130,14 @@ export default function GuestTicketDetailPage({
       const updated = await rateTicket(id, ratingValue, feedback.trim());
       setTicket(updated);
       toast({
-        title: "متشکریم!",
-        description: "نظر شما ثبت شد.",
+        title: t("detail.thanksTitle"),
+        description: t("detail.thanksBody"),
         variant: "success",
       });
     } catch (err) {
       toast({
-        title: "خطا در ثبت نظر",
-        description: err instanceof ApiError ? err.message : "لطفاً دوباره تلاش کنید.",
+        title: t("detail.ratingError"),
+        description: err instanceof ApiError ? err.message : t("common.retry"),
         variant: "destructive",
       });
     } finally {
@@ -154,14 +152,14 @@ export default function GuestTicketDetailPage({
       setTicket(updated);
       setIsReopenDialogOpen(false);
       toast({
-        title: "درخواست دوباره باز شد",
-        description: "همکاران ما دوباره پیگیری می‌کنند.",
+        title: t("detail.reopenedTitle"),
+        description: t("detail.reopenedBody"),
         variant: "success",
       });
     } catch (err) {
       toast({
-        title: "خطا در بازکردن درخواست",
-        description: err instanceof ApiError ? err.message : "لطفاً دوباره تلاش کنید.",
+        title: t("detail.reopenError"),
+        description: err instanceof ApiError ? err.message : t("common.retry"),
         variant: "destructive",
       });
     } finally {
@@ -174,8 +172,8 @@ export default function GuestTicketDetailPage({
       <div className="flex items-center justify-between gap-2">
         <Button asChild variant="ghost" size="sm" className="w-fit gap-1.5">
           <Link href="/guest/tickets">
-            <ArrowRight className="size-3.5" />
-            بازگشت به لیست درخواست‌ها
+            <ArrowRight className="size-3.5 ltr:rotate-180" />
+            {t("detail.backToList")}
           </Link>
         </Button>
         {ticket && <TicketPdfExportButton ticketId={ticket.id} />}
@@ -219,7 +217,7 @@ export default function GuestTicketDetailPage({
             <div className="flex items-start justify-between gap-2">
               <CardTitle className="display-3">{ticket.title}</CardTitle>
               <Badge variant={statusBadgeVariant[ticket.status]}>
-                {statusLabels[ticket.status]}
+                {t(statusMessageKey(ticket.status))}
               </Badge>
             </div>
             <CardDescription>
@@ -230,18 +228,18 @@ export default function GuestTicketDetailPage({
             <div className="flex gap-2">
               <Badge variant={priorityBadgeVariant[ticket.priority]} className="gap-1">
                 <PriorityIcon className="size-3" />
-                اولویت: {priorityLabels[ticket.priority]}
+                {t("detail.priority", { priority: t(priorityMessageKey(ticket.priority)) })}
               </Badge>
             </div>
 
             <div className="flex flex-col gap-1">
-              <span className="text-xs text-muted-foreground">توضیحات</span>
+              <span className="text-xs text-muted-foreground">{t("detail.description")}</span>
               <p className="text-sm">{ticket.description}</p>
             </div>
 
             {ticket.attachments.length > 0 && (
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs text-muted-foreground">تصاویر پیوست</span>
+                <span className="text-xs text-muted-foreground">{t("detail.attachments")}</span>
                 <div className="flex flex-wrap gap-2">
                   {ticket.attachments.map((attachment) => (
                     <a
@@ -254,7 +252,7 @@ export default function GuestTicketDetailPage({
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={attachment.image}
-                        alt="پیوست تیکت"
+                        alt={t("detail.attachmentAlt")}
                         className="size-20 object-cover"
                       />
                     </a>
@@ -265,10 +263,10 @@ export default function GuestTicketDetailPage({
 
             <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground">
               <span>
-                ثبت‌شده: <RelativeTime iso={ticket.created_at} />
+                {t("detail.created")} <RelativeTime iso={ticket.created_at} />
               </span>
               <span>
-                آخرین به‌روزرسانی: <RelativeTime iso={ticket.updated_at} />
+                {t("detail.updated")} <RelativeTime iso={ticket.updated_at} />
               </span>
             </div>
 
@@ -276,12 +274,12 @@ export default function GuestTicketDetailPage({
               <div className="flex flex-col gap-1 rounded-lg border border-success/30 bg-success/10 p-3">
                 <div className="flex items-center gap-1.5 text-sm font-medium text-success">
                   <CheckCircle2 className="size-4" />
-                  نتیجهٔ رسیدگی
+                  {t("detail.resolution")}
                 </div>
                 <p className="text-sm">{ticket.resolution}</p>
                 {ticket.resolved_at && (
                   <span className="text-xs text-muted-foreground">
-                    زمان حل: <RelativeTime iso={ticket.resolved_at} />
+                    {t("detail.resolvedAt")} <RelativeTime iso={ticket.resolved_at} />
                   </span>
                 )}
               </div>
@@ -296,7 +294,7 @@ export default function GuestTicketDetailPage({
         <Card>
           <CardHeader>
             <CardTitle className="text-base font-medium">
-              {ticket.guest_rating ? "نظر شما" : "رضایت شما از این خدمت چقدر بود؟"}
+              {ticket.guest_rating ? t("detail.yourRating") : t("detail.rateQuestion")}
             </CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
@@ -311,12 +309,12 @@ export default function GuestTicketDetailPage({
               <div className="flex flex-col gap-3">
                 <StarPicker value={ratingValue} onChange={setRatingValue} />
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="feedback">نظر شما (اختیاری)</Label>
+                  <Label htmlFor="feedback">{t("detail.feedbackLabel")}</Label>
                   <Textarea
                     id="feedback"
                     value={feedback}
                     onChange={(e) => setFeedback(e.target.value)}
-                    placeholder="اگر نکته‌ای هست، همین‌جا بنویسید…"
+                    placeholder={t("detail.feedbackPlaceholder")}
                     rows={3}
                   />
                 </div>
@@ -326,7 +324,7 @@ export default function GuestTicketDetailPage({
                   onClick={handleSubmitRating}
                 >
                   {isSubmittingRating && <Loader2 className="size-3.5 animate-spin" />}
-                  {isSubmittingRating ? "در حال ثبت…" : "ثبت نظر"}
+                  {isSubmittingRating ? t("detail.submittingRating") : t("detail.submitRating")}
                 </Button>
               </div>
             )}
@@ -337,17 +335,13 @@ export default function GuestTicketDetailPage({
                   <DialogTrigger asChild>
                     <Button variant="outline" size="sm" className="w-fit gap-1.5">
                       <RotateCcw className="size-3.5" />
-                      مشکل حل نشد، دوباره باز کن
+                      {t("detail.reopenButton")}
                     </Button>
                   </DialogTrigger>
                   <DialogContent>
                     <DialogHeader>
-                      <DialogTitle>بازکردن دوبارهٔ درخواست</DialogTitle>
-                      <DialogDescription>
-                        این درخواست دوباره به وضعیت «باز» برمی‌گردد و همکاران واحد
-                        مربوطه دوباره پیگیری می‌کنند. این کار فقط یک‌بار برای هر
-                        درخواست ممکن است.
-                      </DialogDescription>
+                      <DialogTitle>{t("detail.reopenTitle")}</DialogTitle>
+                      <DialogDescription>{t("detail.reopenBody")}</DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                       <Button
@@ -355,7 +349,7 @@ export default function GuestTicketDetailPage({
                         onClick={() => setIsReopenDialogOpen(false)}
                         disabled={isReopening}
                       >
-                        انصراف
+                        {t("common.cancel")}
                       </Button>
                       <Button
                         className="gap-1.5"
@@ -363,7 +357,7 @@ export default function GuestTicketDetailPage({
                         disabled={isReopening}
                       >
                         {isReopening && <Loader2 className="size-3.5 animate-spin" />}
-                        {isReopening ? "در حال بازکردن…" : "بله، دوباره باز کن"}
+                        {isReopening ? t("detail.reopening") : t("detail.reopenConfirm")}
                       </Button>
                     </DialogFooter>
                   </DialogContent>

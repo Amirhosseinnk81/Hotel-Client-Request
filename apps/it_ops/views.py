@@ -11,15 +11,22 @@ Access (apps.core.permissions.IsITStaff + CanWorkOnITItem):
     re-prioritise, reject, or delete.
 """
 
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.core.permissions import CanWorkOnITItem, IsITStaff, is_it_supervisor
+from apps.core.permissions import (
+    CanWorkOnITItem,
+    IsITStaff,
+    IsOperatorWithDepartment,
+    is_it_supervisor,
+    it_department_code,
+)
 
 from .filters import (
     DepartmentRequestFilter,
@@ -41,6 +48,8 @@ from .models import (
 from .serializers import (
     DepartmentRequestSerializer,
     GoalSerializer,
+    ITStaffMemberSerializer,
+    OutgoingITRequestSerializer,
     ProcessSerializer,
     ProjectSerializer,
     RoomDailyStatSerializer,
@@ -110,10 +119,75 @@ class DepartmentRequestViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return (
-            DepartmentRequest.objects.select_related("requesting_department", "assigned_to")
+            DepartmentRequest.objects.select_related(
+                "requesting_department", "requested_by", "assigned_to"
+            )
             .annotate(priority_rank=priority_rank())
             .order_by("-priority_rank", "created_at")
         )
+
+
+class OutgoingITRequestViewSet(
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    """
+    /it-ops/outgoing-requests/ — how every other department asks IT for
+    something, from its own operator panel. Open to any operator with a
+    department, supervisor or not, and deliberately narrow:
+
+    - they see only their own department's requests (never another
+      department's, and none of IT's internal tasks or projects);
+    - the department and requester are always taken from request.user,
+      never from the body;
+    - they can file and follow a request, not change it afterwards —
+      status and assignment are IT's.
+    """
+
+    serializer_class = OutgoingITRequestSerializer
+    permission_classes = [IsOperatorWithDepartment]
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            # Schema generation runs without a real user.
+            return DepartmentRequest.objects.none()
+        return (
+            DepartmentRequest.objects.filter(requesting_department=self.request.user.department)
+            .select_related("requesting_department", "requested_by", "assigned_to")
+            .order_by("-created_at")
+        )
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        serializer.save(
+            requesting_department=user.department,
+            requested_by=user,
+            requested_by_name=user.get_full_name() or user.username,
+        )
+
+
+class ITStaffListView(APIView):
+    """
+    GET /it-ops/staff/ — the IT operators, for the assignee dropdowns in
+    the IT forms. Not paginated: one department's roster.
+    """
+
+    permission_classes = [IsITStaff]
+
+    @extend_schema(responses=ITStaffMemberSerializer(many=True))
+    def get(self, request):
+        staff = (
+            get_user_model()
+            .objects.filter(
+                role="OPERATOR",
+                is_active=True,
+                department__code=it_department_code(),
+            )
+            .order_by("-is_supervisor", "username")
+        )
+        return Response(ITStaffMemberSerializer(staff, many=True).data)
 
 
 class GoalViewSet(viewsets.ModelViewSet):

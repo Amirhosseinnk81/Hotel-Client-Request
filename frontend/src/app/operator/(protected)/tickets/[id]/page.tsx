@@ -44,6 +44,7 @@ import { FormError } from "@/components/form-error";
 import { RelativeTime } from "@/components/relative-time";
 import { TicketPdfExportButton } from "@/components/ticket-pdf-export-button";
 import { toast } from "@/hooks/use-toast";
+import { OFFLINE_SYNCED_EVENT } from "@/lib/offline";
 import {
   addOperatorTicketAttachment,
   addOperatorTicketNote,
@@ -52,6 +53,7 @@ import {
   getOperatorTicketDetail,
   getOperatorTicketHistory,
   updateOperatorTicket,
+  QueuedOfflineError,
   ApiError,
 } from "@/lib/api/client";
 import { canTriage, canWorkOnTicket, getOperatorViewer } from "@/lib/ticket-permissions";
@@ -173,6 +175,18 @@ export default function OperatorTicketDetailPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // After the offline queue is replayed, show what the server really holds
+  // (a queued change may have been sent, or dropped as a conflict).
+  useEffect(() => {
+    const onSynced = () => {
+      load();
+      loadTimeline();
+    };
+    window.addEventListener(OFFLINE_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(OFFLINE_SYNCED_EVENT, onSynced);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
   useEffect(() => {
     getOperatorColleagues()
       .then(setColleagues)
@@ -284,6 +298,21 @@ export default function OperatorTicketDetailPage({
         variant: "success",
       });
     } catch (err) {
+      if (err instanceof QueuedOfflineError) {
+        // Offline: queued for later (lib/offline.ts). Show the expected
+        // result now; a photo can't be queued and has to be added later.
+        if (err.ticket) setTicket(err.ticket);
+        setTargetStatus("");
+        setResolution("");
+        setResolutionAttachment(null);
+        toast({
+          title: "در صف ارسال",
+          description: resolutionAttachment
+            ? `${err.message} عکس در صف نمی‌ماند؛ پس از ارسال دوباره پیوستش کنید.`
+            : err.message,
+        });
+        return;
+      }
       toast({
         title: "خطا در تغییر وضعیت",
         description: err instanceof ApiError ? err.message : "خطا در تغییر وضعیت.",
@@ -306,6 +335,11 @@ export default function OperatorTicketDetailPage({
         variant: "success",
       });
     } catch (err) {
+      if (err instanceof QueuedOfflineError) {
+        setNoteText("");
+        toast({ title: "در صف ارسال", description: err.message });
+        return;
+      }
       toast({
         title: "خطا در ثبت یادداشت",
         description: err instanceof ApiError ? err.message : "خطا در ثبت یادداشت.",

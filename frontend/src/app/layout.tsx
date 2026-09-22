@@ -22,13 +22,20 @@ const THEME_INIT_SCRIPT = `
       var stored = window.localStorage.getItem("theme");
       var dark = stored === "dark" || (stored !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
       if (dark) document.documentElement.classList.add("dark");
+      // Guest portal language (contexts/locale-context.tsx): apply a stored
+      // English choice before first paint, so the page doesn't flash RTL.
+      if (window.location.pathname.indexOf("/guest") === 0 &&
+          window.localStorage.getItem("guest-locale") === "en") {
+        document.documentElement.lang = "en";
+        document.documentElement.dir = "ltr";
+      }
     } catch (e) {}
   })();
 `;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="fa" dir="rtl" className="h-full antialiased">
+    <html lang="fa" dir="rtl" className="h-full antialiased" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>

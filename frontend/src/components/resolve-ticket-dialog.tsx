@@ -19,6 +19,7 @@ import {
   addOperatorTicketAttachment,
   updateOperatorTicket,
   ApiError,
+  QueuedOfflineError,
 } from "@/lib/api/client";
 import type { Ticket } from "@/lib/api/types";
 
@@ -96,6 +97,18 @@ export function ResolveTicketDialog({
       reset();
       onOpenChange(false);
     } catch (err) {
+      if (err instanceof QueuedOfflineError) {
+        if (err.ticket) onResolved(err.ticket);
+        toast({
+          title: "در صف ارسال",
+          description: attachment
+            ? `${err.message} عکس در صف نمی‌ماند؛ پس از ارسال دوباره پیوستش کنید.`
+            : err.message,
+        });
+        reset();
+        onOpenChange(false);
+        return;
+      }
       toast({
         title: "خطا در ثبت نتیجه",
         description: err instanceof ApiError ? err.message : "لطفاً دوباره تلاش کنید.",

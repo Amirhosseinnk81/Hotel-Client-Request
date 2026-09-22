@@ -53,6 +53,22 @@ describe("useRequireRole", () => {
     expect(replaceMock).toHaveBeenCalledWith("/guest/login");
   });
 
+  it("waits instead of redirecting when the session check couldn't reach the server", () => {
+    // Offline reload: whether there's a session is unknown, and the login
+    // page wouldn't work offline either.
+    useAuthMock.mockReturnValue({
+      isLoading: false,
+      isAuthenticated: false,
+      isOfflineUnverified: true,
+      role: null,
+    });
+
+    const { result } = renderHook(() => useRequireRole(["OPERATOR"], "/operator/login"));
+
+    expect(result.current).toBe(false);
+    expect(replaceMock).not.toHaveBeenCalled();
+  });
+
   it("redirects when authenticated but with a role outside the allow-list", () => {
     useAuthMock.mockReturnValue({ isLoading: false, isAuthenticated: true, role: "OPERATOR" });
 

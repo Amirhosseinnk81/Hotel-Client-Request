@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ResolveTicketDialog } from "@/components/resolve-ticket-dialog";
 import { RelativeTime } from "@/components/relative-time";
 import { toast } from "@/hooks/use-toast";
-import { updateOperatorTicket, ApiError } from "@/lib/api/client";
+import { updateOperatorTicket, ApiError, QueuedOfflineError } from "@/lib/api/client";
 import { canWorkOnTicket, getOperatorViewer } from "@/lib/ticket-permissions";
 import {
   allowedNextStatuses,
@@ -88,6 +88,11 @@ export function KanbanBoard({
         variant: "success",
       });
     } catch (err) {
+      if (err instanceof QueuedOfflineError) {
+        if (err.ticket) onTicketChange(err.ticket);
+        toast({ title: "در صف ارسال", description: err.message });
+        return;
+      }
       toast({
         title: "خطا در تغییر وضعیت",
         description: err instanceof ApiError ? err.message : "لطفاً دوباره تلاش کنید.",

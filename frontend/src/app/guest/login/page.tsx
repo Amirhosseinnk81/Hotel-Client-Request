@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,16 +19,13 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FormError } from "@/components/form-error";
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { useAuth } from "@/contexts/auth-context";
+import { useLocale } from "@/contexts/locale-context";
 import { ApiError } from "@/lib/api/client";
 import { normalizeRoomParam } from "@/lib/room-param";
 
-const guestLoginSchema = z.object({
-  nationalId: z.string().min(1, "کد ملی را وارد کنید"),
-  roomNumber: z.string().min(1, "شماره اتاق را وارد کنید"),
-});
-
-type GuestLoginForm = z.infer<typeof guestLoginSchema>;
+type GuestLoginForm = { nationalId: string; roomNumber: string };
 
 /**
  * Room QR deep link: `/guest/login?room=305`.
@@ -43,6 +40,17 @@ function GuestLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [apiError, setApiError] = useState<string | null>(null);
+  const { t, locale } = useLocale();
+
+  // Built per language so the validation messages follow the switcher.
+  const guestLoginSchema = useMemo(
+    () =>
+      z.object({
+        nationalId: z.string().min(1, t("login.nationalIdRequired")),
+        roomNumber: z.string().min(1, t("login.roomNumberRequired")),
+      }),
+    [t]
+  );
 
   const roomFromQr = normalizeRoomParam(searchParams.get("room"));
 
@@ -67,7 +75,7 @@ function GuestLoginContent() {
       if (error instanceof ApiError) {
         setApiError(error.message);
       } else {
-        setApiError("خطایی رخ داد. لطفاً دوباره تلاش کنید.");
+        setApiError(t("common.genericError"));
       }
     }
   };
@@ -77,26 +85,29 @@ function GuestLoginContent() {
     // utilitarian login would use. This is the first screen a guest
     // sees, so it carries the hotel's identity rather than optimising
     // for density.
-    <main className="flex min-h-full flex-1 items-center justify-center px-6 py-16">
+    <main className="relative flex min-h-full flex-1 items-center justify-center px-6 py-16">
+      <div className="absolute end-4 top-4">
+        <LanguageSwitcher />
+      </div>
       <Card className="w-full max-w-md px-2 py-10">
         <CardHeader className="gap-3">
           <div className="mb-1 flex size-11 items-center justify-center border border-accent/40 text-accent">
             <DoorOpen className="size-5" />
           </div>
-          <CardTitle className="display-2 rule-accent">ورود مهمان</CardTitle>
+          <CardTitle className="display-2 rule-accent">{t("login.title")}</CardTitle>
           <CardDescription className="pt-2">
             {roomFromQr
-              ? `شماره اتاق ${roomFromQr} از روی کد QR وارد شد. برای ورود، کد ملی خود را هم وارد کنید.`
-              : "برای ورود، کد ملی و شماره اتاق خود را وارد کنید."}
+              ? t("login.descriptionFromQr", { room: roomFromQr })
+              : t("login.description")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-5">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="nationalId">کد ملی</Label>
+              <Label htmlFor="nationalId">{t("login.nationalId")}</Label>
               <Input
                 id="nationalId"
-                inputMode="numeric"
+                inputMode={locale === "fa" ? "numeric" : "text"}
                 autoComplete="off"
                 aria-invalid={!!errors.nationalId}
                 {...register("nationalId")}
@@ -109,7 +120,7 @@ function GuestLoginContent() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="roomNumber">شماره اتاق</Label>
+              <Label htmlFor="roomNumber">{t("login.roomNumber")}</Label>
               <Input
                 id="roomNumber"
                 inputMode="numeric"
@@ -127,7 +138,7 @@ function GuestLoginContent() {
             <FormError message={apiError} />
 
             <Button type="submit" disabled={isSubmitting} className="mt-3 w-full">
-              {isSubmitting ? "در حال ورود…" : "ورود"}
+              {isSubmitting ? t("login.submitting") : t("login.submit")}
             </Button>
           </form>
         </CardContent>

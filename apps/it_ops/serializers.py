@@ -127,6 +127,9 @@ class DepartmentRequestSerializer(serializers.ModelSerializer):
     assigned_to_username = serializers.CharField(
         source="assigned_to.username", read_only=True, default=None
     )
+    requested_by_username = serializers.CharField(
+        source="requested_by.username", read_only=True, default=None
+    )
 
     class Meta:
         model = DepartmentRequest
@@ -136,6 +139,8 @@ class DepartmentRequestSerializer(serializers.ModelSerializer):
             "description",
             "requesting_department",
             "requesting_department_name",
+            "requested_by",
+            "requested_by_username",
             "requested_by_name",
             "priority",
             "priority_display",
@@ -147,8 +152,9 @@ class DepartmentRequestSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        # resolved_at follows the status (DepartmentRequest.save()).
-        read_only_fields = ["id", "resolved_at", "created_at", "updated_at"]
+        # resolved_at follows the status (DepartmentRequest.save());
+        # requested_by is only ever set by OutgoingITRequestViewSet.
+        read_only_fields = ["id", "requested_by", "resolved_at", "created_at", "updated_at"]
         extra_kwargs = {
             # Nullable in the DB only for legacy rows; new requests need one.
             "requesting_department": {"required": True, "allow_null": False},
@@ -156,6 +162,58 @@ class DepartmentRequestSerializer(serializers.ModelSerializer):
 
     def validate_assigned_to(self, value):
         return validate_it_assignee(value)
+
+
+class OutgoingITRequestSerializer(serializers.ModelSerializer):
+    """
+    A department's own request to IT, as its operators see it: they write
+    the title, description and urgency; everything else (department,
+    requester, status, assignee) is IT's or the server's to set.
+    """
+
+    requesting_department_name = serializers.CharField(
+        source="requesting_department.name", read_only=True, default=None
+    )
+    requested_by_username = serializers.CharField(
+        source="requested_by.username", read_only=True, default=None
+    )
+    assigned_to_username = serializers.CharField(
+        source="assigned_to.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = DepartmentRequest
+        fields = [
+            "id",
+            "title",
+            "description",
+            "priority",
+            "status",
+            "requesting_department_name",
+            "requested_by_username",
+            "assigned_to_username",
+            "resolved_at",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "status",
+            "requesting_department_name",
+            "requested_by_username",
+            "assigned_to_username",
+            "resolved_at",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class ITStaffMemberSerializer(serializers.Serializer):
+    """One IT operator, for the assignee dropdowns of the IT forms."""
+
+    id = serializers.IntegerField()
+    username = serializers.CharField()
+    is_supervisor = serializers.BooleanField()
 
 
 class GoalSerializer(serializers.ModelSerializer):

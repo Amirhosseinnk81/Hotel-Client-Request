@@ -281,6 +281,9 @@ export interface ITDepartmentRequest {
   description: string;
   requesting_department: number | null;
   requesting_department_name: string | null;
+  /** Set when a department filed it from its own panel (outgoing-requests). */
+  requested_by: number | null;
+  requested_by_username: string | null;
   requested_by_name: string;
   priority: ITPriority;
   status: ITRequestStatus;
@@ -310,3 +313,77 @@ export interface ITTodayDashboard {
   room_stats_today: ITRoomStatsToday;
   my_open_tasks_count: number;
 }
+
+export type ITProjectStatus = "PLANNING" | "IN_PROGRESS" | "ON_HOLD" | "DONE" | "CANCELLED";
+export type ITGoalStatus = "NOT_STARTED" | "IN_PROGRESS" | "ACHIEVED" | "MISSED";
+export type ITGoalType = "SHORT_TERM" | "LONG_TERM";
+
+export interface ITProject {
+  id: number;
+  title: string;
+  description: string;
+  status: ITProjectStatus;
+  priority: ITPriority;
+  owner: number | null;
+  owner_username: string | null;
+  start_date: string | null;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ITGoal {
+  id: number;
+  title: string;
+  description: string;
+  goal_type: ITGoalType;
+  status: ITGoalStatus;
+  target_date: string | null;
+  owner: number | null;
+  owner_username: string | null;
+  related_project: number | null;
+  related_project_title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** GET /it-ops/staff/ — an IT operator, for assignee dropdowns. */
+export interface ITStaffMember {
+  id: number;
+  username: string;
+  is_supervisor: boolean;
+}
+
+/**
+ * /it-ops/outgoing-requests/ — a department's own request to IT, as that
+ * department sees it. Only title/description/priority are writable.
+ */
+export interface OutgoingITRequest {
+  id: number;
+  title: string;
+  description: string;
+  priority: ITPriority;
+  status: ITRequestStatus;
+  requesting_department_name: string | null;
+  requested_by_username: string | null;
+  assigned_to_username: string | null;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateOutgoingITRequestPayload {
+  title: string;
+  description?: string;
+  priority?: ITPriority;
+}
+
+/** The IT Ops resources with full CRUD, by URL segment. */
+export interface ITResourceMap {
+  tasks: ITTask;
+  "department-requests": ITDepartmentRequest;
+  processes: ITProcess;
+  projects: ITProject;
+  goals: ITGoal;
+}
+export type ITResource = keyof ITResourceMap;

@@ -597,3 +597,106 @@ class ProcessDateHelperTests(TestCase):
 
         self.assertEqual(_add_months(date(2028, 1, 31), 1), date(2028, 2, 29))
         self.assertEqual(_add_months(date(2026, 12, 15), 1), date(2027, 1, 15))
+
+
+class OutgoingITRequestTests(ITOpsTestData, APITestCase):
+    """Any department files requests to IT from its own panel."""
+
+    url = reverse("it_ops:outgoing-request-list")
+
+    def test_department_operator_files_a_request_for_their_own_department(self):
+        self.as_user(self.hk_supervisor)
+
+        response = self.client.post(
+            self.url,
+            {
+                "title": "Printer jammed",
+                "priority": "HIGH",
+                # Attempts to set what isn't theirs are ignored.
+                "requesting_department": self.it.pk,
+                "status": "COMPLETED",
+                "assigned_to": self.it_operator.pk,
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        request = DepartmentRequest.objects.get(pk=response.data["id"])
+        self.assertEqual(request.requesting_department, self.housekeeping)
+        self.assertEqual(request.requested_by, self.hk_supervisor)
+        self.assertEqual(request.status, DepartmentRequest.Status.PENDING)
+        self.assertIsNone(request.assigned_to)
+        self.assertEqual(request.priority, "HIGH")
+
+    def test_a_regular_operator_can_file_too(self):
+        clerk = User.objects.create_user(
+            username="hk_clerk", role=User.Role.OPERATOR, department=self.housekeeping
+        )
+        self.as_user(clerk)
+
+        response = self.client.post(self.url, {"title": "No network"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_only_their_own_departments_requests_are_listed(self):
+        mine = self.make_request(requesting_department=self.housekeeping)
+        front_desk = Department.objects.create(name="Front desk", code="FD_ITOPS")
+        self.make_request(requesting_department=front_desk)
+        self.as_user(self.hk_supervisor)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual([r["id"] for r in response.data["results"]], [mine.pk])
+
+    def test_another_departments_request_is_not_found(self):
+        front_desk = Department.objects.create(name="Front desk", code="FD_ITOPS2")
+        theirs = self.make_request(requesting_department=front_desk)
+        self.as_user(self.hk_supervisor)
+
+        response = self.client.get(reverse("it_ops:outgoing-request-detail", args=[theirs.pk]))
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_requesters_cannot_change_or_delete_a_filed_request(self):
+        mine = self.make_request(requesting_department=self.housekeeping)
+        self.as_user(self.hk_supervisor)
+        detail = reverse("it_ops:outgoing-request-detail", args=[mine.pk])
+
+        self.assertEqual(
+            self.client.patch(detail, {"status": "COMPLETED"}, format="json").status_code,
+            status.HTTP_405_METHOD_NOT_ALLOWED,
+        )
+        self.assertEqual(self.client.delete(detail).status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_filed_request_reaches_it_with_the_requester(self):
+        self.as_user(self.hk_supervisor)
+        self.client.post(self.url, {"title": "Card reader"}, format="json")
+
+        self.as_user(self.it_operator)
+        response = self.client.get(reverse("it_ops:department-request-list"))
+
+        row = response.data["results"][0]
+        self.assertEqual(row["requested_by_username"], "hk_sup")
+        self.assertEqual(row["requesting_department_name"], "Housekeeping")
+
+    def test_admin_guest_and_departmentless_operator_are_refused(self):
+        drifter = User.objects.create_user(username="no_dept_op", role=User.Role.OPERATOR)
+        for user in (self.admin, self.guest, drifter):
+            self.as_user(user)
+            with self.subTest(user=user.username):
+                self.assertEqual(self.client.get(self.url).status_code, status.HTTP_403_FORBIDDEN)
+
+
+class ITStaffListTests(ITOpsTestData, APITestCase):
+    def test_lists_it_operators_supervisor_first(self):
+        self.as_user(self.it_operator)
+
+        response = self.client.get(reverse("it_ops:staff"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([m["username"] for m in response.data], ["it_sup", "it_op", "it_op2"])
+
+    def test_other_departments_cannot_list_it_staff(self):
+        self.as_user(self.hk_supervisor)
+
+        self.assertEqual(self.client.get(reverse("it_ops:staff")).status_code, 403)

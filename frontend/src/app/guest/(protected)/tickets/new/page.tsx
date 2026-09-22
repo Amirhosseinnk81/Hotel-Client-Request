@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -30,7 +30,9 @@ import {
 } from "@/components/ui/card";
 import { FormError } from "@/components/form-error";
 import { toast } from "@/hooks/use-toast";
-import { priorityLabels } from "@/lib/ticket-labels";
+import { useLocale } from "@/contexts/locale-context";
+import { formatNumber } from "@/lib/format";
+import { priorityMessageKey, type Locale, type MessageKey } from "@/lib/i18n";
 import {
   ApiError,
   addGuestTicketAttachment,
@@ -46,34 +48,36 @@ import type {
   TicketPriority,
 } from "@/lib/api/types";
 
-const priorityOptions: { value: TicketPriority; label: string }[] = (
-  Object.keys(priorityLabels) as TicketPriority[]
-).map((value) => ({ value, label: priorityLabels[value] }));
+const PRIORITIES: TicketPriority[] = ["LOW", "NORMAL", "HIGH", "URGENT"];
 
-/** e.g. 15 -> "۱۵ دقیقه", 90 -> "۱ ساعت و ۳۰ دقیقه" (Stage 2.9). */
-function formatEstimatedResponse(minutes: number): string {
-  const fa = (n: number) => new Intl.NumberFormat("fa-IR").format(n);
+type Translate = (key: MessageKey, vars?: Record<string, string | number>) => string;
+
+/** e.g. 15 -> "۱۵ دقیقه" / "15 min", 90 -> "۱ ساعت و ۳۰ دقیقه" / "1 h 30 min" (Stage 2.9). */
+function formatEstimatedResponse(minutes: number, t: Translate, locale: Locale): string {
+  const n = (value: number) => formatNumber(value, locale);
 
   if (minutes < 60) {
-    return `${fa(minutes)} دقیقه`;
+    return t("new.minutes", { n: n(minutes) });
   }
 
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
   return remainder === 0
-    ? `${fa(hours)} ساعت`
-    : `${fa(hours)} ساعت و ${fa(remainder)} دقیقه`;
+    ? t("new.hours", { n: n(hours) })
+    : t("new.hoursMinutes", { h: n(hours), m: n(remainder) });
 }
 
-const newTicketSchema = z.object({
-  title: z.string().min(3, "عنوان باید حداقل ۳ حرف باشد"),
-  description: z.string().min(5, "توضیحات باید حداقل ۵ حرف باشد"),
-  department: z.string().min(1, "واحد را انتخاب کنید"),
-  category: z.string().min(1, "دسته‌بندی را انتخاب کنید"),
-  priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]),
-});
+function buildNewTicketSchema(t: Translate) {
+  return z.object({
+    title: z.string().min(3, t("new.fieldTitleMin")),
+    description: z.string().min(5, t("new.fieldDescriptionMin")),
+    department: z.string().min(1, t("new.fieldDepartmentRequired")),
+    category: z.string().min(1, t("new.fieldCategoryRequired")),
+    priority: z.enum(["LOW", "NORMAL", "HIGH", "URGENT"]),
+  });
+}
 
-type NewTicketForm = z.infer<typeof newTicketSchema>;
+type NewTicketForm = z.infer<ReturnType<typeof buildNewTicketSchema>>;
 
 /** Renders a QuickRequestTemplate.icon (a lucide-react name) with a safe fallback. */
 function QuickTemplateIcon({ name }: { name: string }) {
@@ -86,6 +90,9 @@ function QuickTemplateIcon({ name }: { name: string }) {
 
 export default function NewTicketPage() {
   const router = useRouter();
+  const { t, locale } = useLocale();
+  // Built per language so the validation messages follow the switcher.
+  const newTicketSchema = useMemo(() => buildNewTicketSchema(t), [t]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [quickTemplates, setQuickTemplates] = useState<QuickRequestTemplate[]>([]);
@@ -127,7 +134,7 @@ export default function NewTicketPage() {
       .catch((err) => {
         if (cancelled) return;
         setOptionsError(
-          err instanceof ApiError ? err.message : "خطا در دریافت لیست واحدها و دسته‌بندی‌ها."
+          err instanceof ApiError ? err.message : t("new.optionsError")
         );
       })
       .finally(() => {
@@ -147,6 +154,7 @@ export default function NewTicketPage() {
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t only changes the fallback text
   }, []);
 
   // Holds the confirmation on screen just long enough to register, then
@@ -181,11 +189,9 @@ export default function NewTicketPage() {
           // The ticket itself was created successfully — don't block the
           // guest on a photo failure, just let them know it didn't attach.
           toast({
-            title: "درخواست ثبت شد، ولی عکس پیوست نشد",
+            title: t("new.photoFailedTitle"),
             description:
-              attachmentErr instanceof ApiError
-                ? attachmentErr.message
-                : "خطا در آپلود تصویر.",
+              attachmentErr instanceof ApiError ? attachmentErr.message : t("new.photoFailedBody"),
             variant: "destructive",
           });
         }
@@ -198,7 +204,7 @@ export default function NewTicketPage() {
       // beat with the ticket number closes that loop before we navigate.
       setSubmittedTicket({ id: ticket.id, title: ticket.title });
     } catch (error) {
-      setApiError(error instanceof ApiError ? error.message : "خطایی رخ داد. لطفاً دوباره تلاش کنید.");
+      setApiError(error instanceof ApiError ? error.message : t("common.genericError"));
     }
   };
 
@@ -225,11 +231,10 @@ export default function NewTicketPage() {
             <path d="M14 27l8.5 8.5L38 19" />
           </svg>
 
-          <p className="display-2 mt-6">درخواست شما ثبت شد</p>
+          <p className="display-2 mt-6">{t("new.doneTitle")}</p>
 
           <p className="mt-3 text-sm text-muted-foreground">
-            «{submittedTicket.title}» با شمارهٔ {submittedTicket.id} برای هتل
-            ارسال شد و به‌زودی بررسی می‌شود.
+            {t("new.doneBody", { title: submittedTicket.title, id: submittedTicket.id })}
           </p>
 
           <span className="mt-6 h-px w-10 bg-accent" aria-hidden="true" />
@@ -242,22 +247,20 @@ export default function NewTicketPage() {
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 py-2">
       <Button asChild variant="ghost" size="sm" className="w-fit gap-1.5">
         <Link href="/guest">
-          <ArrowRight className="size-3.5" />
-          بازگشت
+          <ArrowRight className="size-3.5 ltr:rotate-180" />
+          {t("common.back")}
         </Link>
       </Button>
 
       <Card className="py-8">
         <CardHeader className="gap-2">
-          <CardTitle className="display-2 rule-accent">ثبت درخواست جدید</CardTitle>
-          <CardDescription className="pt-2">
-            درخواست خود را برای هتل ثبت کنید.
-          </CardDescription>
+          <CardTitle className="display-2 rule-accent">{t("new.title")}</CardTitle>
+          <CardDescription className="pt-2">{t("new.subtitle")}</CardDescription>
         </CardHeader>
         <CardContent>
           {quickTemplates.length > 0 && (
             <div className="mb-4 flex flex-col gap-1.5">
-              <span className="text-xs text-muted-foreground">درخواست سریع</span>
+              <span className="text-xs text-muted-foreground">{t("new.quick")}</span>
               <div className="flex flex-wrap gap-2">
                 {quickTemplates.map((template) => (
                   <button
@@ -275,7 +278,7 @@ export default function NewTicketPage() {
           )}
 
           {isLoadingOptions && (
-            <p className="text-sm text-muted-foreground">در حال بارگذاری…</p>
+            <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
           )}
 
           {!isLoadingOptions && optionsError && <FormError message={optionsError} />}
@@ -284,10 +287,10 @@ export default function NewTicketPage() {
             <FormError
               message={
                 departments.length === 0 && categories.length === 0
-                  ? "هیچ واحد و دسته‌بندی‌ای در سیستم تعریف نشده است. ابتدا از پنل مدیریت اضافه کنید."
+                  ? t("new.noDepartmentsOrCategories")
                   : departments.length === 0
-                    ? "هیچ واحدی در سیستم تعریف نشده است. ابتدا از پنل مدیریت اضافه کنید."
-                    : "هیچ دسته‌بندی‌ای در سیستم تعریف نشده است. ابتدا از پنل مدیریت اضافه کنید."
+                    ? t("new.noDepartments")
+                    : t("new.noCategories")
               }
             />
           )}
@@ -295,10 +298,10 @@ export default function NewTicketPage() {
           {!isLoadingOptions && !optionsError && departments.length > 0 && categories.length > 0 && (
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="title">عنوان</Label>
+                <Label htmlFor="title">{t("new.fieldTitle")}</Label>
                 <Input
                   id="title"
-                  placeholder="مثلاً درخواست حوله اضافه"
+                  placeholder={t("new.fieldTitlePlaceholder")}
                   aria-invalid={!!errors.title}
                   {...register("title")}
                 />
@@ -308,10 +311,10 @@ export default function NewTicketPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="description">توضیحات</Label>
+                <Label htmlFor="description">{t("new.fieldDescription")}</Label>
                 <Textarea
                   id="description"
-                  placeholder="جزئیات درخواست خود را بنویسید"
+                  placeholder={t("new.fieldDescriptionPlaceholder")}
                   aria-invalid={!!errors.description}
                   {...register("description")}
                 />
@@ -324,14 +327,14 @@ export default function NewTicketPage() {
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
-                  <Label>واحد مربوطه</Label>
+                  <Label>{t("new.fieldDepartment")}</Label>
                   <Controller
                     name="department"
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger aria-invalid={!!errors.department}>
-                          <SelectValue placeholder="انتخاب واحد" />
+                          <SelectValue placeholder={t("new.fieldDepartmentPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent>
                           {departments.map((dept) => (
@@ -351,14 +354,14 @@ export default function NewTicketPage() {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <Label>دسته‌بندی</Label>
+                  <Label>{t("new.fieldCategory")}</Label>
                   <Controller
                     name="category"
                     control={control}
                     render={({ field }) => (
                       <Select onValueChange={field.onChange} value={field.value}>
                         <SelectTrigger aria-invalid={!!errors.category}>
-                          <SelectValue placeholder="انتخاب دسته‌بندی" />
+                          <SelectValue placeholder={t("new.fieldCategoryPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent>
                           {categories.map((cat) => (
@@ -377,14 +380,16 @@ export default function NewTicketPage() {
                   )}
                   {selectedCategory && (
                     <span className="text-xs text-muted-foreground">
-                      زمان تقریبی پاسخ: {formatEstimatedResponse(selectedCategory.sla_minutes)}
+                      {t("new.estimatedResponse", {
+                        time: formatEstimatedResponse(selectedCategory.sla_minutes, t, locale),
+                      })}
                     </span>
                   )}
                 </div>
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label>اولویت</Label>
+                <Label>{t("new.fieldPriority")}</Label>
                 <Controller
                   name="priority"
                   control={control}
@@ -394,9 +399,9 @@ export default function NewTicketPage() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {priorityOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
+                        {PRIORITIES.map((value) => (
+                          <SelectItem key={value} value={value}>
+                            {t(priorityMessageKey(value))}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -406,13 +411,13 @@ export default function NewTicketPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="attachment">عکس خرابی (اختیاری)</Label>
+                <Label htmlFor="attachment">{t("new.fieldPhoto")}</Label>
                 <label
                   htmlFor="attachment"
                   className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-secondary/40"
                 >
                   <ImagePlus className="size-4 shrink-0" />
-                  {attachmentFile ? attachmentFile.name : "انتخاب تصویر…"}
+                  {attachmentFile ? attachmentFile.name : t("new.choosePhoto")}
                 </label>
                 <input
                   id="attachment"
@@ -433,7 +438,7 @@ export default function NewTicketPage() {
 
               <Button type="submit" disabled={isSubmitting} className="mt-2 gap-2">
                 <Send className="size-4" />
-                {isSubmitting ? "در حال ثبت…" : "ثبت درخواست"}
+                {isSubmitting ? t("new.submitting") : t("new.submit")}
               </Button>
             </form>
           )}

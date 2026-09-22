@@ -891,6 +891,118 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/it-ops/outgoing-requests/:
+    get:
+      operationId: api_v1_it_ops_outgoing_requests_list
+      description: |-
+        /it-ops/outgoing-requests/ — how every other department asks IT for
+        something, from its own operator panel. Open to any operator with a
+        department, supervisor or not, and deliberately narrow:
+
+        - they see only their own department's requests (never another
+          department's, and none of IT's internal tasks or projects);
+        - the department and requester are always taken from request.user,
+          never from the body;
+        - they can file and follow a request, not change it afterwards —
+          status and assignment are IT's.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedOutgoingITRequestList'
+          description: ''
+    post:
+      operationId: api_v1_it_ops_outgoing_requests_create
+      description: |-
+        /it-ops/outgoing-requests/ — how every other department asks IT for
+        something, from its own operator panel. Open to any operator with a
+        department, supervisor or not, and deliberately narrow:
+
+        - they see only their own department's requests (never another
+          department's, and none of IT's internal tasks or projects);
+        - the department and requester are always taken from request.user,
+          never from the body;
+        - they can file and follow a request, not change it afterwards —
+          status and assignment are IT's.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutgoingITRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/OutgoingITRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/OutgoingITRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutgoingITRequest'
+          description: ''
+  /api/v1/it-ops/outgoing-requests/{id}/:
+    get:
+      operationId: api_v1_it_ops_outgoing_requests_retrieve
+      description: |-
+        /it-ops/outgoing-requests/ — how every other department asks IT for
+        something, from its own operator panel. Open to any operator with a
+        department, supervisor or not, and deliberately narrow:
+
+        - they see only their own department's requests (never another
+          department's, and none of IT's internal tasks or projects);
+        - the department and requester are always taken from request.user,
+          never from the body;
+        - they can file and follow a request, not change it afterwards —
+          status and assignment are IT's.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this department request.
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutgoingITRequest'
+          description: ''
   /api/v1/it-ops/processes/:
     get:
       operationId: api_v1_it_ops_processes_list
@@ -1440,6 +1552,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RoomDailyStat'
+          description: ''
+  /api/v1/it-ops/staff/:
+    get:
+      operationId: api_v1_it_ops_staff_list
+      description: |-
+        GET /it-ops/staff/ — the IT operators, for the assignee dropdowns in
+        the IT forms. Not paginated: one department's roster.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ITStaffMember'
           description: ''
   /api/v1/it-ops/tasks/:
     get:
@@ -3025,6 +3156,15 @@ components:
         requesting_department_name:
           type: string
           readOnly: true
+        requested_by:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: The operator who filed it from their own department's panel.
+            Empty when IT logged a phoned-in request (see requested_by_name).
+        requested_by_username:
+          type: string
+          readOnly: true
         requested_by_name:
           type: string
           description: Name of the person who filed the request, if not a system user.
@@ -3063,6 +3203,8 @@ components:
       - created_at
       - id
       - priority_display
+      - requested_by
+      - requested_by_username
       - requesting_department
       - requesting_department_name
       - resolved_at
@@ -3154,6 +3296,20 @@ components:
         * `IN_PROGRESS` - In Progress
         * `COMPLETED` - Completed
         * `REJECTED` - Rejected
+    ITStaffMember:
+      type: object
+      description: One IT operator, for the assignee dropdowns of the IT forms.
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        is_supervisor:
+          type: boolean
+      required:
+      - id
+      - is_supervisor
+      - username
     ITTaskStatusEnum:
       enum:
       - TODO
@@ -3352,6 +3508,76 @@ components:
       required:
       - password
       - username
+    OutgoingITRequest:
+      type: object
+      description: |-
+        A department's own request to IT, as its operators see it: they write
+        the title, description and urgency; everything else (department,
+        requester, status, assignee) is IT's or the server's to set.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+        status:
+          allOf:
+          - $ref: '#/components/schemas/ITRequestStatusEnum'
+          readOnly: true
+        requesting_department_name:
+          type: string
+          readOnly: true
+        requested_by_username:
+          type: string
+          readOnly: true
+        assigned_to_username:
+          type: string
+          readOnly: true
+        resolved_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - assigned_to_username
+      - created_at
+      - id
+      - requested_by_username
+      - requesting_department_name
+      - resolved_at
+      - status
+      - title
+      - updated_at
+    OutgoingITRequestRequest:
+      type: object
+      description: |-
+        A department's own request to IT, as its operators see it: they write
+        the title, description and urgency; everything else (department,
+        requester, status, assignee) is IT's or the server's to set.
+      properties:
+        title:
+          type: string
+          minLength: 1
+          maxLength: 255
+        description:
+          type: string
+        priority:
+          $ref: '#/components/schemas/ITPriorityEnum'
+      required:
+      - title
     PaginatedCategoryList:
       type: object
       required:
@@ -3467,6 +3693,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/OperatorTicket'
+    PaginatedOutgoingITRequestList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/OutgoingITRequest'
     PaginatedProcessList:
       type: object
       required:

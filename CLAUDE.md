@@ -24,9 +24,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Frontend | **Next.js 16.3.2** (App Router) + React 19.2 + TypeScript + Tailwind v4 |
 | UI Kit | shadcn/ui **دستی‌ساز** (بدون CLI) در `frontend/src/components/ui/` روی Radix |
 | فونت | `@fontsource-variable/vazirmatn` در UI؛ TTF کامل Vazirmatn برای PDF |
-| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۲۳۲ تست** |
-| تست فرانت | Vitest + React Testing Library — **۶۹ تست** |
-| Deployment | مستقیم روی هاست ویندوز، بدون Docker/Redis/Celery؛ کار زمان‌بندی‌شده با Windows Task Scheduler |
+| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۲۵۳ تست** |
+| تست فرانت | Vitest + React Testing Library — **۹۷ تست** |
+| Deployment | مستقیم روی هاست ویندوز، بدون Docker/Redis/Celery؛ کار زمان‌بندی‌شده با Windows Task Scheduler (`send_pending_sms` هر دقیقه، `snapshot_room_stats` هر شب) |
 
 ## دستورهای رایج
 
@@ -36,7 +36,7 @@ python manage.py migrate
 python manage.py runserver localhost:8000      # localhost، نه 127.0.0.1 — بخش «دو تلهٔ همیشگی»
 python manage.py seed_demo_data                # دادهٔ دموی فارسی: واحدها، دسته‌ها، اتاق، اپراتور، سرپرست، مهمان
 python manage.py seed_demo_data --reset-passwords
-python manage.py test                          # کل ۲۳۲ تست
+python manage.py test                          # کل ۲۵۳ تست
 python manage.py test apps.tickets             # فقط یک اپ
 python manage.py spectacular --file Hotel_Client_Request_Platform_API.yaml
 ```
@@ -90,6 +90,7 @@ npx vitest run -t "relative"                   # فیلتر روی نام تست
   - `departments/` — CRUD ادمین
   - `tickets/` — هستهٔ پروژه: `Category`، `Ticket`، `TicketHistory`، `TicketNote`، `TicketAttachment`، `QuickRequestTemplate`، و `pdf.py`
   - `it_ops/` — عملیات داخلی واحد IT (`Process`، `Project`، `DepartmentRequest`، `Goal`، `Task`، `RoomDailyStat`) — بخش «IT Ops». **تنها اپی که ViewSet + Router دارد** نه generics؛ عمدی است (شش منبع CRUD هم‌شکل)
+  - `notifications/` — صف پیامک مهمان (`SmsMessage`) و درایورهای ارسال — بخش «پیامک»
 - `tests/test_mvp_integration.py` — سناریوی end-to-end بین اپ‌ها. تست واحد هر اپ داخل خود اپ می‌ماند.
 - `frontend/src/` — `app/` با Route Groupهای `guest/(protected)` و `operator/(protected)`، `components/ui/`، `contexts/`، `hooks/`، `lib/api/`
 
@@ -160,7 +161,40 @@ CANCELLED    → (نهایی)
 - **`RoomDailyStat` ورودی دستی نیست:** `services.snapshot_room_stats` امروز را از `Room.status` زنده و روز گذشته را از `RoomStatusLog` بازسازی می‌کند. ViewSetش `ReadOnly` است (POST روی لیست ۴۰۵)، و ردیف تازه از اکشن `snapshot/` (سرپرست) یا دستور شبانهٔ `snapshot_room_stats` در Task Scheduler می‌آید. داشبورد `today/` اشغال امروز را زنده حساب می‌کند نه از آخرین ردیف ذخیره‌شده.
 - **اولویت رشته‌ای را `order_by("-priority")` نکن** — الفبایی می‌شود (MEDIUM اول، CRITICAL آخر). از `priority_rank()` در `it_ops/models.py` استفاده کن. تست `test_list_puts_the_most_urgent_first_not_alphabetical` این را pin می‌کند.
 - فیلترها با django-filter در `it_ops/filters.py`؛ تاریخ خراب ۴۰۰ می‌گیرد نه ۵۰۰.
+- **واحدهای دیگر هم به IT درخواست می‌دهند**، ولی نه از مسیرهای IT: `/it-ops/outgoing-requests/` (`OutgoingITRequestViewSet`) با پرمیشن `IsOperatorWithDepartment`. هر اپراتورِ واحددار فقط درخواست‌های واحد خودش را می‌بیند، واحد و درخواست‌دهنده همیشه از `request.user` می‌آیند نه از بدنه، و بعد از ثبت نمی‌تواند تغییرش دهد (PATCH/DELETE ۴۰۵) — وضعیت و مسئول کار IT است. `requested_by` روی `DepartmentRequest` را فقط همین ویو پر می‌کند. صفحهٔ فرانتش `/operator/it-requests` است.
+- **فرم‌های صفحهٔ IT** (`components/it-ops/item-dialog.tsx` + `resource-panel.tsx`) یک دیالوگ مشترک‌اند که با field spec کار می‌کنند. دو قاعده که شکستنشان ۴۰۳ می‌سازد: در ویرایش **فقط فیلدهای تغییرکرده** فرستاده می‌شوند (`changedFields`) — چون `CanWorkOnITItem` صرفِ حضور یک فیلد سرپرستی در بدنه را رد می‌کند، حتی با مقدار دست‌نخورده؛ و فیلدهایی که بیننده اجازه‌شان را ندارد اصلاً نمایش داده نمی‌شوند (`isItFieldEditable`). در ساخت، فیلد خالی فرستاده نمی‌شود تا پیش‌فرض سرور اعمال شود.
 - `DepartmentRequestSerializer` در schema با نام `ITDepartmentRequest` است، چون `DepartmentSerializer` با `COMPONENT_SPLIT_REQUEST` خودش کامپوننتی به نام `DepartmentRequest` می‌سازد. enumهای وضعیت/اولویت IT هم در `ENUM_NAME_OVERRIDES` نام گرفته‌اند؛ اگر enum تازه‌ای با نام تکراری اضافه شد، spectacular اسم هش‌دار می‌سازد — همان‌جا نامش بده.
+
+## پیامک (Stage 3.1)
+
+`apps/notifications`. ثبت تیکت و Resolve شدنش به مهمان پیامک می‌دهد، **بدون Celery و Redis**: تصمیم کاربر «صف در PostgreSQL» بود.
+
+- **جریان تیکت فقط یک ردیف در صف می‌نویسد** (`queue_ticket_sms`، صدا زده از `GuestTicketListCreateView.perform_create` و `OperatorTicketDetailView.perform_update` وقتی وضعیت به RESOLVED می‌رود). ارسال واقعی بعداً و بیرون از request در `manage.py send_pending_sms` است که Task Scheduler ویندوز هر دقیقه اجرایش می‌کند. پس سرویس پیامکِ کند یا قطع هرگز ثبت/Resolve را کند، خراب یا rollback نمی‌کند — شرط DoD.
+- `queue_ticket_sms` **هرگز raise نمی‌کند** و در savepoint خودش می‌نویسد؛ خطای دیتابیس هم تراکنش بیرونی را آلوده نمی‌کند. `test_the_ticket_is_created_even_if_queueing_the_sms_blows_up` این را pin می‌کند. مهمان بی‌شماره و `SMS_ENABLED=False` بی‌صدا رد می‌شوند.
+- ارسال: `select_for_update(skip_locked=True)`، پس دو اجرای هم‌پوشان یک پیامک را دو بار نمی‌فرستند. شکست ← backoff نمایی (۱، ۲، ۴… دقیقه، سقف یک ساعت) تا `SMS_MAX_ATTEMPTS` و بعد `FAILED`. در Django Admin اکشن «Retry» هست.
+- درایور با `SMS_BACKEND` (مثل `EMAIL_BACKEND` جنگو). پیش‌فرض `ConsoleSmsBackend` است: چیزی نمی‌فرستد، فقط لاگ می‌کند و موفق برمی‌گرداند. `KavenegarSmsBackend` آماده است (urllib، بدون وابستگی) — با `SMS_API_KEY` و `SMS_SENDER` در `.env` فعال می‌شود. عوض‌کردن سرویس یعنی یک کلاس تازه، نه معماری تازه.
+- متن پیامک همیشه فارسی است؛ سرور زبان مهمان را نمی‌داند (انتخاب زبان فقط در مرورگر است).
+
+## چندزبانگی پرتال مهمان
+
+فقط `/guest/*` فارسی/انگلیسی است؛ پنل اپراتور عمداً فقط فارسی می‌ماند (کارکنان ایرانی‌اند).
+
+- **بدون کتابخانه:** دیکشنری تایپ‌شده در `lib/i18n.ts`. `en` از نوع `Record<MessageKey, string>` است، پس کلیدی که به `fa` اضافه و در `en` فراموش شود خطای کامپایل است. `i18n.test.ts` یکی‌بودن کلیدها و placeholderهای `{…}` در دو زبان را pin می‌کند.
+- `LocaleProvider` (`contexts/locale-context.tsx`) در `app/guest/layout.tsx` کل `/guest` را می‌پوشاند و `lang`/`dir` روی `<html>` را عوض می‌کند و موقع خروج به fa/rtl برمی‌گرداند. انتخاب در `localStorage` (`guest-locale`). اسکریپت init در `app/layout.tsx` انتخاب انگلیسی را پیش از اولین paint اعمال می‌کند تا RTL فلش نزند؛ `LocaleProvider` تا خواندن انتخاب ذخیره‌شده به `dir` دست نمی‌زند.
+- کامپوننت‌های مشترک با پنل اپراتور (`RelativeTime`، دکمهٔ PDF، ThemeToggle، دکمهٔ بستن Dialog) از `useOptionalLocale()` استفاده می‌کنند: داخل پرتال مهمان زبان مهمان، بیرونش فارسی. `lib/format.ts` پارامتر اختیاری `locale` دارد (پیش‌فرض `fa`؛ `en` = تقویم میلادی و ارقام لاتین).
+- آیکون‌های جهت‌دار (برگشت، رفتن) با `ltr:rotate-180` برعکس می‌شوند. کلاس‌های فیزیکی (`left-4`) جایشان را به منطقی (`end-4`) داده‌اند.
+- **ترجمه نمی‌شوند:** داده‌ای که هتل وارد کرده (نام واحد، دسته، قالب درخواست سریع، resolution اپراتور) و پیام خطای API. برای ترجمهٔ داده، فیلد `name_en` روی مدل لازم است — تصمیم جدا.
+
+## حالت آفلاین اپراتور
+
+تصمیم کاربر: «خواندنی + صف اقدامات». منطق در `lib/offline.ts`، نمایش در `components/offline-indicator.tsx`.
+
+- **خواندن:** GETهای اپراتور (لیست، جزئیات، تایم‌لاین، همکاران، وضعیت خودم) از `readThrough` رد می‌شوند: پاسخ موفق در `sessionStorage` نگه داشته می‌شود و وقتی شبکه قطع است (`TypeError` از fetch) همان برمی‌گردد. خطای سرور (۴۰۳، ۴۰۴…) هرگز پشت کش پنهان نمی‌شود.
+- **نوشتن:** فقط تغییر وضعیت (با resolution) و یادداشت داخلی صف می‌شوند — در `localStorage`، به ازای هر کاربر. تخصیص، اولویت و عکس شبکه لازم دارند. `updateOperatorTicket` / `addOperatorTicketNote` به‌جای خطای شبکه `QueuedOfflineError` می‌دهند (با تیکت خوش‌بینانه)؛ هر call site جدیدی که وضعیت یا یادداشت ثبت می‌کند باید اول این را بگیرد، وگرنه «در صف ماند» را به‌شکل خطا نشان می‌دهد.
+- **بازپخش:** `flushQueue` به ترتیب، با `directOperatorApi` (بدون کش و بدون صف — وگرنه شکستِ بازپخش خودش را دوباره صف می‌کرد). پیش از هر تغییر وضعیت تیکت را دوباره می‌خواند و اگر `updated_at` با نسخه‌ای که اپراتور دیده بود فرق کند، **اقدام را دور می‌ریزد و به‌عنوان تعارض اعلام می‌کند** تا کار همکار بازنویسی نشود. تغییرات خودِ صف روی همان تیکت تعارض حساب نمی‌شوند. خطای شبکه وسط کار ← توقف و نگه‌داشتن بقیه؛ رد سرور ← دور ریختن و اعلام. بعد از بازپخش `OFFLINE_SYNCED_EVENT` صفحه‌ها را وادار به خواندن دوباره می‌کند.
+- **توکن ذخیره نمی‌شود — عمداً.** آفلاین فقط «قطع اینترنت وسط کار» را پوشش می‌دهد. ریلود در حالت آفلاین: `restoreSession()` حالا `"offline"` برمی‌گرداند، `AuthProvider` فلگ `isOfflineUnverified` می‌گذارد، `useRequireRole` به لاگین ری‌دایرکت نمی‌کند و پنل پیام «آفلاین هستید» نشان می‌دهد؛ با رویداد `online` یا هر ۱۵ ثانیه دوباره تلاش می‌کند (قطع‌بودن سرور رویداد `online` نمی‌دهد).
+- خروج (`logout`) همهٔ کش و صف را پاک می‌کند (`clearOfflineData`).
+- **Service worker** (`public/sw.js`، فقط build تولیدی، ثبت از layout اپراتور) فقط پوستهٔ اپ را کش می‌کند: `/_next/static` کش‌اول، صفحه‌ها و payloadهای RSC شبکه‌اول. به APIها (origin دیگر) دست نمی‌زند — کش‌کردن API در Cache Storage دادهٔ مهمان‌ها را بعد از خروج روی دستگاه جا می‌گذاشت. `next.config.ts` برای `/sw.js` هدر `no-cache` می‌گذارد. `app/manifest.ts` نصب PWA را ممکن می‌کند.
 
 ## Dark Mode
 
@@ -235,6 +269,8 @@ CANCELLED    → (نهایی)
 
 با هر دست‌کاری در `AuthProvider` یا `client.ts` هر چهار بند را دوباره چک کن.
 
+حالت آفلاین اپراتور هیچ‌کدام از این‌ها را عوض نکرده: توکن همچنان فقط در حافظه است. آنچه آفلاین ذخیره می‌شود دادهٔ تیکت (در `sessionStorage`) و صف اقدامات (در `localStorage`) است، هر دو با خروج پاک می‌شوند — بخش «حالت آفلاین اپراتور».
+
 لاگین مهمان رمز عبور ندارد، پس تنها ترمز حدس‌زدن `national_id` / `room_number` همان throttle است: `guest_login`، پیش‌فرض `10/min`، تنظیم‌شدنی با `GUEST_LOGIN_THROTTLE_RATE`.
 
 ## باگ‌های قبلی — دوباره تکرار نکن
@@ -245,17 +281,16 @@ CANCELLED    → (نهایی)
 - **حذف پوشهٔ عمیق در ویندوز:** `cmd /c rmdir /s /q node_modules` — نه `Remove-Item` در PowerShell (قفل‌شدن فایل).
 - **کش `.next`:** بعد از تغییر ساختاری، اگر خطای عجیب TypeScript روی `routes.d.ts` دیدی، `.next` را کامل پاک کن.
 - **تست زمان‌محور روی ویندوز:** ساعت ویندوز حدود هر ۱۵ میلی‌ثانیه تیک می‌خورد، پس `since = timezone.now()` و `created_at` ردیفی که بلافاصله بعدش ساخته می‌شود می‌توانند دقیقاً برابر باشند و شرط `>` فیل شود. در تست یک فاصلهٔ صریح بگذار (`- timedelta(seconds=1)`)؛ `test_new_count_reflects_tickets_created_after_since` یک‌بار دقیقاً همین‌طور فلیکی بود.
+- **`swagger_fake_view`:** هر `get_queryset` که از `request.user` فیلتر می‌گیرد باید اول `getattr(self, "swagger_fake_view", False)` را چک کند و `.none()` برگرداند؛ وگرنه `spectacular` با AnonymousUser می‌شکند و هشدار می‌دهد (نمونه: `OutgoingITRequestViewSet`).
 - **مرج دستی:** وقتی Amirhossein خودش یک Stage را پیاده می‌کند، فیچرهای تأییدشدهٔ قبلی دوباره چک شوند — یک‌بار فیچر تأییدشده از بین رفته — و بار دوم هم: کپی IT Ops فاز ۱ کل Stage 2 (در دسترس بودن خودکار) را به نسخهٔ قبل برگرداند ولی migration `accounts/0005` را روی دیسک گذاشت، یعنی مدل و migration ناسازگار شدند. بعد از هر مرج اول `makemigrations --check` بزن.
 
-## الهامات محصول / Backlog — پیاده‌سازی نشده
+## الهامات محصول / Backlog
 
-اینها از یک تحقیق مقایسه‌ای روی ALICE/Actabl، Flexkeeping، Quore، Optii و Zendesk/Freshdesk درآمده‌اند. **هیچ‌کدام پیاده نشده‌اند** و هرکدام تصمیم جداگانه می‌خواهند — بدون درخواست صریح سراغشان نرو.
+اینها از یک تحقیق مقایسه‌ای روی ALICE/Actabl، Flexkeeping، Quore، Optii و Zendesk/Freshdesk درآمده‌اند. حالت آفلاین اپراتور و چندزبانگی پرتال مهمان از این فهرست پیاده شده‌اند (بخش‌های خودشان در همین فایل). باقی‌مانده پیاده نشده و تصمیم جداگانه می‌خواهد — بدون درخواست صریح سراغش نرو:
 
-- **حالت آفلاین اپراتور.** رقبا این را «باید داشته باشی» می‌دانند. برای ما یعنی یک لایهٔ PWA به‌علاوهٔ صف محلی برای اکشن‌هایی مثل تغییر وضعیت وقتی اینترنت قطع است. تصمیم معماری جدا می‌خواهد و قبل از فاز ۳ در اولویت نیست.
-- **چندزبانگی.** اگر هتل مهمان بین‌المللی قابل‌توجه داشته باشد، یک لایهٔ i18n روی فرانت لازم است (`next-intl` یا مشابه). تصمیمش به بازار هدف هتل بستگی دارد، نه به کد.
 - **شفافیت هویت در چت** (اگر روزی Live Chat اضافه شد). در تست‌های کاربری هتل‌های ۵ ستاره، کاربرها گیج می‌شدند که با آدم حرف می‌زنند یا ربات. اگر چت اضافه شد، همیشه باید صریح بگوید «اپراتور [نام]» — نه یک حباب چت بی‌نام.
 
-جمع‌بندی همان تحقیق: بیشتر چک‌لیست «ضروری» صنعت را از قبل داریم (SLA و معوق، بازخورد مهمان، داشبورد ادمین، تایم‌لاین، پیوست). خلأهای واقعی همین سه مورد بالا به‌علاوهٔ دریافت چندکاناله‌اند — که PMS و IPTV و پیامکش در فاز ۳ برنامه‌ریزی شده و QR کد اتاقش پیاده شده است.
+جمع‌بندی همان تحقیق: بیشتر چک‌لیست «ضروری» صنعت را داریم (SLA و معوق، بازخورد مهمان، داشبورد ادمین، تایم‌لاین، پیوست، آفلاین، دوزبانگی مهمان). از دریافت چندکاناله، QR کد اتاق و پیامک پیاده شده‌اند؛ اعلان لحظه‌ای (3.2)، وب‌هوک PMS (3.3) و IPTV (3.4) مانده‌اند.
 
 ## QR کد اتاق
 

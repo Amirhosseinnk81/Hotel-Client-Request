@@ -7,6 +7,7 @@ import { Bell, LogOut } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { OfflineIndicator } from "@/components/offline-indicator";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/auth-context";
 import { useRequireRole } from "@/hooks/use-require-role";
@@ -21,7 +22,7 @@ const POLL_INTERVAL_MS = 45_000;
 
 export default function OperatorLayout({ children }: { children: React.ReactNode }) {
   const canRender = useRequireRole(["OPERATOR", "ADMIN"], "/operator/login");
-  const { logout } = useAuth();
+  const { logout, isOfflineUnverified } = useAuth();
 
   const [myStatus, setMyStatus] = useState<OperatorAvailability | null>(null);
   const [newCount, setNewCount] = useState(0);
@@ -100,10 +101,21 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
     };
   }, [canRender, role]);
 
+  // Operator offline mode: the service worker makes the panel load without
+  // a connection. Production only — in `next dev` it would serve stale code.
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "production" || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      // Not fatal: the panel just won't open without a connection.
+    });
+  }, []);
+
   if (!canRender) {
     return (
-      <div className="flex min-h-full flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
-        در حال بررسی ورود…
+      <div className="flex min-h-full flex-1 items-center justify-center p-6 text-center text-sm text-muted-foreground">
+        {isOfflineUnverified
+          ? "آفلاین هستید و ورود شما هنوز تأیید نشده است. با وصل‌شدن اینترنت، پنل خودکار باز می‌شود."
+          : "در حال بررسی ورود…"}
       </div>
     );
   }
@@ -137,6 +149,14 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
           {isITStaff(getITViewer()) && (
             <Link href="/operator/it" className={navClass(pathname === "/operator/it")}>
               IT
+            </Link>
+          )}
+          {role === "OPERATOR" && (
+            <Link
+              href="/operator/it-requests"
+              className={navClass(pathname === "/operator/it-requests")}
+            >
+              درخواست از IT
             </Link>
           )}
         </nav>
@@ -183,6 +203,8 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
           </Button>
         </div>
       </header>
+
+      {role === "OPERATOR" && <OfflineIndicator />}
 
       <div className="flex flex-1 flex-col p-6">{children}</div>
     </div>

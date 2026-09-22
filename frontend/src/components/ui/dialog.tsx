@@ -4,6 +4,7 @@ import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 
+import { useOptionalLocale } from "@/contexts/locale-context";
 import { cn } from "@/lib/utils";
 
 function Dialog(props: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -40,6 +41,7 @@ function DialogContent({
   children,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
+  const { t } = useOptionalLocale();
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -53,9 +55,9 @@ function DialogContent({
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute left-4 top-4 rounded-sm opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring">
+        <DialogPrimitive.Close className="absolute end-4 top-4 rounded-sm opacity-70 outline-none transition-opacity hover:opacity-100 focus-visible:ring-2 focus-visible:ring-ring">
           <X className="size-4" />
-          <span className="sr-only">بستن</span>
+          <span className="sr-only">{t("common.close")}</span>
         </DialogPrimitive.Close>
       </DialogPrimitive.Content>
     </DialogPortal>

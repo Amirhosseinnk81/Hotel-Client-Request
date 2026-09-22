@@ -19,17 +19,19 @@ export function useRequireRole(
   redirectTo: string,
   skip = false
 ): boolean {
-  const { isLoading, isAuthenticated, role } = useAuth();
+  const { isLoading, isAuthenticated, isOfflineUnverified, role } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (skip || isLoading) return;
+    // Offline reload: we can't tell yet whether there's a session, so
+    // don't bounce the user to a login page that can't work offline either.
+    if (skip || isLoading || isOfflineUnverified) return;
 
     if (!isAuthenticated || !role || !allowedRoles.includes(role)) {
       router.replace(redirectTo);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [skip, isLoading, isAuthenticated, role]);
+  }, [skip, isLoading, isOfflineUnverified, isAuthenticated, role]);
 
   if (skip) return true;
 

@@ -7,28 +7,41 @@
  * powers `<RelativeTime />`.
  */
 
-const dateOnlyFormatter = new Intl.DateTimeFormat("fa-IR", {
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-});
+import type { Locale } from "@/lib/i18n";
 
-const dateTimeFormatter = new Intl.DateTimeFormat("fa-IR", {
+/**
+ * Every formatter takes an optional locale (default "fa"). Only the guest
+ * portal ever passes "en" (see contexts/locale-context.tsx); "fa" gives the
+ * Persian (Solar Hijri) calendar and Persian digits, "en" the Gregorian
+ * calendar and Latin digits.
+ */
+const INTL_LOCALE: Record<Locale, string> = { fa: "fa-IR", en: "en-GB" };
+
+const dateOnlyFormatters: Record<Locale, Intl.DateTimeFormat> = {
+  fa: new Intl.DateTimeFormat(INTL_LOCALE.fa, { year: "numeric", month: "long", day: "numeric" }),
+  en: new Intl.DateTimeFormat(INTL_LOCALE.en, { year: "numeric", month: "long", day: "numeric" }),
+};
+
+const dateTimeOptions: Intl.DateTimeFormatOptions = {
   year: "numeric",
   month: "long",
   day: "numeric",
   hour: "2-digit",
   minute: "2-digit",
-});
+};
+const dateTimeFormatters: Record<Locale, Intl.DateTimeFormat> = {
+  fa: new Intl.DateTimeFormat(INTL_LOCALE.fa, dateTimeOptions),
+  en: new Intl.DateTimeFormat(INTL_LOCALE.en, dateTimeOptions),
+};
 
 /** e.g. "۱۲ شهریور ۱۴۰۵" — used where only the day matters (list cards). */
-export function formatDateOnly(iso: string): string {
-  return dateOnlyFormatter.format(new Date(iso));
+export function formatDateOnly(iso: string, locale: Locale = "fa"): string {
+  return dateOnlyFormatters[locale].format(new Date(iso));
 }
 
 /** e.g. "۱۲ شهریور ۱۴۰۵ ساعت ۱۴:۳۰" — used on detail pages. */
-export function formatDateTime(iso: string): string {
-  return dateTimeFormatter.format(new Date(iso));
+export function formatDateTime(iso: string, locale: Locale = "fa"): string {
+  return dateTimeFormatters[locale].format(new Date(iso));
 }
 
 const RELATIVE_UNITS: { unit: Intl.RelativeTimeFormatUnit; seconds: number }[] = [
@@ -40,18 +53,23 @@ const RELATIVE_UNITS: { unit: Intl.RelativeTimeFormatUnit; seconds: number }[] =
   { unit: "minute", seconds: 60 },
 ];
 
-const relativeFormatter = new Intl.RelativeTimeFormat("fa", { numeric: "auto" });
+const relativeFormatters: Record<Locale, Intl.RelativeTimeFormat> = {
+  fa: new Intl.RelativeTimeFormat("fa", { numeric: "auto" }),
+  en: new Intl.RelativeTimeFormat("en", { numeric: "auto" }),
+};
+const NOW_LABEL: Record<Locale, string> = { fa: "اکنون", en: "just now" };
 
 /**
  * "۲ ساعت پیش" / "دیروز" / "اکنون" — always paired with a tooltip showing
  * the exact `formatDateTime` value (see `<RelativeTime />`), never used
  * alone, since a relative string alone can't be scanned precisely.
  */
-export function formatRelativeTime(iso: string): string {
+export function formatRelativeTime(iso: string, locale: Locale = "fa"): string {
   const diffSeconds = (new Date(iso).getTime() - Date.now()) / 1000;
   const abs = Math.abs(diffSeconds);
+  const relativeFormatter = relativeFormatters[locale];
 
-  if (abs < 45) return "اکنون";
+  if (abs < 45) return NOW_LABEL[locale];
 
   for (const { unit, seconds } of RELATIVE_UNITS) {
     if (abs >= seconds) {
@@ -63,11 +81,14 @@ export function formatRelativeTime(iso: string): string {
   return relativeFormatter.format(Math.round(diffSeconds / 60), "minute");
 }
 
-const numberFormatter = new Intl.NumberFormat("fa-IR");
+const numberFormatters: Record<Locale, Intl.NumberFormat> = {
+  fa: new Intl.NumberFormat(INTL_LOCALE.fa),
+  en: new Intl.NumberFormat(INTL_LOCALE.en),
+};
 
 /** e.g. 42 -> "۴۲" — counts on the stats summary. */
-export function formatNumber(value: number): string {
-  return numberFormatter.format(value);
+export function formatNumber(value: number, locale: Locale = "fa"): string {
+  return numberFormatters[locale].format(value);
 }
 
 /**

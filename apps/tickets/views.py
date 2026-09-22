@@ -20,6 +20,9 @@ from apps.core.permissions import (
     IsSupervisor,
 )
 
+from apps.notifications.models import SmsMessage
+from apps.notifications.services import queue_ticket_sms
+
 from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
 from .pdf import generate_ticket_pdf
 from .permissions import IsOperator
@@ -137,6 +140,10 @@ class GuestTicketListCreateView(generics.ListCreateAPIView):
             action=TicketHistory.Action.CREATED,
             new_value=Ticket.Status.OPEN,
         )
+
+        # Stage 3.1: only queues the SMS; it is sent later, outside this
+        # request, and can never fail the ticket (queue_ticket_sms).
+        queue_ticket_sms(ticket, SmsMessage.Event.TICKET_CREATED)
 
 
 class GuestTicketDetailView(generics.RetrieveUpdateAPIView):
@@ -431,6 +438,8 @@ class OperatorTicketDetailView(generics.RetrieveUpdateAPIView):
                 old_value=old_status,
                 new_value=ticket.status,
             )
+            if ticket.status == Ticket.Status.RESOLVED:
+                queue_ticket_sms(ticket, SmsMessage.Event.TICKET_RESOLVED)
 
         if "priority" in serializer.validated_data and ticket.priority != old_priority:
             TicketHistory.objects.create(

@@ -49,6 +49,7 @@ LOCAL_APPS = [
     "apps.departments",
     "apps.tickets",
     "apps.it_ops",
+    "apps.notifications",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -165,6 +166,18 @@ REST_FRAMEWORK = {
 # IT staff are the OPERATORs of the department with this code (and the IT
 # supervisor is the one with is_supervisor) — see apps/core/permissions.py.
 IT_DEPARTMENT_CODE = config("IT_DEPARTMENT_CODE", default="IT")
+
+# ---------------------------------------------------------------------------
+# SMS (Stage 3.1) — see apps/notifications
+# ---------------------------------------------------------------------------
+# Messages are queued in the database and sent by `send_pending_sms`
+# (Windows Task Scheduler, every minute). The console backend only logs.
+SMS_ENABLED = config("SMS_ENABLED", default=True, cast=bool)
+SMS_BACKEND = config("SMS_BACKEND", default="apps.notifications.backends.ConsoleSmsBackend")
+SMS_API_KEY = config("SMS_API_KEY", default="")
+SMS_SENDER = config("SMS_SENDER", default="")
+SMS_HOTEL_NAME = config("SMS_HOTEL_NAME", default="هتل")
+SMS_MAX_ATTEMPTS = config("SMS_MAX_ATTEMPTS", default=5, cast=int)
 
 # ---------------------------------------------------------------------------
 # Simple JWT

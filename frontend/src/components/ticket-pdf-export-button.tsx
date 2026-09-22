@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FileDown, Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { useOptionalLocale } from "@/contexts/locale-context";
 import { toast } from "@/hooks/use-toast";
 import { exportTicketPdf, ApiError } from "@/lib/api/client";
 import { downloadBlob } from "@/lib/utils";
@@ -14,6 +15,7 @@ import { downloadBlob } from "@/lib/utils";
  * frontend, decides who's allowed to export a given ticket).
  */
 export function TicketPdfExportButton({ ticketId }: { ticketId: number | string }) {
+  const { t } = useOptionalLocale();
   const [isDownloading, setIsDownloading] = useState(false);
 
   const handleDownload = async () => {
@@ -24,8 +26,8 @@ export function TicketPdfExportButton({ ticketId }: { ticketId: number | string 
     } catch (err) {
       toast({
         variant: "destructive",
-        title: "دریافت PDF ناموفق بود",
-        description: err instanceof ApiError ? err.message : "لطفاً دوباره تلاش کنید.",
+        title: t("pdf.error"),
+        description: err instanceof ApiError ? err.message : t("common.retry"),
       });
     } finally {
       setIsDownloading(false);
@@ -45,7 +47,7 @@ export function TicketPdfExportButton({ ticketId }: { ticketId: number | string 
       ) : (
         <FileDown className="size-3.5" />
       )}
-      دریافت PDF
+      {t("pdf.button")}
     </Button>
   );
 }

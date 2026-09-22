@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { KanbanBoard } from "@/components/kanban-board";
 import { RelativeTime } from "@/components/relative-time";
 import { getAccessToken, getOperatorTickets, ApiError } from "@/lib/api/client";
+import { OFFLINE_SYNCED_EVENT } from "@/lib/offline";
 import { decodeAccessToken } from "@/lib/api/tokens";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import type { Ticket, TicketPriority, TicketStatus } from "@/lib/api/types";
@@ -65,6 +66,15 @@ export default function OperatorHomePage() {
   // filter doesn't apply there — only List view uses it (see the fetch
   // effect below, and the hidden Select further down).
   const [viewMode, setViewMode] = useState<"list" | "kanban">("list");
+  // Bumped when the offline queue is replayed, to re-read the real tickets
+  // in place of the optimistic, queued view (lib/offline.ts).
+  const [syncTick, setSyncTick] = useState(0);
+
+  useEffect(() => {
+    const onSynced = () => setSyncTick((tick) => tick + 1);
+    window.addEventListener(OFFLINE_SYNCED_EVENT, onSynced);
+    return () => window.removeEventListener(OFFLINE_SYNCED_EVENT, onSynced);
+  }, []);
 
   // Admins have no department, so every operator ticket endpoint refuses
   // them. Their landing page in this panel is the hotel-wide summary.
@@ -102,7 +112,7 @@ export default function OperatorHomePage() {
     return () => {
       cancelled = true;
     };
-  }, [statusFilter, priorityFilter, debouncedSearch, viewMode, isAdmin]);
+  }, [statusFilter, priorityFilter, debouncedSearch, viewMode, isAdmin, syncTick]);
 
   const hasActiveFilters =
     statusFilter !== "ALL" || priorityFilter !== "ALL" || searchInput.trim() !== "";

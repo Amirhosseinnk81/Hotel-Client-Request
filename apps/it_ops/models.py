@@ -228,6 +228,17 @@ class DepartmentRequest(TimeStampedModel):
         null=True,
         related_name="it_requests",
     )
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="it_requests_filed",
+        help_text=(
+            "The operator who filed it from their own department's panel. "
+            "Empty when IT logged a phoned-in request (see requested_by_name)."
+        ),
+    )
     requested_by_name = models.CharField(
         max_length=150,
         blank=True,

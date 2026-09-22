@@ -4,6 +4,8 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     DepartmentRequestViewSet,
     GoalViewSet,
+    ITStaffListView,
+    OutgoingITRequestViewSet,
     ProcessViewSet,
     ProjectViewSet,
     RoomDailyStatViewSet,
@@ -22,9 +24,13 @@ router.register("processes", ProcessViewSet, basename="process")
 router.register("projects", ProjectViewSet, basename="project")
 router.register("department-requests", DepartmentRequestViewSet, basename="department-request")
 router.register("goals", GoalViewSet, basename="goal")
+router.register(
+    "outgoing-requests", OutgoingITRequestViewSet, basename="outgoing-request"
+)
 router.register("tasks", TaskViewSet, basename="task")
 router.register("room-stats", RoomDailyStatViewSet, basename="room-stat")
 
 urlpatterns = [
     path("today/", TodayDashboardView.as_view(), name="today-dashboard"),
+    path("staff/", ITStaffListView.as_view(), name="staff"),
 ] + router.urls

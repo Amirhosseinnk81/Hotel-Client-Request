@@ -8,8 +8,13 @@ import type {
   Department,
   DepartmentStatsSummary,
   GuestProfile,
+  CreateOutgoingITRequestPayload,
   ITProcess,
+  ITResource,
+  ITResourceMap,
+  ITStaffMember,
   ITTodayDashboard,
+  OutgoingITRequest,
   OperatorAvailability,
   OperatorColleague,
   QuickRequestTemplate,
@@ -22,6 +27,8 @@ import type {
   UpdateOperatorTicketPayload,
   UserRole,
 } from "./types";
+
+import { enqueue, findCachedTicket, isNetworkError, readThrough } from "@/lib/offline";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 
@@ -109,18 +116,22 @@ async function refreshAccessToken(): Promise<string> {
 }
 
 /**
- * Called once by AuthProvider on mount to silently restore a session from
- * the httpOnly refresh cookie (if any). Never throws — a missing/expired
+ * Called by AuthProvider on mount to silently restore a session from the
+ * httpOnly refresh cookie (if any). Never throws — a missing/expired
  * cookie just means "not logged in", which is a normal, expected outcome,
  * not an error worth surfacing.
+ *
+ * "offline" means the server couldn't be reached at all, so we don't know
+ * yet whether there is a session: the caller should wait for the network
+ * rather than send the user to the login page (operator offline mode).
  */
-export async function restoreSession(): Promise<AuthTokens | null> {
+export async function restoreSession(): Promise<AuthTokens | null | "offline"> {
   try {
     const access = await refreshAccessToken();
     return { access, role: getRoleFromToken(access) };
-  } catch {
+  } catch (err) {
     setAccessToken(null);
-    return null;
+    return isNetworkError(err) ? "offline" : null;
   }
 }
 
@@ -354,6 +365,50 @@ export interface OperatorTicketFilters {
   search?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Operator offline mode (lib/offline.ts): the reads below fall back to their
+// last good answer when the network is down; a status change or a note made
+// while offline is queued instead of lost.
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown instead of a network error when the change was queued for later.
+ * `ticket` is what the ticket will look like once it is sent, so the page
+ * can show it right away. Check for it before the generic error handling.
+ */
+export class QueuedOfflineError extends ApiError {
+  ticket?: Ticket;
+
+  constructor(ticket?: Ticket) {
+    super(0, "آفلاین هستید؛ این تغییر در صف ماند و با وصل‌شدن اینترنت ارسال می‌شود.");
+    this.name = "QueuedOfflineError";
+    this.ticket = ticket;
+  }
+}
+
+/** The logged-in user's id, from the in-memory token — scopes the offline queue. */
+export function getCurrentUserId(): number | null {
+  return decodeAccessToken(currentAccessToken ?? "")?.user_id ?? null;
+}
+
+const QUEUEABLE_FIELDS = new Set(["status", "resolution"]);
+
+/**
+ * Straight to the server — no cache fallback, no queueing. For replaying
+ * the offline queue (lib/offline.ts flushQueue): a replay that fails must
+ * report the failure, not quietly queue itself again or read a stale copy.
+ */
+export const directOperatorApi = {
+  getTicket: (id: number) => apiFetch<Ticket>(`/operator/tickets/${id}/`),
+  updateTicket: (id: number, payload: UpdateOperatorTicketPayload) =>
+    apiFetch<Ticket>(`/operator/tickets/${id}/`, { method: "PATCH", body: JSON.stringify(payload) }),
+  addNote: (id: number, text: string) =>
+    apiFetch<TicketTimelineEntry>(`/operator/tickets/${id}/notes/`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    }),
+};
+
 export async function getOperatorTickets(
   filters: OperatorTicketFilters = {}
 ): Promise<Ticket[]> {
@@ -363,21 +418,43 @@ export async function getOperatorTickets(
   if (filters.search) query.set("search", filters.search);
   const qs = query.toString();
 
-  return getAllPages<Ticket>(`/operator/tickets/${qs ? `?${qs}` : ""}`);
+  return readThrough(`operator/tickets?${qs}`, () =>
+    getAllPages<Ticket>(`/operator/tickets/${qs ? `?${qs}` : ""}`)
+  );
 }
 
 export async function getOperatorTicketDetail(id: number | string): Promise<Ticket> {
-  return apiFetch<Ticket>(`/operator/tickets/${id}/`);
+  return readThrough(`operator/tickets/${id}`, () => apiFetch<Ticket>(`/operator/tickets/${id}/`));
 }
 
+/**
+ * PATCH an operator ticket. Offline, a pure status/resolution change is
+ * queued (throws QueuedOfflineError with the expected ticket); anything
+ * else — assignment, priority — needs the network and fails as usual.
+ */
 export async function updateOperatorTicket(
   id: number | string,
   payload: UpdateOperatorTicketPayload
 ): Promise<Ticket> {
-  return apiFetch<Ticket>(`/operator/tickets/${id}/`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
+  try {
+    return await apiFetch<Ticket>(`/operator/tickets/${id}/`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  } catch (err) {
+    const queueable = Object.keys(payload).every((field) => QUEUEABLE_FIELDS.has(field));
+    const base = isNetworkError(err) && queueable ? findCachedTicket(Number(id)) : null;
+    if (!base) throw err;
+
+    enqueue(getCurrentUserId(), {
+      kind: "status",
+      ticketId: base.id,
+      ticketTitle: base.title,
+      payload: { status: payload.status, resolution: payload.resolution },
+      baseUpdatedAt: base.updated_at,
+    });
+    throw new QueuedOfflineError({ ...base, ...payload } as Ticket);
+  }
 }
 
 export async function assignTicketToSelf(id: number | string): Promise<Ticket> {
@@ -387,24 +464,41 @@ export async function assignTicketToSelf(id: number | string): Promise<Ticket> {
 }
 
 export async function getOperatorColleagues(): Promise<OperatorColleague[]> {
-  return apiFetch<OperatorColleague[]>("/operator/colleagues/");
+  return readThrough("operator/colleagues", () =>
+    apiFetch<OperatorColleague[]>("/operator/colleagues/")
+  );
 }
 
 /** Merged, chronologically-sorted history + notes timeline for a ticket. */
 export async function getOperatorTicketHistory(
   id: number | string
 ): Promise<TicketTimelineEntry[]> {
-  return apiFetch<TicketTimelineEntry[]>(`/operator/tickets/${id}/history/`);
+  return readThrough(`operator/tickets/${id}/history`, () =>
+    apiFetch<TicketTimelineEntry[]>(`/operator/tickets/${id}/history/`)
+  );
 }
 
 export async function addOperatorTicketNote(
   id: number | string,
   text: string
 ): Promise<TicketTimelineEntry> {
-  return apiFetch<TicketTimelineEntry>(`/operator/tickets/${id}/notes/`, {
-    method: "POST",
-    body: JSON.stringify({ text }),
-  });
+  try {
+    return await apiFetch<TicketTimelineEntry>(`/operator/tickets/${id}/notes/`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+  } catch (err) {
+    // A note is append-only, so it can't conflict with anyone — queue it.
+    if (!isNetworkError(err)) throw err;
+    const base = findCachedTicket(Number(id));
+    enqueue(getCurrentUserId(), {
+      kind: "note",
+      ticketId: Number(id),
+      ticketTitle: base?.title ?? `#${id}`,
+      text,
+    });
+    throw new QueuedOfflineError(base ?? undefined);
+  }
 }
 
 /** Guest attaches a photo to their own ticket — at creation or later, any status. */
@@ -439,7 +533,9 @@ export async function addOperatorTicketAttachment(
  * one is RESOLVED or CANCELLED), so there is nothing to set.
  */
 export async function getMyOperatorStatus(): Promise<OperatorAvailability> {
-  return apiFetch<OperatorAvailability>("/operator/me/status/");
+  return readThrough("operator/me/status", () =>
+    apiFetch<OperatorAvailability>("/operator/me/status/")
+  );
 }
 
 /**
@@ -482,6 +578,55 @@ export async function getItOpsToday(): Promise<ITTodayDashboard> {
  */
 export async function markItProcessDone(processId: number): Promise<ITProcess> {
   return apiFetch<ITProcess>(`/it-ops/processes/${processId}/mark-done/`, { method: "POST" });
+}
+
+/** Every row of one IT Ops resource (all pages). */
+export async function listItItems<R extends ITResource>(resource: R): Promise<ITResourceMap[R][]> {
+  return getAllPages<ITResourceMap[R]>(`/it-ops/${resource}/`);
+}
+
+export async function createItItem<R extends ITResource>(
+  resource: R,
+  payload: Record<string, unknown>
+): Promise<ITResourceMap[R]> {
+  return apiFetch<ITResourceMap[R]>(`/it-ops/${resource}/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateItItem<R extends ITResource>(
+  resource: R,
+  id: number,
+  payload: Record<string, unknown>
+): Promise<ITResourceMap[R]> {
+  return apiFetch<ITResourceMap[R]>(`/it-ops/${resource}/${id}/`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteItItem(resource: ITResource, id: number): Promise<void> {
+  await apiFetch<void>(`/it-ops/${resource}/${id}/`, { method: "DELETE" });
+}
+
+/** IT operators, for the assignee dropdowns (IT staff only). */
+export async function getItStaff(): Promise<ITStaffMember[]> {
+  return apiFetch<ITStaffMember[]>("/it-ops/staff/");
+}
+
+/** The caller's own department's requests to IT (any operator with a department). */
+export async function getOutgoingItRequests(): Promise<OutgoingITRequest[]> {
+  return getAllPages<OutgoingITRequest>("/it-ops/outgoing-requests/");
+}
+
+export async function createOutgoingItRequest(
+  payload: CreateOutgoingITRequestPayload
+): Promise<OutgoingITRequest> {
+  return apiFetch<OutgoingITRequest>("/it-ops/outgoing-requests/", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 /**

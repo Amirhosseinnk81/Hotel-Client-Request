@@ -180,6 +180,26 @@ def is_it_supervisor(user):
     )
 
 
+class IsOperatorWithDepartment(BasePermission):
+    """
+    Any OPERATOR who belongs to a department — for endpoints scoped to
+    "my own department" (e.g. filing a request to IT). An operator with no
+    department is refused rather than treated as "every department",
+    the same rule as the department stats summary.
+    """
+
+    message = "Only an operator with a department can do this."
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            user
+            and user.is_authenticated
+            and user.role == "OPERATOR"
+            and user.department_id is not None
+        )
+
+
 class IsITStaff(BasePermission):
     """
     Any access to IT Ops data at all: IT operators and admins. An operator

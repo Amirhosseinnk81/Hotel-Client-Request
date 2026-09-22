@@ -26,22 +26,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "@/components/relative-time";
 import { getTickets, ApiError } from "@/lib/api/client";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { useLocale } from "@/contexts/locale-context";
+import { priorityMessageKey, statusMessageKey } from "@/lib/i18n";
 import type { Ticket, TicketStatus } from "@/lib/api/types";
-import {
-  statusLabels,
-  statusBadgeVariant,
-  priorityLabels,
-  priorityBadgeVariant,
-  priorityIcons,
-} from "@/lib/ticket-labels";
+import { statusBadgeVariant, priorityBadgeVariant, priorityIcons } from "@/lib/ticket-labels";
 
-const statusFilterOptions: { value: TicketStatus | "ALL"; label: string }[] = [
-  { value: "ALL", label: "همه‌ی وضعیت‌ها" },
-  { value: "OPEN", label: statusLabels.OPEN },
-  { value: "IN_PROGRESS", label: statusLabels.IN_PROGRESS },
-  { value: "RESOLVED", label: statusLabels.RESOLVED },
-  { value: "CANCELLED", label: statusLabels.CANCELLED },
-];
+const STATUSES: TicketStatus[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CANCELLED"];
 
 export default function GuestTicketsPage() {
   const [tickets, setTickets] = useState<Ticket[] | null>(null);
@@ -49,6 +39,11 @@ export default function GuestTicketsPage() {
   const [searchInput, setSearchInput] = useState("");
   const [statusFilter, setStatusFilter] = useState<TicketStatus | "ALL">("ALL");
   const debouncedSearch = useDebouncedValue(searchInput, 400);
+  const { t } = useLocale();
+  const statusFilterOptions: { value: TicketStatus | "ALL"; label: string }[] = [
+    { value: "ALL", label: t("list.allStatuses") },
+    ...STATUSES.map((status) => ({ value: status, label: t(statusMessageKey(status)) })),
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -65,13 +60,14 @@ export default function GuestTicketsPage() {
       })
       .catch((err) => {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : "خطا در دریافت درخواست‌ها.");
+          setError(err instanceof ApiError ? err.message : t("list.loadError"));
         }
       });
 
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- t only changes the fallback text
   }, [debouncedSearch]);
 
   // پارامتر status توی API لیست تیکت‌های مهمان پشتیبانی نمی‌شه،
@@ -86,21 +82,19 @@ export default function GuestTicketsPage() {
     <main className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4">
       <Button asChild variant="ghost" size="sm" className="w-fit gap-1.5">
         <Link href="/guest">
-          <ArrowRight className="size-3.5" />
-          بازگشت
+          <ArrowRight className="size-3.5 ltr:rotate-180" />
+          {t("common.back")}
         </Link>
       </Button>
 
       <div>
-        <h1 className="display-2">درخواست‌های من</h1>
-        <p className="text-sm text-muted-foreground">
-          لیست درخواست‌هایی که تاکنون ثبت کرده‌اید.
-        </p>
+        <h1 className="display-2">{t("list.title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("list.subtitle")}</p>
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <Input
-          placeholder="جستجو در عنوان یا توضیحات…"
+          placeholder={t("list.searchPlaceholder")}
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           className="sm:max-w-xs"
@@ -155,12 +149,10 @@ export default function GuestTicketsPage() {
             <Inbox className="size-8 text-muted-foreground/60" />
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium">
-                {tickets && tickets.length > 0 ? "موردی یافت نشد" : "هنوز درخواستی ندارید"}
+                {tickets && tickets.length > 0 ? t("list.noMatchTitle") : t("list.emptyTitle")}
               </p>
               <p className="text-sm text-muted-foreground">
-                {tickets && tickets.length > 0
-                  ? "با این فیلتر یا عبارت جست‌وجو درخواستی پیدا نشد."
-                  : "با ثبت اولین درخواست، اینجا نمایش داده می‌شود."}
+                {tickets && tickets.length > 0 ? t("list.noMatchBody") : t("list.emptyBody")}
               </p>
             </div>
             {tickets && tickets.length > 0 ? (
@@ -172,11 +164,11 @@ export default function GuestTicketsPage() {
                   setSearchInput("");
                 }}
               >
-                پاک‌کردن فیلترها
+                {t("list.clearFilters")}
               </Button>
             ) : (
               <Button asChild size="sm" className="gap-1.5">
-                <Link href="/guest/tickets/new">ثبت درخواست جدید</Link>
+                <Link href="/guest/tickets/new">{t("home.newRequest")}</Link>
               </Button>
             )}
           </CardContent>
@@ -202,15 +194,15 @@ export default function GuestTicketsPage() {
                         <RelativeTime iso={ticket.created_at} />
                       </CardDescription>
                     </div>
-                    <ChevronLeft className="mt-1 size-4 shrink-0 text-muted-foreground" />
+                    <ChevronLeft className="mt-1 size-4 shrink-0 text-muted-foreground ltr:rotate-180" />
                   </CardHeader>
                   <CardContent className="flex gap-2">
                     <Badge variant={statusBadgeVariant[ticket.status]}>
-                      {statusLabels[ticket.status]}
+                      {t(statusMessageKey(ticket.status))}
                     </Badge>
                     <Badge variant={priorityBadgeVariant[ticket.priority]} className="gap-1">
                       <PriorityIcon className="size-3" />
-                      {priorityLabels[ticket.priority]}
+                      {t(priorityMessageKey(ticket.priority))}
                     </Badge>
                   </CardContent>
                 </Card>

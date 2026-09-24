@@ -5,6 +5,9 @@ from .views import (
     CategoryDetailView,
     CategoryListCreateView,
     DepartmentStatsSummaryView,
+    OperatorCannedResponseListView,
+    OperatorTicketMergeCandidatesView,
+    OperatorTicketMergeView,
     GuestTicketAttachmentCreateView,
     GuestTicketDetailView,
     GuestTicketListCreateView,
@@ -125,5 +128,20 @@ urlpatterns = [
         "operator/stats/summary/",
         DepartmentStatsSummaryView.as_view(),
         name="operator-stats-summary",
+    ),
+    path(
+        "operator/canned-responses/",
+        OperatorCannedResponseListView.as_view(),
+        name="operator-canned-responses",
+    ),
+    path(
+        "operator/tickets/<int:pk>/merge-candidates/",
+        OperatorTicketMergeCandidatesView.as_view(),
+        name="operator-ticket-merge-candidates",
+    ),
+    path(
+        "operator/tickets/<int:pk>/merge/",
+        OperatorTicketMergeView.as_view(),
+        name="operator-ticket-merge",
     ),
 ]

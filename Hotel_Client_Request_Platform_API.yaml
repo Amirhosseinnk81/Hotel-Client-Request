@@ -464,6 +464,39 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/guest/hotel-info/:
+    get:
+      operationId: api_v1_guest_hotel_info_list
+      description: |-
+        GET /api/v1/guest/hotel-info/ — the help page: Wi-Fi, breakfast hours,
+        check-out time... Logged-in guests only (the Wi-Fi password isn't for
+        the whole internet). Unpaginated: a handful of entries.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HotelInfo'
+          description: ''
   /api/v1/guest/profile/:
     get:
       operationId: api_v1_guest_profile_retrieve
@@ -1799,6 +1832,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/TodayDashboard'
           description: ''
+  /api/v1/operator/canned-responses/:
+    get:
+      operationId: api_v1_operator_canned_responses_list
+      description: |-
+        GET /api/v1/operator/canned-responses/ — ready-made texts for notes and
+        resolutions: the caller's department's own plus the hotel-wide ones.
+        Unpaginated: a short list for a picker.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CannedResponse'
+          description: ''
   /api/v1/operator/colleagues/:
     get:
       operationId: api_v1_operator_colleagues_list
@@ -2157,6 +2223,79 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/TicketHistory'
+          description: ''
+  /api/v1/operator/tickets/{id}/merge/:
+    post:
+      operationId: api_v1_operator_tickets_merge_create
+      description: |-
+        POST /api/v1/operator/tickets/{id}/merge/ {"into": <ticket id>} — fold
+        this duplicate into another ticket of the same guest. Supervisor only
+        (it's triage). Rules and effects: services.merge_tickets.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TicketMergeRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TicketMergeRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TicketMergeRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorTicket'
+          description: ''
+  /api/v1/operator/tickets/{id}/merge-candidates/:
+    get:
+      operationId: api_v1_operator_tickets_merge_candidates_list
+      description: |-
+        GET /api/v1/operator/tickets/{id}/merge-candidates/ — other open tickets
+        from the same guest in the same department: the likely duplicates.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OperatorTicket'
           description: ''
   /api/v1/operator/tickets/{id}/notes/:
     post:
@@ -2775,6 +2914,7 @@ components:
       - ASSIGNED
       - STATUS_CHANGED
       - PRIORITY_CHANGED
+      - MERGED
       type: string
       description: |-
         * `CREATED` - Created
@@ -2782,6 +2922,7 @@ components:
         * `ASSIGNED` - Assigned
         * `STATUS_CHANGED` - Status Changed
         * `PRIORITY_CHANGED` - Priority Changed
+        * `MERGED` - Merged
     AdminStatsByDepartment:
       type: object
       description: One row of the by-department breakdown (Stage 2.4).
@@ -2800,12 +2941,20 @@ components:
           type: integer
         total:
           type: integer
+        rating_avg:
+          type: number
+          format: double
+          nullable: true
+        rating_count:
+          type: integer
       required:
       - cancelled
       - department_id
       - department_name
       - in_progress
       - open
+      - rating_avg
+      - rating_count
       - resolved
       - total
     AdminStatsByStatus:
@@ -2863,6 +3012,22 @@ components:
           format: double
           nullable: true
           description: Share of due tickets resolved within the resolution target.
+        rating_avg:
+          type: number
+          format: double
+          nullable: true
+          description: Average guest rating (1-5) in the window.
+        rating_count:
+          type: integer
+        rating_distribution:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Ratings per star, keys "1".."5".
+        recent_feedback:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecentFeedback'
         resolution_window_days:
           type: integer
         generated_at:
@@ -2875,10 +3040,37 @@ components:
       - by_status
       - generated_at
       - overdue_count
+      - rating_avg
+      - rating_count
+      - rating_distribution
+      - recent_feedback
       - resolution_sla_met_percent
       - resolution_window_days
       - response_overdue_count
       - response_sla_met_percent
+    CannedResponse:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+          description: Short label shown in the picker.
+        body:
+          type: string
+          readOnly: true
+        department:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Blank = available to every department.
+      required:
+      - body
+      - department
+      - id
+      - title
     Category:
       type: object
       properties:
@@ -3015,10 +3207,18 @@ components:
         resolved_recent:
           type: integer
           description: Assigned tickets resolved within resolution_window_days.
+        rating_avg:
+          type: number
+          format: double
+          nullable: true
+        rating_count:
+          type: integer
       required:
       - active
       - is_supervisor
       - operator_id
+      - rating_avg
+      - rating_count
       - resolved_recent
       - username
     DepartmentStatsSummary:
@@ -3063,6 +3263,22 @@ components:
           format: double
           nullable: true
           description: Share of due tickets resolved within the resolution target.
+        rating_avg:
+          type: number
+          format: double
+          nullable: true
+          description: Average guest rating (1-5) in the window.
+        rating_count:
+          type: integer
+        rating_distribution:
+          type: object
+          additionalProperties:
+            type: integer
+          description: Ratings per star, keys "1".."5".
+        recent_feedback:
+          type: array
+          items:
+            $ref: '#/components/schemas/RecentFeedback'
         resolution_window_days:
           type: integer
         generated_at:
@@ -3077,6 +3293,10 @@ components:
       - department_name
       - generated_at
       - overdue_count
+      - rating_avg
+      - rating_count
+      - rating_distribution
+      - recent_feedback
       - resolution_sla_met_percent
       - resolution_window_days
       - response_overdue_count
@@ -3236,6 +3456,35 @@ components:
       - national_id
       - phone
       - room_number
+    HotelInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        title_en:
+          type: string
+          readOnly: true
+        body_en:
+          type: string
+          readOnly: true
+        icon:
+          type: string
+          readOnly: true
+          description: A lucide-react icon name, e.g. Wifi, Coffee, Clock, Phone.
+      required:
+      - body
+      - body_en
+      - icon
+      - id
+      - title
+      - title_en
     ITDepartmentRequest:
       type: object
       properties:
@@ -3544,6 +3793,12 @@ components:
         is_response_overdue:
           type: boolean
           readOnly: true
+        merged_into:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Set when a supervisor merged this ticket into another one as
+            a duplicate (it is then CANCELLED). See services.merge_tickets.
         attachments:
           type: array
           items:
@@ -3575,6 +3830,7 @@ components:
       - id
       - is_overdue
       - is_response_overdue
+      - merged_into
       - overdue_since
       - resolved_at
       - response_deadline
@@ -4420,6 +4676,34 @@ components:
       - id
       - order
       - title
+    RecentFeedback:
+      type: object
+      description: One recent written guest comment, for the ratings report.
+      properties:
+        ticket_id:
+          type: integer
+        title:
+          type: string
+        rating:
+          type: integer
+        feedback:
+          type: string
+        operator:
+          type: string
+          nullable: true
+        department_name:
+          type: string
+        resolved_at:
+          type: string
+          format: date-time
+      required:
+      - department_name
+      - feedback
+      - operator
+      - rating
+      - resolved_at
+      - ticket_id
+      - title
     Room:
       type: object
       properties:
@@ -4718,6 +5002,12 @@ components:
         can_reopen:
           type: boolean
           readOnly: true
+        merged_into:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Set when a supervisor merged this ticket into another one as
+            a duplicate (it is then CANCELLED). See services.merge_tickets.
         attachments:
           type: array
           items:
@@ -4748,6 +5038,7 @@ components:
       - guest_feedback
       - guest_rating
       - id
+      - merged_into
       - reopened_at
       - resolution
       - resolved_at
@@ -4841,6 +5132,15 @@ components:
       - new_value
       - old_value
       - user_username
+    TicketMergeRequest:
+      type: object
+      description: POST /operator/tickets/{id}/merge/ — the ticket to fold this duplicate
+        into.
+      properties:
+        into:
+          type: integer
+      required:
+      - into
     TicketNote:
       type: object
       description: |-

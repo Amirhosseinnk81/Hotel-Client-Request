@@ -114,6 +114,8 @@ export interface Ticket {
   guest_feedback?: string;
   reopened_at?: string | null;
   can_reopen?: boolean;
+  /** Set when a supervisor merged this duplicate into another ticket (it is then CANCELLED). */
+  merged_into?: number | null;
   /** Stage 2.8 — present on both guest and operator ticket reads. */
   attachments: TicketAttachment[];
   created_at: string;
@@ -160,7 +162,8 @@ export type TicketHistoryAction =
   | "UPDATED"
   | "ASSIGNED"
   | "STATUS_CHANGED"
-  | "PRIORITY_CHANGED";
+  | "PRIORITY_CHANGED"
+  | "MERGED";
 
 export interface TicketHistoryEntry {
   entry_type: "history";
@@ -208,6 +211,8 @@ export interface AdminStatsSummary {
     resolved: number;
     cancelled: number;
     total: number;
+    rating_avg: number | null;
+    rating_count: number;
   }[];
   avg_resolution_minutes: number | null;
   overdue_count: number;
@@ -217,6 +222,12 @@ export interface AdminStatsSummary {
   avg_first_response_minutes: number | null;
   response_sla_met_percent: number | null;
   resolution_sla_met_percent: number | null;
+  /** Guest ratings (1-5) over the window; null average when there were none. */
+  rating_avg: number | null;
+  rating_count: number;
+  /** Ratings per star, keys "1".."5". */
+  rating_distribution: Record<"1" | "2" | "3" | "4" | "5", number>;
+  recent_feedback: RecentFeedback[];
   resolution_window_days: number;
   generated_at: string;
 }
@@ -230,6 +241,19 @@ export interface DepartmentOperatorLoad {
   active: number;
   /** Assigned tickets resolved within resolution_window_days. */
   resolved_recent: number;
+  rating_avg: number | null;
+  rating_count: number;
+}
+
+/** One recent written guest comment (ratings report). */
+export interface RecentFeedback {
+  ticket_id: number;
+  title: string;
+  rating: number;
+  feedback: string;
+  operator: string | null;
+  department_name: string;
+  resolved_at: string;
 }
 
 /** GET /operator/stats/summary/ — the caller's own department. */
@@ -246,6 +270,12 @@ export interface DepartmentStatsSummary {
   avg_first_response_minutes: number | null;
   response_sla_met_percent: number | null;
   resolution_sla_met_percent: number | null;
+  /** Guest ratings (1-5) over the window; null average when there were none. */
+  rating_avg: number | null;
+  rating_count: number;
+  /** Ratings per star, keys "1".."5". */
+  rating_distribution: Record<"1" | "2" | "3" | "4" | "5", number>;
+  recent_feedback: RecentFeedback[];
   resolution_window_days: number;
   generated_at: string;
 }
@@ -409,3 +439,23 @@ export interface ITResourceMap {
   goals: ITGoal;
 }
 export type ITResource = keyof ITResourceMap;
+
+/** GET /operator/canned-responses/ — a ready-made text for notes and resolutions. */
+export interface CannedResponse {
+  id: number;
+  title: string;
+  body: string;
+  /** Null = offered to every department. */
+  department: number | null;
+}
+
+/** GET /guest/hotel-info/ — one entry of the guest help page. English fields may be empty. */
+export interface HotelInfo {
+  id: number;
+  title: string;
+  body: string;
+  title_en: string;
+  body_en: string;
+  /** lucide-react icon name. */
+  icon: string;
+}

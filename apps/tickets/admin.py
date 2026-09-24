@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    CannedResponse,
     Category,
     QuickRequestTemplate,
     Ticket,
@@ -97,3 +98,13 @@ class QuickRequestTemplateAdmin(admin.ModelAdmin):
     list_filter = ("department", "is_active")
     search_fields = ("title",)
     ordering = ("order", "title")
+
+
+@admin.register(CannedResponse)
+class CannedResponseAdmin(admin.ModelAdmin):
+    """Ready-made texts operators insert into notes and resolutions."""
+
+    list_display = ("title", "department", "is_active", "order")
+    list_editable = ("is_active", "order")
+    list_filter = ("department", "is_active")
+    search_fields = ("title", "body")

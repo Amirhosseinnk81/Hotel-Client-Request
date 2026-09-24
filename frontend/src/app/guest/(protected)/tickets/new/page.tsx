@@ -256,6 +256,9 @@ export default function NewTicketPage() {
         <CardHeader className="gap-2">
           <CardTitle className="display-2 rule-accent">{t("new.title")}</CardTitle>
           <CardDescription className="pt-2">{t("new.subtitle")}</CardDescription>
+          <Link href="/guest/info" className="w-fit text-xs text-primary underline underline-offset-2">
+            {t("new.infoHint")}
+          </Link>
         </CardHeader>
         <CardContent>
           {quickTemplates.length > 0 && (

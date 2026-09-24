@@ -3,7 +3,7 @@ from django.db import transaction
 
 from apps.accounts.models import User
 from apps.departments.models import Department
-from apps.guests.models import Guest
+from apps.guests.models import Guest, HotelInfo
 from apps.it_ops.models import Process
 from apps.rooms.models import Room
 from apps.tickets.models import Category, QuickRequestTemplate
@@ -90,6 +90,18 @@ IT_PROCESSES = [
     ("بررسی ماهانهٔ UPS و رک شبکه", "PERIODIC_CHECK", "MONTHLY", "sup_it"),
 ]
 
+# Guest help page: (order, icon, title, body, title_en, body_en)
+HOTEL_INFO = [
+    (1, "Wifi", "اینترنت بی‌سیم (Wi-Fi)", "نام شبکه: Hotel-Guest\nرمز: welcome2026",
+     "Wi-Fi", "Network: Hotel-Guest\nPassword: welcome2026"),
+    (2, "Coffee", "صبحانه", "هر روز ۷ تا ۱۰:۳۰ صبح، رستوران طبقهٔ همکف.",
+     "Breakfast", "Daily 7:00 to 10:30, ground-floor restaurant."),
+    (3, "Clock", "تحویل اتاق (چک‌اوت)", "تا ساعت ۱۲ ظهر. برای تأخیر در تحویل، از طریق همین سامانه درخواست دهید.",
+     "Check-out", "By 12:00 noon. For a late check-out, send a request here."),
+    (4, "Phone", "تماس با پذیرش", "شمارهٔ داخلی ۰ — شبانه‌روزی.",
+     "Front desk", "Dial 0 from your room phone — 24 hours."),
+]
+
 ADMIN_USERNAME = "hotel_admin"
 ADMIN_PASSWORD = "Demo!Pass123"
 
@@ -133,6 +145,7 @@ class Command(BaseCommand):
         self._seed_guests()
         self._seed_quick_templates(departments, categories)
         self._seed_it_processes()
+        self._seed_hotel_info()
 
         self.stdout.write(self.style.SUCCESS("Demo data seeded."))
 
@@ -296,6 +309,16 @@ class Command(BaseCommand):
                 },
             )
             self._log(created, "IT process", process.title)
+
+    # -- guest help page -------------------------------------------------------
+
+    def _seed_hotel_info(self):
+        for order, icon, title, body, title_en, body_en in HOTEL_INFO:
+            info, created = HotelInfo.objects.get_or_create(
+                title=title,
+                defaults={"order": order, "icon": icon, "body": body, "title_en": title_en, "body_en": body_en},
+            )
+            self._log(created, "Hotel info", info.title)
 
     # -- helpers -------------------------------------------------------------
 

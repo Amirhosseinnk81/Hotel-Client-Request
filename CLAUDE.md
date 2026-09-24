@@ -24,8 +24,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Frontend | **Next.js 16.3.2** (App Router) + React 19.2 + TypeScript + Tailwind v4 |
 | UI Kit | shadcn/ui **دستی‌ساز** (بدون CLI) در `frontend/src/components/ui/` روی Radix |
 | فونت | `@fontsource-variable/vazirmatn` در UI؛ TTF کامل Vazirmatn برای PDF |
-| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۲۸۲ تست** |
-| تست فرانت | Vitest + React Testing Library — **۱۰۵ تست** |
+| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۳۰۰ تست** |
+| تست فرانت | Vitest + React Testing Library — **۱۰۷ تست** |
 | Deployment | مستقیم روی هاست ویندوز، بدون Docker/Redis/Celery؛ کار زمان‌بندی‌شده با Windows Task Scheduler (`send_pending_sms` هر دقیقه، `snapshot_room_stats` هر شب). هر جریان زندهٔ اپراتور یک thread سرور نگه می‌دارد — بخش «اعلان لحظه‌ای» |
 
 ## دستورهای رایج
@@ -36,7 +36,7 @@ python manage.py migrate
 python manage.py runserver localhost:8000      # localhost، نه 127.0.0.1 — بخش «دو تلهٔ همیشگی»
 python manage.py seed_demo_data                # دادهٔ دموی فارسی: واحدها، دسته‌ها، اتاق، اپراتور، سرپرست، مهمان
 python manage.py seed_demo_data --reset-passwords
-python manage.py test                          # کل ۲۸۲ تست
+python manage.py test                          # کل ۳۰۰ تست
 python manage.py test apps.tickets             # فقط یک اپ
 python manage.py spectacular --file Hotel_Client_Request_Platform_API.yaml
 ```
@@ -85,7 +85,7 @@ npx vitest run -t "relative"                   # فیلتر روی نام تست
 - `apps/` — هر اپ با الگوی ثابت: `models.py` → `serializers.py` → `views.py` (DRF generics) → `urls.py` → `admin.py` → `tests.py`
   - `core/` — پرمیشن‌های مشترک، `jwt_cookies.py`، `throttling.py`، `exceptions.py`، health check، `seed_demo_data`
   - `accounts/` — User سفارشی (`role`، `department`، `is_supervisor`)، لاگین اپراتور، refresh، logout، وضعیت اپراتور (`/operator/me/status/`، محاسبه‌شده)، و `last_seen_at` (حضور در پنل، برای تخصیص خودکار)
-  - `guests/` — Guest و لاگین مهمان
+  - `guests/` — Guest و لاگین مهمان، و `HotelInfo` (صفحهٔ راهنمای مهمان — بخش «قابلیت‌های Helpdesk»)
   - `rooms/` — Room و `RoomStatusLog` (لاگ append-only که خودِ `Room.save()` می‌نویسد)
   - `departments/` — CRUD ادمین
   - `tickets/` — هستهٔ پروژه: `Category`، `Ticket`، `TicketHistory`، `TicketNote`، `TicketAttachment`، `QuickRequestTemplate`، و `pdf.py`
@@ -168,6 +168,16 @@ SLA دو مرحله دارد، هر دو به ازای هر دسته و قابل
 - **واحدهای دیگر هم به IT درخواست می‌دهند**، ولی نه از مسیرهای IT: `/it-ops/outgoing-requests/` (`OutgoingITRequestViewSet`) با پرمیشن `IsOperatorWithDepartment`. هر اپراتورِ واحددار فقط درخواست‌های واحد خودش را می‌بیند، واحد و درخواست‌دهنده همیشه از `request.user` می‌آیند نه از بدنه، و بعد از ثبت نمی‌تواند تغییرش دهد (PATCH/DELETE ۴۰۵) — وضعیت و مسئول کار IT است. `requested_by` روی `DepartmentRequest` را فقط همین ویو پر می‌کند. صفحهٔ فرانتش `/operator/it-requests` است.
 - **فرم‌های صفحهٔ IT** (`components/it-ops/item-dialog.tsx` + `resource-panel.tsx`) یک دیالوگ مشترک‌اند که با field spec کار می‌کنند. دو قاعده که شکستنشان ۴۰۳ می‌سازد: در ویرایش **فقط فیلدهای تغییرکرده** فرستاده می‌شوند (`changedFields`) — چون `CanWorkOnITItem` صرفِ حضور یک فیلد سرپرستی در بدنه را رد می‌کند، حتی با مقدار دست‌نخورده؛ و فیلدهایی که بیننده اجازه‌شان را ندارد اصلاً نمایش داده نمی‌شوند (`isItFieldEditable`). در ساخت، فیلد خالی فرستاده نمی‌شود تا پیش‌فرض سرور اعمال شود.
 - `DepartmentRequestSerializer` در schema با نام `ITDepartmentRequest` است، چون `DepartmentSerializer` با `COMPONENT_SPLIT_REQUEST` خودش کامپوننتی به نام `DepartmentRequest` می‌سازد. enumهای وضعیت/اولویت IT هم در `ENUM_NAME_OVERRIDES` نام گرفته‌اند؛ اگر enum تازه‌ای با نام تکراری اضافه شد، spectacular اسم هش‌دار می‌سازد — همان‌جا نامش بده.
+
+## قابلیت‌های Helpdesk (الهام از Odoo)
+
+چهار قابلیت از بررسی ماژول Helpdesk در Odoo. هر کدام از Django Admin مدیریت می‌شود.
+
+- **قالب پیامک برای هر وضعیت** — `notifications.MessageTemplate`، یک ردیف برای هر رویداد (ثبت، شروع کار، حل، لغو). متن با متغیرهای `{title} {ticket_id} {department} {room} {hotel}`؛ متغیر ناشناخته در `clean()` رد می‌شود تا غلط تایپی به مهمان نرسد. `is_active=False` یعنی برای آن رویداد پیامکی نمی‌رود؛ بدون ردیف ← متن پیش‌فرض `services.DEFAULT_BODIES`. migration `notifications/0003` متن‌های پیش‌فرض را به‌صورت قالب قابل‌ویرایش گذاشت (کپی متن، نه import از کد). پیامک «شروع کار» **فقط بار اول** می‌رود (`first_response_at` قبلاً خالی بوده)، نه در هر رفت‌وبرگشت OPEN↔IN_PROGRESS.
+- **گزارش امتیاز مهمان** — `_ratings` در `services.py`: میانگین، تعداد، توزیع ۱ تا ۵ و ۵ نظر متنی آخر؛ به‌علاوهٔ `rating_avg`/`rating_count` در هر ردیف «به تفکیک واحد» (ادمین) و «بار کاری اپراتورها» (واحد). پنجرهٔ زمانی بر اساس `resolved_at` است (فیلد جدای «زمان امتیاز» نداریم). میانگینِ بی‌امتیاز `null` است نه صفر.
+- **پاسخ‌های آماده** — `tickets.CannedResponse` (واحد خالی = برای همهٔ واحدها)، `GET /operator/canned-responses/`. فرانت: `components/canned-response-picker.tsx` کنار یادداشت، نتیجهٔ رسیدگی و دیالوگ Resolve؛ متن را به انتهای فیلد اضافه می‌کند، جایگزین نمی‌کند.
+- **ادغام تیکت تکراری** — `services.merge_tickets` و `POST /operator/tickets/{id}/merge/` (فقط سرپرست). قواعد: همان مهمان و همان واحد (دو مهمان که هر دو حوله خواسته‌اند دو درخواست‌اند)، تکراری هنوز OPEN، مقصد هنوز باز. اثر: تکراری CANCELLED با `merged_into`، عکس‌هایش به مقصد می‌روند، یادداشت داخلی با توضیحش روی مقصد، رویداد `MERGED` در هر دو تایم‌لاین، و **پیامک لغو نمی‌رود** (درخواست مهمان هنوز در حال رسیدگی است). `merge-candidates/` تیکت‌های باز دیگر همان مهمان را می‌دهد. مهمان روی تیکت ادغام‌شده پیوند به تیکت اصلی می‌بیند.
+- **صفحهٔ راهنمای مهمان** — `guests.HotelInfo` (دوزبانه: `title_en`/`body_en` اختیاری با برگشت به فارسی)، `GET /guest/hotel-info/` **فقط برای مهمانِ واردشده** (رمز وای‌فای عمومی نیست)، صفحهٔ `/guest/info` با پیوند از داشبورد و فرم ثبت درخواست.
 
 ## تخصیص خودکار
 
@@ -304,6 +314,7 @@ SLA دو مرحله دارد، هر دو به ازای هر دسته و قابل
 - **`read_only_fields = fields`:** اگر سریالایزر قرار است داده هم بپذیرد، این باعث می‌شود ورودی بی‌صدا و بدون خطای validation دور ریخته شود. فقط برای سریالایزرهای صرفاً خواندنی درست است (مثل `RoomStatusLogSerializer`).
 - **Pagination:** `PageNumberPagination` با `PAGE_SIZE=10` به‌صورت پیش‌فرض روی همهٔ لیست‌هاست. تستی که فرض کند `response.data` مستقیماً لیست است بی‌صدا فیل می‌شود؛ باید `response.data["results"]` باز شود.
 - **حذف پوشهٔ عمیق در ویندوز:** `cmd /c rmdir /s /q node_modules` — نه `Remove-Item` در PowerShell (قفل‌شدن فایل).
+- **`os error 32` در build/dev ویندوز** («used by another process» روی یک فایل سورس): کد ایرادی ندارد؛ فایل لحظه‌ای قفل بوده — معمولاً کپی فایل‌ها وسط `npm run dev`، دو `next dev` هم‌زمان، آنتی‌ویروس یا OneDrive. سرور dev را ببند، پروسه‌های node جامانده را ببند، `.next` را پاک کن، دوباره بالا بیاور؛ و فایل‌ها را همیشه با سرور خاموش کپی کن.
 - **کش `.next`:** بعد از تغییر ساختاری، اگر خطای عجیب TypeScript روی `routes.d.ts` دیدی، `.next` را کامل پاک کن.
 - **تست زمان‌محور روی ویندوز:** ساعت ویندوز حدود هر ۱۵ میلی‌ثانیه تیک می‌خورد، پس `since = timezone.now()` و `created_at` ردیفی که بلافاصله بعدش ساخته می‌شود می‌توانند دقیقاً برابر باشند و شرط `>` فیل شود. در تست یک فاصلهٔ صریح بگذار (`- timedelta(seconds=1)`)؛ `test_new_count_reflects_tickets_created_after_since` یک‌بار دقیقاً همین‌طور فلیکی بود.
 - **`swagger_fake_view`:** هر `get_queryset` که از `request.user` فیلتر می‌گیرد باید اول `getattr(self, "swagger_fake_view", False)` را چک کند و `.none()` برگرداند؛ وگرنه `spectacular` با AnonymousUser می‌شکند و هشدار می‌دهد (نمونه: `OutgoingITRequestViewSet`).
@@ -315,7 +326,7 @@ SLA دو مرحله دارد، هر دو به ازای هر دسته و قابل
 
 - **شفافیت هویت در چت** (اگر روزی Live Chat اضافه شد). در تست‌های کاربری هتل‌های ۵ ستاره، کاربرها گیج می‌شدند که با آدم حرف می‌زنند یا ربات. اگر چت اضافه شد، همیشه باید صریح بگوید «اپراتور [نام]» — نه یک حباب چت بی‌نام.
 
-جمع‌بندی همان تحقیق: بیشتر چک‌لیست «ضروری» صنعت را داریم (SLA و معوق، بازخورد مهمان، داشبورد ادمین، تایم‌لاین، پیوست، آفلاین، دوزبانگی مهمان). از دریافت چندکاناله، QR کد اتاق و پیامک پیاده شده‌اند؛ اعلان لحظه‌ای (3.2) و تخصیص خودکار و SLA دومرحله‌ای (الهام از Odoo Helpdesk) هم پیاده شده‌اند؛ وب‌هوک PMS (3.3) و IPTV (3.4) مانده‌اند.
+جمع‌بندی همان تحقیق: بیشتر چک‌لیست «ضروری» صنعت را داریم (SLA و معوق، بازخورد مهمان، داشبورد ادمین، تایم‌لاین، پیوست، آفلاین، دوزبانگی مهمان). از دریافت چندکاناله، QR کد اتاق و پیامک پیاده شده‌اند؛ اعلان لحظه‌ای (3.2)، تخصیص خودکار، SLA دومرحله‌ای، قالب پیامک، گزارش امتیاز، پاسخ آماده، ادغام تکراری و صفحهٔ راهنمای مهمان (همه با الهام از Odoo Helpdesk) هم پیاده شده‌اند؛ وب‌هوک PMS (3.3) و IPTV (3.4) مانده‌اند.
 
 ## QR کد اتاق
 

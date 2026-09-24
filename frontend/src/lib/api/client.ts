@@ -3,11 +3,13 @@ import type {
   AdminStatsSummary,
   ApiErrorBody,
   AuthTokens,
+  CannedResponse,
   Category,
   CreateTicketPayload,
   Department,
   DepartmentStatsSummary,
   GuestProfile,
+  HotelInfo,
   CreateOutgoingITRequestPayload,
   ITProcess,
   ITResource,
@@ -555,6 +557,31 @@ export async function getMyOperatorStatus(): Promise<OperatorAvailability> {
   return readThrough("operator/me/status", () =>
     apiFetch<OperatorAvailability>("/operator/me/status/")
   );
+}
+
+/** Ready-made texts for notes and resolutions: own department's plus hotel-wide ones. */
+export async function getCannedResponses(): Promise<CannedResponse[]> {
+  return readThrough("operator/canned-responses", () =>
+    apiFetch<CannedResponse[]>("/operator/canned-responses/")
+  );
+}
+
+/** Other open tickets of the same guest in the department — likely duplicates. */
+export async function getMergeCandidates(id: number | string): Promise<Ticket[]> {
+  return apiFetch<Ticket[]>(`/operator/tickets/${id}/merge-candidates/`);
+}
+
+/** Supervisor only: fold duplicate `id` into ticket `into`. Returns the kept ticket. */
+export async function mergeTicket(id: number | string, into: number): Promise<Ticket> {
+  return apiFetch<Ticket>(`/operator/tickets/${id}/merge/`, {
+    method: "POST",
+    body: JSON.stringify({ into }),
+  });
+}
+
+/** The guest help page: Wi-Fi, breakfast hours, check-out time... */
+export async function getHotelInfo(): Promise<HotelInfo[]> {
+  return apiFetch<HotelInfo[]>("/guest/hotel-info/");
 }
 
 /** Count of currently-overdue tickets in the operator's department (Stage 2.9). */

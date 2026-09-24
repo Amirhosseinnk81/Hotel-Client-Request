@@ -63,6 +63,13 @@ const fa = {
   "home.requests": "درخواست‌ها",
   "home.newRequest": "ثبت درخواست جدید",
   "home.myRequests": "درخواست‌های من",
+  "home.hotelInfo": "اطلاعات هتل",
+
+  // hotel info (help page)
+  "info.title": "اطلاعات هتل",
+  "info.subtitle": "پاسخ سؤال‌های رایج — شاید نیازی به ثبت درخواست نباشد.",
+  "info.empty": "هنوز اطلاعاتی ثبت نشده است.",
+  "info.loadError": "خطا در دریافت اطلاعات هتل.",
 
   // list
   "list.title": "درخواست‌های من",
@@ -80,6 +87,7 @@ const fa = {
   "new.title": "ثبت درخواست جدید",
   "new.subtitle": "درخواست خود را برای هتل ثبت کنید.",
   "new.quick": "درخواست سریع",
+  "new.infoHint": "رمز وای‌فای، ساعت صبحانه و ساعت تحویل اتاق را در «اطلاعات هتل» ببینید.",
   "new.optionsError": "خطا در دریافت لیست واحدها و دسته‌بندی‌ها.",
   "new.noDepartmentsOrCategories": "هیچ واحد و دسته‌بندی‌ای در سیستم تعریف نشده است. ابتدا از پنل مدیریت اضافه کنید.",
   "new.noDepartments": "هیچ واحدی در سیستم تعریف نشده است. ابتدا از پنل مدیریت اضافه کنید.",
@@ -112,6 +120,8 @@ const fa = {
 
   // detail
   "detail.backToList": "بازگشت به لیست درخواست‌ها",
+  "detail.mergedInto": "این درخواست تکراری بود و با درخواست شمارهٔ {id} یکی شد؛ پیگیری آنجا ادامه دارد.",
+  "detail.openMerged": "مشاهدهٔ درخواست {id}",
   "detail.notFound": "چنین درخواستی یافت نشد.",
   "detail.loadError": "خطا در دریافت جزئیات درخواست.",
   "detail.priority": "اولویت: {priority}",
@@ -202,6 +212,12 @@ const en: Record<MessageKey, string> = {
   "home.requests": "Requests",
   "home.newRequest": "New request",
   "home.myRequests": "My requests",
+  "home.hotelInfo": "Hotel info",
+
+  "info.title": "Hotel information",
+  "info.subtitle": "Quick answers — you may not need to send a request at all.",
+  "info.empty": "Nothing here yet.",
+  "info.loadError": "Could not load the hotel information.",
 
   "list.title": "My requests",
   "list.subtitle": "Every request you have made so far.",
@@ -217,6 +233,7 @@ const en: Record<MessageKey, string> = {
   "new.title": "New request",
   "new.subtitle": "Tell the hotel what you need.",
   "new.quick": "Quick requests",
+  "new.infoHint": "The Wi-Fi password, breakfast hours and check-out time are in Hotel info.",
   "new.optionsError": "Could not load the departments and categories.",
   "new.noDepartmentsOrCategories": "No departments or categories are set up yet. Please contact the front desk.",
   "new.noDepartments": "No departments are set up yet. Please contact the front desk.",
@@ -248,6 +265,8 @@ const en: Record<MessageKey, string> = {
   "new.doneBody": "“{title}” was sent to the hotel as request #{id} and will be looked at shortly.",
 
   "detail.backToList": "Back to my requests",
+  "detail.mergedInto": "This was a duplicate and was merged into request #{id}; it is being handled there.",
+  "detail.openMerged": "Open request #{id}",
   "detail.notFound": "This request could not be found.",
   "detail.loadError": "Could not load this request.",
   "detail.priority": "Priority: {priority}",

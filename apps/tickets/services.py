@@ -24,12 +24,13 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import transaction
 from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
 from django.utils import timezone
 
 from apps.departments.models import Department
 
-from .models import Ticket, TicketHistory
+from .models import Ticket, TicketAttachment, TicketHistory, TicketNote
 
 # How far back "average resolution time" (and each operator's "resolved
 # recently" count) looks. A fixed 30-day window rather than "all time" so
@@ -139,6 +140,81 @@ def auto_assign(ticket):
     return operator
 
 
+# -- duplicates -----------------------------------------------------------------
+
+
+class MergeError(Exception):
+    """A merge that breaks one of the rules below; the message says which."""
+
+
+def merge_candidates(ticket):
+    """Other still-open tickets from the same guest in the same department."""
+    return (
+        Ticket.objects.filter(
+            guest_id=ticket.guest_id,
+            department_id=ticket.department_id,
+            status__in=ACTIVE_STATUSES,
+        )
+        .exclude(pk=ticket.pk)
+        .select_related("category", "room", "assigned_to")
+        .order_by("created_at")
+    )
+
+
+@transaction.atomic
+def merge_tickets(source, target, user):
+    """
+    Fold duplicate `source` into `target` (inspired by Odoo Helpdesk's
+    ticket merge). A guest who asks for towels twice gets one ticket, one
+    operator on it, and one set of numbers in the reports.
+
+    Rules: same guest and same department (different guests asking for the
+    same thing are different requests); the duplicate must still be OPEN
+    (once someone has started on it, it isn't a stray duplicate any more);
+    the target must still be open (OPEN or IN_PROGRESS).
+
+    Effect: the duplicate is CANCELLED with merged_into set, its photos move
+    to the target, both timelines record the merge, and the target gets an
+    internal note quoting the duplicate. No cancellation SMS goes out — the
+    guest's request is still being handled, under the other number.
+    """
+    if source.pk == target.pk:
+        raise MergeError("A ticket cannot be merged into itself.")
+    if source.guest_id != target.guest_id or source.department_id != target.department_id:
+        raise MergeError("Only tickets from the same guest in the same department can be merged.")
+    if source.status != Ticket.Status.OPEN:
+        raise MergeError("Only a ticket nobody has started on (OPEN) can be merged away.")
+    if target.status not in ACTIVE_STATUSES:
+        raise MergeError("The ticket to merge into must still be open.")
+
+    source.status = Ticket.Status.CANCELLED
+    source.merged_into = target
+    source.save(update_fields=["status", "merged_into", "updated_at"])
+
+    TicketAttachment.objects.filter(ticket=source).update(ticket=target)
+    TicketNote.objects.create(
+        ticket=target,
+        author=user,
+        text=f"درخواست تکراری #{source.pk} («{source.title}») با این درخواست ادغام شد.\n{source.description}",
+    )
+    TicketHistory.objects.create(
+        ticket=source,
+        user=user,
+        action=TicketHistory.Action.MERGED,
+        old_value=str(source.pk),
+        new_value=str(target.pk),
+    )
+    TicketHistory.objects.create(
+        ticket=target,
+        user=user,
+        action=TicketHistory.Action.MERGED,
+        old_value=str(source.pk),
+        new_value=str(target.pk),
+    )
+    target.save(update_fields=["updated_at"])
+    return target
+
+
 # -- statistics -----------------------------------------------------------------
 
 
@@ -231,6 +307,43 @@ def _sla_performance(tickets, window_start):
     }
 
 
+def _ratings(tickets, window_start):
+    """
+    Guest satisfaction over the window (inspired by Odoo Helpdesk's
+    customer-ratings report): average of the 1-5 stars, how many ratings,
+    the spread per star, and the latest written comments. A rating belongs
+    to the window its ticket was resolved in (there's no separate rated-at).
+    """
+    rated = tickets.filter(guest_rating__isnull=False, resolved_at__gte=window_start)
+    totals = rated.aggregate(avg=Avg("guest_rating"), count=Count("id"))
+    distribution = {str(stars): 0 for stars in range(1, 6)}
+    for row in rated.values("guest_rating").annotate(n=Count("id")):
+        distribution[str(row["guest_rating"])] = row["n"]
+
+    recent = (
+        rated.exclude(guest_feedback="")
+        .select_related("assigned_to", "department")
+        .order_by("-resolved_at")[:5]
+    )
+    return {
+        "rating_avg": round(totals["avg"], 2) if totals["avg"] is not None else None,
+        "rating_count": totals["count"],
+        "rating_distribution": distribution,
+        "recent_feedback": [
+            {
+                "ticket_id": ticket.id,
+                "title": ticket.title,
+                "rating": ticket.guest_rating,
+                "feedback": ticket.guest_feedback,
+                "operator": ticket.assigned_to.username if ticket.assigned_to_id else None,
+                "department_name": ticket.department.name,
+                "resolved_at": ticket.resolved_at,
+            }
+            for ticket in recent
+        ],
+    }
+
+
 def compute_admin_stats_summary():
     tickets = Ticket.objects.all()
     window_start = timezone.now() - RESOLUTION_WINDOW
@@ -250,6 +363,14 @@ def compute_admin_stats_summary():
                 "tickets", filter=Q(tickets__status=Ticket.Status.CANCELLED)
             ),
             total=Count("tickets"),
+            rating_avg=Avg(
+                "tickets__guest_rating",
+                filter=Q(tickets__guest_rating__isnull=False, tickets__resolved_at__gte=window_start),
+            ),
+            rating_count=Count(
+                "tickets",
+                filter=Q(tickets__guest_rating__isnull=False, tickets__resolved_at__gte=window_start),
+            ),
         )
         .order_by("name")
     )
@@ -265,12 +386,15 @@ def compute_admin_stats_summary():
                 "resolved": dept.resolved,
                 "cancelled": dept.cancelled,
                 "total": dept.total,
+                "rating_avg": round(dept.rating_avg, 2) if dept.rating_avg is not None else None,
+                "rating_count": dept.rating_count,
             }
             for dept in department_rows
         ],
         "avg_resolution_minutes": _avg_resolution_minutes(tickets, window_start),
         "overdue_count": _overdue_count(tickets),
         **_sla_performance(tickets, window_start),
+        **_ratings(tickets, window_start),
         "resolution_window_days": RESOLUTION_WINDOW.days,
         "generated_at": timezone.now(),
     }
@@ -305,6 +429,22 @@ def compute_department_stats_summary(department):
                     assigned_tickets__resolved_at__gte=window_start,
                 ),
             ),
+            rating_avg=Avg(
+                "assigned_tickets__guest_rating",
+                filter=Q(
+                    assigned_tickets__department=department,
+                    assigned_tickets__guest_rating__isnull=False,
+                    assigned_tickets__resolved_at__gte=window_start,
+                ),
+            ),
+            rating_count=Count(
+                "assigned_tickets",
+                filter=Q(
+                    assigned_tickets__department=department,
+                    assigned_tickets__guest_rating__isnull=False,
+                    assigned_tickets__resolved_at__gte=window_start,
+                ),
+            ),
         )
         .order_by("-is_supervisor", "username")
     )
@@ -320,12 +460,15 @@ def compute_department_stats_summary(department):
                 "is_supervisor": operator.is_supervisor,
                 "active": operator.active_tickets,
                 "resolved_recent": operator.resolved_recent,
+                "rating_avg": round(operator.rating_avg, 2) if operator.rating_avg is not None else None,
+                "rating_count": operator.rating_count,
             }
             for operator in operators
         ],
         "avg_resolution_minutes": _avg_resolution_minutes(tickets, window_start),
         "overdue_count": _overdue_count(tickets),
         **_sla_performance(tickets, window_start),
+        **_ratings(tickets, window_start),
         "resolution_window_days": RESOLUTION_WINDOW.days,
         "generated_at": timezone.now(),
     }

@@ -3,6 +3,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from .models import (
+    CannedResponse,
     Category,
     QuickRequestTemplate,
     Ticket,
@@ -84,6 +85,7 @@ class TicketSerializer(serializers.ModelSerializer):
             "guest_feedback",
             "reopened_at",
             "can_reopen",
+            "merged_into",
             "attachments",
             "created_at",
             "updated_at",
@@ -97,6 +99,7 @@ class TicketSerializer(serializers.ModelSerializer):
             "guest_feedback",
             "reopened_at",
             "can_reopen",
+            "merged_into",
             "created_at",
             "updated_at",
             "resolved_at",
@@ -162,6 +165,7 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             "first_response_at",
             "response_deadline",
             "is_response_overdue",
+            "merged_into",
             "attachments",
             "created_at",
             "updated_at",
@@ -179,6 +183,7 @@ class OperatorTicketSerializer(serializers.ModelSerializer):
             "first_response_at",
             "response_deadline",
             "is_response_overdue",
+            "merged_into",
             "created_at",
             "updated_at",
             "resolved_at",
@@ -349,6 +354,19 @@ class TicketRateSerializer(serializers.Serializer):
     feedback = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+class CannedResponseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CannedResponse
+        fields = ["id", "title", "body", "department"]
+        read_only_fields = fields
+
+
+class TicketMergeSerializer(serializers.Serializer):
+    """POST /operator/tickets/{id}/merge/ — the ticket to fold this duplicate into."""
+
+    into = serializers.IntegerField()
+
+
 class QuickRequestTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuickRequestTemplate
@@ -375,6 +393,20 @@ class AdminStatsByDepartmentSerializer(serializers.Serializer):
     resolved = serializers.IntegerField()
     cancelled = serializers.IntegerField()
     total = serializers.IntegerField()
+    rating_avg = serializers.FloatField(allow_null=True)
+    rating_count = serializers.IntegerField()
+
+
+class RecentFeedbackSerializer(serializers.Serializer):
+    """One recent written guest comment, for the ratings report."""
+
+    ticket_id = serializers.IntegerField()
+    title = serializers.CharField()
+    rating = serializers.IntegerField()
+    feedback = serializers.CharField()
+    operator = serializers.CharField(allow_null=True)
+    department_name = serializers.CharField()
+    resolved_at = serializers.DateTimeField()
 
 
 class AdminStatsSummarySerializer(serializers.Serializer):
@@ -399,6 +431,12 @@ class AdminStatsSummarySerializer(serializers.Serializer):
     resolution_sla_met_percent = serializers.FloatField(
         allow_null=True, help_text="Share of due tickets resolved within the resolution target."
     )
+    rating_avg = serializers.FloatField(allow_null=True, help_text="Average guest rating (1-5) in the window.")
+    rating_count = serializers.IntegerField()
+    rating_distribution = serializers.DictField(
+        child=serializers.IntegerField(), help_text='Ratings per star, keys "1".."5".'
+    )
+    recent_feedback = RecentFeedbackSerializer(many=True)
     resolution_window_days = serializers.IntegerField()
     generated_at = serializers.DateTimeField()
 
@@ -415,6 +453,8 @@ class DepartmentStatsByOperatorSerializer(serializers.Serializer):
     resolved_recent = serializers.IntegerField(
         help_text="Assigned tickets resolved within resolution_window_days."
     )
+    rating_avg = serializers.FloatField(allow_null=True)
+    rating_count = serializers.IntegerField()
 
 
 class DepartmentStatsSummarySerializer(serializers.Serializer):
@@ -441,5 +481,11 @@ class DepartmentStatsSummarySerializer(serializers.Serializer):
     resolution_sla_met_percent = serializers.FloatField(
         allow_null=True, help_text="Share of due tickets resolved within the resolution target."
     )
+    rating_avg = serializers.FloatField(allow_null=True, help_text="Average guest rating (1-5) in the window.")
+    rating_count = serializers.IntegerField()
+    rating_distribution = serializers.DictField(
+        child=serializers.IntegerField(), help_text='Ratings per star, keys "1".."5".'
+    )
+    recent_feedback = RecentFeedbackSerializer(many=True)
     resolution_window_days = serializers.IntegerField()
     generated_at = serializers.DateTimeField()

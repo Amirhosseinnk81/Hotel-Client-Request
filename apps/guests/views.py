@@ -1,5 +1,5 @@
 from drf_spectacular.utils import OpenApiResponse, extend_schema
-from rest_framework import status
+from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -9,11 +9,12 @@ from apps.core.jwt_cookies import set_refresh_cookie
 from apps.core.permissions import IsGuest
 from apps.core.throttling import GuestLoginRateThrottle
 
-from .models import Guest
+from .models import Guest, HotelInfo
 from .serializers import (
     GuestLoginSerializer,
     GuestLoginResponseSerializer,
     GuestProfileSerializer,
+    HotelInfoSerializer,
 )
 
 
@@ -83,3 +84,16 @@ class GuestProfileView(APIView):
         serializer = GuestProfileSerializer(guest)
 
         return Response(serializer.data)
+
+
+class GuestHotelInfoListView(generics.ListAPIView):
+    """
+    GET /api/v1/guest/hotel-info/ — the help page: Wi-Fi, breakfast hours,
+    check-out time... Logged-in guests only (the Wi-Fi password isn't for
+    the whole internet). Unpaginated: a handful of entries.
+    """
+
+    serializer_class = HotelInfoSerializer
+    permission_classes = [IsGuest]
+    pagination_class = None
+    queryset = HotelInfo.objects.filter(is_active=True)

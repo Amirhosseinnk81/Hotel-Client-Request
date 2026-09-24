@@ -225,6 +225,14 @@ export default function GuestTicketDetailPage({
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
+            {ticket.merged_into && (
+              <p className="border border-dashed px-3 py-2 text-sm text-muted-foreground">
+                {t("detail.mergedInto", { id: ticket.merged_into })}{" "}
+                <Link href={`/guest/tickets/${ticket.merged_into}`} className="text-primary underline">
+                  {t("detail.openMerged", { id: ticket.merged_into })}
+                </Link>
+              </p>
+            )}
             <div className="flex gap-2">
               <Badge variant={priorityBadgeVariant[ticket.priority]} className="gap-1">
                 <PriorityIcon className="size-3" />

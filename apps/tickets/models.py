@@ -216,6 +216,18 @@ class Ticket(models.Model):
         blank=True,
     )
 
+    merged_into = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="merged_duplicates",
+        help_text=(
+            "Set when a supervisor merged this ticket into another one as a "
+            "duplicate (it is then CANCELLED). See services.merge_tickets."
+        ),
+    )
+
     first_response_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -284,6 +296,7 @@ class TicketHistory(models.Model):
         ASSIGNED = "ASSIGNED", "Assigned"
         STATUS_CHANGED = "STATUS_CHANGED", "Status Changed"
         PRIORITY_CHANGED = "PRIORITY_CHANGED", "Priority Changed"
+        MERGED = "MERGED", "Merged"
 
     ticket = models.ForeignKey(
         Ticket,
@@ -465,3 +478,31 @@ class TicketAttachment(models.Model):
 
     def __str__(self):
         return f"Attachment #{self.pk} on Ticket #{self.ticket_id}"
+
+
+class CannedResponse(models.Model):
+    """
+    A ready-made text an operator can drop into an internal note or a
+    resolution with one click ("Towels delivered to the room.") — inspired
+    by Odoo Helpdesk. Managed in Django Admin. No department = offered to
+    every department.
+    """
+
+    title = models.CharField(max_length=100, help_text="Short label shown in the picker.")
+    body = models.TextField()
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="canned_responses",
+        help_text="Blank = available to every department.",
+    )
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "title"]
+
+    def __str__(self):
+        return self.title

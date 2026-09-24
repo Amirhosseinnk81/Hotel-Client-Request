@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import Guest
+from .models import Guest, HotelInfo
 
 
 class GuestLoginSerializer(serializers.Serializer):
@@ -76,3 +76,10 @@ class GuestLoginResponseSerializer(serializers.Serializer):
     refresh = serializers.CharField()
     access = serializers.CharField()
     role = serializers.CharField()
+
+
+class HotelInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HotelInfo
+        fields = ["id", "title", "body", "title_en", "body_en", "icon"]
+        read_only_fields = fields

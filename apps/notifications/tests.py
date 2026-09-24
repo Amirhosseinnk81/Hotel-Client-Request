@@ -110,17 +110,31 @@ class TicketEventsQueueSmsTests(SmsTestData, APITestCase):
         self.assertIn("خانه‌داری", sms.body)
         self.assertEqual(sms.ticket, ticket)
 
-    def test_other_status_changes_send_nothing(self):
+    def test_work_started_is_sent_only_the_first_time(self):
+        ticket = self.make_ticket()
+        self.client.force_authenticate(self.operator)
+        url = reverse("tickets:operator-ticket-detail", kwargs={"pk": ticket.pk})
+
+        # Started, handed back to the queue, started again.
+        for new_status in ("IN_PROGRESS", "OPEN", "IN_PROGRESS"):
+            self.client.patch(url, {"status": new_status}, format="json")
+
+        self.assertEqual(
+            list(SmsMessage.objects.values_list("event", flat=True)),
+            [SmsMessage.Event.TICKET_IN_PROGRESS],
+        )
+
+    def test_cancelling_sends_a_cancellation(self):
         ticket = self.make_ticket()
         self.client.force_authenticate(self.operator)
 
         self.client.patch(
             reverse("tickets:operator-ticket-detail", kwargs={"pk": ticket.pk}),
-            {"status": "IN_PROGRESS"},
+            {"status": "CANCELLED"},
             format="json",
         )
 
-        self.assertFalse(SmsMessage.objects.exists())
+        self.assertTrue(SmsMessage.objects.filter(event=SmsMessage.Event.TICKET_CANCELLED).exists())
 
     def test_the_ticket_is_created_even_if_queueing_the_sms_blows_up(self):
         self.client.force_authenticate(self.guest_user)

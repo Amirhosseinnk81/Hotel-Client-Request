@@ -22,3 +22,36 @@ class Guest(models.Model):
 
     def __str__(self):
         return f"{self.full_name} ({self.national_id})"
+
+
+class HotelInfo(models.Model):
+    """
+    A short piece of hotel information for the guest portal's help page —
+    Wi-Fi password, breakfast hours, check-out time — so a guest finds the
+    answer instead of filing a ticket (inspired by Odoo Helpdesk's help
+    center). Managed in Django Admin; shown only to logged-in guests,
+    because some of it (the Wi-Fi password) is for guests only.
+
+    Bilingual like the guest portal: the English fields are optional and
+    fall back to the Persian ones.
+    """
+
+    title = models.CharField(max_length=120)
+    body = models.TextField()
+    title_en = models.CharField(max_length=120, blank=True)
+    body_en = models.TextField(blank=True)
+    icon = models.CharField(
+        max_length=50,
+        default="Info",
+        help_text="A lucide-react icon name, e.g. Wifi, Coffee, Clock, Phone.",
+    )
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["order", "title"]
+        verbose_name = "Hotel info"
+        verbose_name_plural = "Hotel info"
+
+    def __str__(self):
+        return self.title

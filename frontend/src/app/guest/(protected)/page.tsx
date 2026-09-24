@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BedDouble, FilePlus2, IdCard, ListChecks, Phone, User } from "lucide-react";
+import { BedDouble, FilePlus2, IdCard, Info, ListChecks, Phone, User } from "lucide-react";
 
 import {
   Card,
@@ -127,6 +127,12 @@ export default function GuestDashboardPage() {
             <Link href="/guest/tickets">
               <ListChecks className="size-4" />
               {t("home.myRequests")}
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="flex-1 gap-2">
+            <Link href="/guest/info">
+              <Info className="size-4" />
+              {t("home.hotelInfo")}
             </Link>
           </Button>
         </CardContent>

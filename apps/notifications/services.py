@@ -14,7 +14,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .backends import SmsSendError, get_backend
-from .models import SmsMessage
+from .models import MessageTemplate, SmsMessage
 
 logger = logging.getLogger(__name__)
 
@@ -23,17 +23,39 @@ def _hotel_name():
     return getattr(settings, "SMS_HOTEL_NAME", "هتل")
 
 
+# Used when an event has no MessageTemplate row (e.g. a fresh database).
+# Migration 0003 copies these into editable templates.
+DEFAULT_BODIES = {
+    SmsMessage.Event.TICKET_CREATED: (
+        "مهمان گرامی، درخواست «{title}» شما ثبت شد (شمارهٔ پیگیری {ticket_id}) "
+        "و به واحد {department} سپرده شد. {hotel}"
+    ),
+    SmsMessage.Event.TICKET_IN_PROGRESS: (
+        "مهمان گرامی، همکار ما در واحد {department} رسیدگی به درخواست «{title}» را شروع کرد. {hotel}"
+    ),
+    SmsMessage.Event.TICKET_RESOLVED: (
+        "مهمان گرامی، درخواست «{title}» شما توسط واحد {department} انجام شد. {hotel}"
+    ),
+    SmsMessage.Event.TICKET_CANCELLED: (
+        "مهمان گرامی، درخواست «{title}» (شمارهٔ {ticket_id}) لغو شد. "
+        "در صورت نیاز با پذیرش تماس بگیرید. {hotel}"
+    ),
+}
+
+
 def _body_for(ticket, event):
-    if event == SmsMessage.Event.TICKET_CREATED:
-        return (
-            f"مهمان گرامی، درخواست «{ticket.title}» شما ثبت شد "
-            f"(شمارهٔ پیگیری {ticket.pk}) و به واحد {ticket.department.name} سپرده شد. "
-            f"{_hotel_name()}"
-        )
-    return (
-        f"مهمان گرامی، درخواست «{ticket.title}» شما توسط واحد "
-        f"{ticket.department.name} انجام شد. {_hotel_name()}"
-    )
+    """The SMS text for `event`, or None when the admin switched that event off."""
+    values = {
+        "title": ticket.title,
+        "ticket_id": ticket.pk,
+        "department": ticket.department.name,
+        "room": ticket.room.number if ticket.room_id else "",
+        "hotel": _hotel_name(),
+    }
+    template = MessageTemplate.objects.filter(event=event).first()
+    if template is not None:
+        return template.render(values) if template.is_active else None
+    return DEFAULT_BODIES[event].format_map(values)
 
 
 def queue_ticket_sms(ticket, event):
@@ -52,10 +74,13 @@ def queue_ticket_sms(ticket, event):
         phone = (ticket.guest.phone or "").strip() if ticket.guest_id else ""
         if not phone:
             return None
+        body = _body_for(ticket, event)
+        if body is None:
+            return None
         with transaction.atomic():
             return SmsMessage.objects.create(
                 phone=phone,
-                body=_body_for(ticket, event),
+                body=body,
                 event=event,
                 ticket=ticket,
                 next_attempt_at=timezone.now(),

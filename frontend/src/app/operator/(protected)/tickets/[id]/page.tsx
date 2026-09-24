@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
   ArrowRight,
@@ -24,6 +25,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { appendText, CannedResponsePicker } from "@/components/canned-response-picker";
+import { MergeTicketDialog } from "@/components/merge-ticket-dialog";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -93,6 +96,8 @@ function describeHistoryEntry(entry: TicketHistoryEntry): string {
       return `وضعیت از «${statusLabel(entry.old_value)}» به «${statusLabel(entry.new_value)}» تغییر کرد.`;
     case "PRIORITY_CHANGED":
       return `اولویت از «${priorityLabel(entry.old_value)}» به «${priorityLabel(entry.new_value)}» تغییر کرد.`;
+    case "MERGED":
+      return `درخواست تکراری #${entry.old_value} با درخواست #${entry.new_value} ادغام شد.`;
     default:
       return entry.action_display;
   }
@@ -107,6 +112,7 @@ export default function OperatorTicketDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -424,6 +430,15 @@ export default function OperatorTicketDetailPage({
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
+              {ticket.merged_into && (
+                <p className="border border-dashed px-3 py-2 text-sm text-muted-foreground">
+                  این درخواست به‌عنوان تکراری با{" "}
+                  <Link href={`/operator/tickets/${ticket.merged_into}`} className="text-primary underline">
+                    درخواست #{ticket.merged_into}
+                  </Link>{" "}
+                  ادغام شده است.
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 <Badge variant={priorityBadgeVariant[ticket.priority]} className="gap-1">
                   {(() => {
@@ -509,6 +524,13 @@ export default function OperatorTicketDetailPage({
               )}
             </CardContent>
           </Card>
+
+          {ticket.status === "OPEN" && canAssign && (
+            <MergeTicketDialog
+              ticket={ticket}
+              onMerged={(kept) => router.push(`/operator/tickets/${kept.id}`)}
+            />
+          )}
 
           {!isClosed && canAssign && (
             <Card>
@@ -627,7 +649,10 @@ export default function OperatorTicketDetailPage({
 
                 {needsResolution && (
                   <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="resolution">نتیجهٔ رسیدگی</Label>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="resolution">نتیجهٔ رسیدگی</Label>
+                      <CannedResponsePicker onPick={(text) => setResolution((current) => appendText(current, text))} />
+                    </div>
                     <Textarea
                       id="resolution"
                       placeholder="توضیح دهید که چه اقدامی انجام شد…"
@@ -769,7 +794,10 @@ export default function OperatorTicketDetailPage({
               )}
 
               <div className="flex flex-col gap-1.5 border-t pt-4">
-                <Label htmlFor="note">افزودن یادداشت داخلی</Label>
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor="note">افزودن یادداشت داخلی</Label>
+                  <CannedResponsePicker onPick={(text) => setNoteText((current) => appendText(current, text))} />
+                </div>
                 <Textarea
                   id="note"
                   placeholder="یادداشتی برای همکاران (فقط برای اپراتور/ادمین قابل مشاهده است)…"

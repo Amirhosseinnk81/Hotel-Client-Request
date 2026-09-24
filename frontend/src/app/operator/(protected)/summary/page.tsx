@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { AlertTriangle, Clock, Target, Timer } from "lucide-react";
+import { AlertTriangle, Clock, Star, Target, Timer } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -18,6 +18,7 @@ import type {
   AdminStatsSummary,
   DepartmentOperatorLoad,
   DepartmentStatsSummary,
+  RecentFeedback,
   TicketStatus,
 } from "@/lib/api/types";
 import { formatDurationMinutes, formatNumber } from "@/lib/format";
@@ -27,6 +28,9 @@ const STATUS_ORDER: TicketStatus[] = ["OPEN", "IN_PROGRESS", "RESOLVED", "CANCEL
 
 /** SLA share, e.g. 87.5 -> "۸۷٫۵٪"; "—" when nothing was due in the window. */
 const formatPercent = (value: number | null) => (value === null ? "—" : `${formatNumber(value)}٪`);
+
+/** Average guest rating, e.g. 4.25 -> "۴٫۲۵ از ۵"; "—" when nobody rated. */
+const formatRating = (value: number | null) => (value === null ? "—" : `${formatNumber(value)} از ۵`);
 
 type Summary =
   | { scope: "hotel"; data: AdminStatsSummary }
@@ -160,6 +164,15 @@ export default function StatsSummaryPage() {
             </div>
           </section>
 
+          <RatingsSection
+            average={summary.data.rating_avg}
+            count={summary.data.rating_count}
+            distribution={summary.data.rating_distribution}
+            feedback={summary.data.recent_feedback}
+            windowDays={summary.data.resolution_window_days}
+            showDepartment={summary.scope === "hotel"}
+          />
+
           {summary.scope === "hotel" ? (
             <DepartmentTable rows={summary.data.by_department} />
           ) : (
@@ -220,12 +233,13 @@ function DepartmentTable({ rows }: { rows: AdminStatsSummary["by_department"] })
                 </th>
               ))}
               <th className={th}>مجموع</th>
+              <th className={th}>رضایت</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">
                   هنوز واحدی تعریف نشده است.
                 </td>
               </tr>
@@ -239,6 +253,9 @@ function DepartmentTable({ rows }: { rows: AdminStatsSummary["by_department"] })
                     </td>
                   ))}
                   <td className={`${td} font-medium`}>{formatNumber(row.total)}</td>
+                  <td className={td}>
+                    <RatingCell average={row.rating_avg} count={row.rating_count} />
+                  </td>
                 </tr>
               ))
             )}
@@ -271,12 +288,13 @@ function OperatorTable({
               <th className={th}>اپراتور</th>
               <th className={th}>فعال</th>
               <th className={th}>حل‌شده — {formatNumber(windowDays)} روز اخیر</th>
+              <th className={th}>رضایت</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-4 py-6 text-center text-muted-foreground">
+                <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
                   هیچ اپراتوری در این واحد تعریف نشده است.
                 </td>
               </tr>
@@ -295,12 +313,105 @@ function OperatorTable({
                   </td>
                   <td className={td}>{formatNumber(row.active)}</td>
                   <td className={td}>{formatNumber(row.resolved_recent)}</td>
+                  <td className={td}>
+                    <RatingCell average={row.rating_avg} count={row.rating_count} />
+                  </td>
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+function RatingCell({ average, count }: { average: number | null; count: number }) {
+  if (average === null) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span className="flex items-center gap-1">
+      <Star className="size-3.5 fill-warning text-warning" aria-hidden />
+      {formatNumber(average)}
+      <span className="text-xs text-muted-foreground">({formatNumber(count)})</span>
+    </span>
+  );
+}
+
+/**
+ * Guest satisfaction (inspired by Odoo Helpdesk's customer-ratings report):
+ * the average, how the ratings spread over 1-5 stars, and the latest
+ * written comments.
+ */
+function RatingsSection({
+  average,
+  count,
+  distribution,
+  feedback,
+  windowDays,
+  showDepartment,
+}: {
+  average: number | null;
+  count: number;
+  distribution: Record<"1" | "2" | "3" | "4" | "5", number>;
+  feedback: RecentFeedback[];
+  windowDays: number;
+  showDepartment: boolean;
+}) {
+  const stars = ["5", "4", "3", "2", "1"] as const;
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h2 className="display-3">رضایت مهمان</h2>
+        <p className="text-sm text-muted-foreground">
+          امتیاز مهمان‌ها به درخواست‌های حل‌شده در {formatNumber(windowDays)} روز اخیر.
+        </p>
+      </div>
+      <div className="grid grid-cols-1 gap-px border bg-border sm:grid-cols-[14rem_1fr]">
+        <StatTile
+          label={`میانگین از ${formatNumber(count)} امتیاز`}
+          value={formatRating(average)}
+          icon={<Star className="size-3.5" />}
+        />
+        <div className="flex flex-col justify-center gap-1.5 bg-card p-5">
+          {stars.map((star) => {
+            const n = distribution[star];
+            const share = count ? (n / count) * 100 : 0;
+            return (
+              <div key={star} className="flex items-center gap-3 text-xs">
+                <span className="w-10 shrink-0 tabular-nums">{formatNumber(Number(star))} ★</span>
+                <span className="h-2 flex-1 bg-secondary" aria-hidden>
+                  <span className="block h-full bg-primary" style={{ width: `${share}%` }} />
+                </span>
+                <span className="w-8 shrink-0 text-end tabular-nums text-muted-foreground">
+                  {formatNumber(n)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      {feedback.length > 0 && (
+        <ul className="flex flex-col border">
+          {feedback.map((item) => (
+            <li key={item.ticket_id} className="flex flex-col gap-1 border-t px-4 py-3 text-sm first:border-t-0">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="tabular-nums text-warning" aria-label={`${item.rating} از ۵`}>
+                  {"★".repeat(item.rating)}
+                  <span className="text-muted-foreground/40">{"★".repeat(5 - item.rating)}</span>
+                </span>
+                <span className="text-muted-foreground">
+                  «{item.title}»
+                  {showDepartment && ` · ${item.department_name}`}
+                  {item.operator && ` · ${item.operator}`}
+                  {" · "}
+                  <RelativeTime iso={item.resolved_at} />
+                </span>
+              </span>
+              <p>{item.feedback}</p>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

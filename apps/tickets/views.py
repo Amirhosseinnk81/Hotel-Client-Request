@@ -1,4 +1,5 @@
 from django.contrib.auth import get_user_model
+from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -23,17 +24,21 @@ from apps.core.permissions import (
 from apps.notifications.models import SmsMessage
 from apps.notifications.services import queue_ticket_sms
 
-from .models import Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
+from .models import CannedResponse, Category, QuickRequestTemplate, Ticket, TicketHistory, TicketNote
 from .pdf import generate_ticket_pdf
 from .permissions import IsOperator
 from .services import (
+    MergeError,
     active_tickets_count,
     auto_assign,
     compute_admin_stats_summary,
     compute_department_stats_summary,
+    merge_candidates,
+    merge_tickets,
 )
 from .serializers import (
     AdminStatsSummarySerializer,
+    CannedResponseSerializer,
     CategorySerializer,
     DepartmentStatsSummarySerializer,
     OperatorColleagueSerializer,
@@ -42,6 +47,7 @@ from .serializers import (
     TicketHistorySerializer,
     TicketNoteSerializer,
     TicketRateSerializer,
+    TicketMergeSerializer,
     TicketSerializer,
     OperatorTicketSerializer,
 )
@@ -430,6 +436,7 @@ class OperatorTicketDetailView(generics.RetrieveUpdateAPIView):
 
     def perform_update(self, serializer):
         old_status = serializer.instance.status
+        had_first_response = serializer.instance.first_response_at is not None
         old_priority = serializer.instance.priority
         old_assigned_to = serializer.instance.assigned_to
 
@@ -443,8 +450,15 @@ class OperatorTicketDetailView(generics.RetrieveUpdateAPIView):
                 old_value=old_status,
                 new_value=ticket.status,
             )
+            # Guest SMS per status (templates in notifications.MessageTemplate).
+            # "Work started" only the first time — not again every time a
+            # ticket is handed back to OPEN and picked up again.
             if ticket.status == Ticket.Status.RESOLVED:
                 queue_ticket_sms(ticket, SmsMessage.Event.TICKET_RESOLVED)
+            elif ticket.status == Ticket.Status.CANCELLED:
+                queue_ticket_sms(ticket, SmsMessage.Event.TICKET_CANCELLED)
+            elif ticket.status == Ticket.Status.IN_PROGRESS and not had_first_response:
+                queue_ticket_sms(ticket, SmsMessage.Event.TICKET_IN_PROGRESS)
 
         if "priority" in serializer.validated_data and ticket.priority != old_priority:
             TicketHistory.objects.create(
@@ -517,6 +531,7 @@ class OperatorTicketAssignView(APIView):
 
         old_assigned_to = ticket.assigned_to
         old_status = ticket.status
+        had_first_response = ticket.first_response_at is not None
 
         ticket.assigned_to = request.user
         # Through the state machine rather than around it: an OPEN ticket
@@ -550,6 +565,8 @@ class OperatorTicketAssignView(APIView):
                 old_value=old_status,
                 new_value=Ticket.Status.IN_PROGRESS,
             )
+            if not had_first_response:
+                queue_ticket_sms(ticket, SmsMessage.Event.TICKET_IN_PROGRESS)
 
         return Response(
             OperatorTicketSerializer(ticket).data,
@@ -752,3 +769,68 @@ class OperatorTicketAttachmentCreateView(generics.CreateAPIView):
             assigned_to=self.request.user,
         )
         serializer.save(ticket=ticket, uploaded_by=self.request.user)
+
+
+class OperatorCannedResponseListView(generics.ListAPIView):
+    """
+    GET /api/v1/operator/canned-responses/ — ready-made texts for notes and
+    resolutions: the caller's department's own plus the hotel-wide ones.
+    Unpaginated: a short list for a picker.
+    """
+
+    serializer_class = CannedResponseSerializer
+    permission_classes = [IsOperator]
+    pagination_class = None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return CannedResponse.objects.none()
+        return CannedResponse.objects.filter(is_active=True).filter(
+            Q(department__isnull=True) | Q(department=self.request.user.department)
+        )
+
+
+def _operator_ticket_or_404(request, pk):
+    return get_object_or_404(
+        Ticket.objects.select_related("department", "category", "room", "assigned_to"),
+        pk=pk,
+        department=request.user.department,
+    )
+
+
+class OperatorTicketMergeCandidatesView(generics.ListAPIView):
+    """
+    GET /api/v1/operator/tickets/{id}/merge-candidates/ — other open tickets
+    from the same guest in the same department: the likely duplicates.
+    """
+
+    serializer_class = OperatorTicketSerializer
+    permission_classes = [IsOperator]
+    pagination_class = None
+
+    def get_queryset(self):
+        if getattr(self, "swagger_fake_view", False):
+            return Ticket.objects.none()
+        return merge_candidates(_operator_ticket_or_404(self.request, self.kwargs["pk"]))
+
+
+class OperatorTicketMergeView(APIView):
+    """
+    POST /api/v1/operator/tickets/{id}/merge/ {"into": <ticket id>} — fold
+    this duplicate into another ticket of the same guest. Supervisor only
+    (it's triage). Rules and effects: services.merge_tickets.
+    """
+
+    permission_classes = [IsSupervisor]
+
+    @extend_schema(request=TicketMergeSerializer, responses=OperatorTicketSerializer)
+    def post(self, request, pk):
+        params = TicketMergeSerializer(data=request.data)
+        params.is_valid(raise_exception=True)
+        source = _operator_ticket_or_404(request, pk)
+        target = _operator_ticket_or_404(request, params.validated_data["into"])
+        try:
+            merged = merge_tickets(source, target, request.user)
+        except MergeError as exc:
+            raise ValidationError({"detail": str(exc)}) from exc
+        return Response(OperatorTicketSerializer(merged).data)

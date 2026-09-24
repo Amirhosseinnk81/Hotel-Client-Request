@@ -1,7 +1,16 @@
 from django.contrib import admin, messages
 from django.utils import timezone
 
-from .models import SmsMessage
+from .models import MessageTemplate, SmsMessage
+
+
+@admin.register(MessageTemplate)
+class MessageTemplateAdmin(admin.ModelAdmin):
+    """The guest SMS text for each ticket event — edit, or switch an event off."""
+
+    list_display = ("event", "is_active", "body", "updated_at")
+    list_editable = ("is_active",)
+    readonly_fields = ("updated_at",)
 
 
 @admin.register(SmsMessage)

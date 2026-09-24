@@ -1,3 +1,6 @@
+import string
+
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -25,7 +28,9 @@ class SmsMessage(models.Model):
 
     class Event(models.TextChoices):
         TICKET_CREATED = "TICKET_CREATED", "Ticket created"
+        TICKET_IN_PROGRESS = "TICKET_IN_PROGRESS", "Work started"
         TICKET_RESOLVED = "TICKET_RESOLVED", "Ticket resolved"
+        TICKET_CANCELLED = "TICKET_CANCELLED", "Ticket cancelled"
 
     phone = models.CharField(max_length=20)
     body = models.TextField()
@@ -55,3 +60,43 @@ class SmsMessage(models.Model):
 
     def __str__(self):
         return f"{self.get_event_display()} → {self.phone} ({self.status})"
+
+
+class MessageTemplate(models.Model):
+    """
+    The text of the guest SMS for one ticket event, editable in Django Admin
+    (inspired by Odoo Helpdesk's per-stage email/SMS templates). One row per
+    event; `is_active` off means "send nothing for this event". With no row
+    at all the built-in default text in services.py is used.
+
+    Placeholders, filled in per ticket: {title} {ticket_id} {department}
+    {room} {hotel}. Anything else in braces is refused on save, so a typo
+    can't reach a guest as a raw "{titel}".
+    """
+
+    PLACEHOLDERS = ("title", "ticket_id", "department", "room", "hotel")
+
+    event = models.CharField(max_length=30, choices=SmsMessage.Event.choices, unique=True)
+    body = models.TextField(
+        help_text="Placeholders: {title} {ticket_id} {department} {room} {hotel}"
+    )
+    is_active = models.BooleanField(default=True, help_text="Off = no SMS for this event.")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["event"]
+
+    def __str__(self):
+        return self.get_event_display()
+
+    def clean(self):
+        used = {name for _, name, _, _ in string.Formatter().parse(self.body) if name is not None}
+        unknown = used - set(self.PLACEHOLDERS)
+        if unknown:
+            raise ValidationError(
+                {"body": f"Unknown placeholder(s): {', '.join(sorted(unknown))}. "
+                         f"Allowed: {', '.join(self.PLACEHOLDERS)}."}
+            )
+
+    def render(self, values):
+        return self.body.format_map(values)

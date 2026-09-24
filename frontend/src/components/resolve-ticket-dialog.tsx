@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { appendText, CannedResponsePicker } from "@/components/canned-response-picker";
 import { toast } from "@/hooks/use-toast";
 import {
   addOperatorTicketAttachment,
@@ -131,7 +132,10 @@ export function ResolveTicketDialog({
 
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="kanban-resolution">نتیجهٔ رسیدگی</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="kanban-resolution">نتیجهٔ رسیدگی</Label>
+              <CannedResponsePicker onPick={(text) => setResolution((current) => appendText(current, text))} />
+            </div>
             <Textarea
               id="kanban-resolution"
               placeholder="توضیح دهید که چه اقدامی انجام شد…"

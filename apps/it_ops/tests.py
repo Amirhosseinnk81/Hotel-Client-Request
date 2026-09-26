@@ -1,6 +1,8 @@
+import io
 from datetime import date, datetime, timedelta
 from io import StringIO
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase
 from django.urls import reverse
@@ -12,7 +14,16 @@ from apps.accounts.models import User
 from apps.departments.models import Department
 from apps.rooms.models import Room, RoomStatusLog
 
-from .models import DepartmentRequest, Process, Project, RoomDailyStat, Task
+from PIL import Image
+
+from .models import (
+    DepartmentRequest,
+    ITRequestTemplate,
+    Process,
+    Project,
+    RoomDailyStat,
+    Task,
+)
 from .services import compute_room_stats, snapshot_room_stats
 
 
@@ -700,3 +711,257 @@ class ITStaffListTests(ITOpsTestData, APITestCase):
         self.as_user(self.hk_supervisor)
 
         self.assertEqual(self.client.get(reverse("it_ops:staff")).status_code, 403)
+
+def png_upload(name="problem.png"):
+    """A tiny real PNG — ImageField rejects anything Pillow cannot open."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (8, 8), (200, 160, 120)).save(buffer, format="PNG")
+    buffer.seek(0)
+    return SimpleUploadedFile(name, buffer.read(), content_type="image/png")
+
+
+class ITRequestTemplateTests(ITOpsTestData, APITestCase):
+    """
+    One-click shortcuts on the "ask IT" form — the staff-side twin of the
+    guest's quick requests.
+    """
+
+    url = reverse("it_ops:request-templates")
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        ITRequestTemplate.objects.create(
+            title="پرینتر کار نمی‌کند",
+            description="روشن است ولی چاپ نمی‌کند.",
+            icon="Printer",
+            priority="HIGH",
+            order=0,
+        )
+        ITRequestTemplate.objects.create(title="نصب نرم‌افزار", priority="LOW", order=1)
+        ITRequestTemplate.objects.create(title="قالب بازنشسته", is_active=False, order=2)
+
+    def test_any_operator_with_a_department_sees_the_active_templates(self):
+        self.as_user(self.hk_supervisor)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [t["title"] for t in response.data], ["پرینتر کار نمی‌کند", "نصب نرم‌افزار"]
+        )
+
+    def test_a_template_carries_what_it_should_fill_in(self):
+        self.as_user(self.hk_supervisor)
+
+        first = self.client.get(self.url).data[0]
+
+        self.assertEqual(first["description"], "روشن است ولی چاپ نمی‌کند.")
+        self.assertEqual(first["priority"], "HIGH")
+        self.assertEqual(first["icon"], "Printer")
+
+    def test_they_are_read_only_over_the_api(self):
+        self.as_user(self.hk_supervisor)
+
+        response = self.client.post(self.url, {"title": "از راه دور"}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_a_guest_or_a_department_less_operator_gets_nothing(self):
+        drifter = User.objects.create_user(username="tpl_no_dept", role=User.Role.OPERATOR)
+        for user in (self.guest, drifter):
+            self.as_user(user)
+            with self.subTest(user=user.username):
+                self.assertEqual(self.client.get(self.url).status_code, 403)
+
+
+class ITRequestAttachmentTests(ITOpsTestData, APITestCase):
+    """A photo of the problem, on a department's own request to IT."""
+
+    def setUp(self):
+        self.request = DepartmentRequest.objects.create(
+            title="پرینتر",
+            requesting_department=self.housekeeping,
+            requested_by=self.hk_supervisor,
+        )
+        self.url = reverse("it_ops:outgoing-request-attachments", args=[self.request.pk])
+
+    def test_the_asking_department_attaches_a_photo(self):
+        self.as_user(self.hk_supervisor)
+
+        response = self.client.post(self.url, {"image": png_upload()}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(self.request.attachments.count(), 1)
+        self.assertEqual(response.data["uploaded_by_username"], "hk_sup")
+
+    def test_another_department_cannot_attach_to_a_request_that_is_not_theirs(self):
+        other = User.objects.create_user(
+            username="fd_op",
+            role=User.Role.OPERATOR,
+            department=Department.objects.create(name="Front desk", code="FD_ITOPS"),
+        )
+        self.as_user(other)
+
+        response = self.client.post(self.url, {"image": png_upload()}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(self.request.attachments.count(), 0)
+
+    def test_a_non_image_is_refused(self):
+        self.as_user(self.hk_supervisor)
+        not_an_image = SimpleUploadedFile("notes.txt", b"just text", content_type="text/plain")
+
+        response = self.client.post(self.url, {"image": not_an_image}, format="multipart")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_the_photo_comes_back_with_the_request(self):
+        self.as_user(self.hk_supervisor)
+        self.client.post(self.url, {"image": png_upload()}, format="multipart")
+
+        listed = self.client.get(reverse("it_ops:outgoing-request-list")).data["results"][0]
+
+        self.assertEqual(len(listed["attachments"]), 1)
+        self.assertIn("it_request_attachments/", listed["attachments"][0]["image"])
+
+    def test_it_staff_see_the_photo_on_their_own_side(self):
+        self.as_user(self.hk_supervisor)
+        self.client.post(self.url, {"image": png_upload()}, format="multipart")
+        self.as_user(self.it_operator)
+
+        detail = self.client.get(
+            reverse("it_ops:department-request-detail", args=[self.request.pk])
+        ).data
+
+        self.assertEqual(len(detail["attachments"]), 1)
+
+
+class ITRequestFeedbackTests(ITOpsTestData, APITestCase):
+    """The asking department says how the work went."""
+
+    def setUp(self):
+        self.request = DepartmentRequest.objects.create(
+            title="پرینتر",
+            requesting_department=self.housekeeping,
+            requested_by=self.hk_supervisor,
+        )
+        self.url = reverse("it_ops:outgoing-request-rate", args=[self.request.pk])
+
+    def complete(self):
+        self.request.status = DepartmentRequest.Status.COMPLETED
+        self.request.save()
+
+    def test_a_completed_request_can_be_rated_with_a_comment(self):
+        self.complete()
+        self.as_user(self.hk_supervisor)
+
+        response = self.client.post(
+            self.url, {"rating": 5, "feedback": "سریع درست شد"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.rating, 5)
+        self.assertEqual(self.request.feedback, "سریع درست شد")
+        self.assertIsNotNone(self.request.rated_at)
+        self.assertFalse(response.data["can_be_rated"])
+
+    def test_the_comment_is_optional(self):
+        self.complete()
+        self.as_user(self.hk_supervisor)
+
+        response = self.client.post(self.url, {"rating": 3}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.feedback, "")
+
+    def test_work_that_is_not_finished_cannot_be_rated(self):
+        self.as_user(self.hk_supervisor)
+
+        response = self.client.post(self.url, {"rating": 5}, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.request.refresh_from_db()
+        self.assertIsNone(self.request.rating)
+
+    def test_a_rejected_request_cannot_be_rated(self):
+        # IT saying no is a conversation, not a service to score.
+        self.request.status = DepartmentRequest.Status.REJECTED
+        self.request.save()
+        self.as_user(self.hk_supervisor)
+
+        self.assertEqual(
+            self.client.post(self.url, {"rating": 1}, format="json").status_code, 400
+        )
+
+    def test_rating_happens_once(self):
+        self.complete()
+        self.as_user(self.hk_supervisor)
+        self.client.post(self.url, {"rating": 4}, format="json")
+
+        second = self.client.post(self.url, {"rating": 1}, format="json")
+
+        self.assertEqual(second.status_code, status.HTTP_400_BAD_REQUEST)
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.rating, 4)
+
+    def test_a_score_outside_one_to_five_is_refused(self):
+        self.complete()
+        self.as_user(self.hk_supervisor)
+
+        for score in (0, 6):
+            with self.subTest(score=score):
+                response = self.client.post(self.url, {"rating": score}, format="json")
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_another_department_cannot_rate_work_done_for_someone_else(self):
+        self.complete()
+        other = User.objects.create_user(
+            username="fd_op2",
+            role=User.Role.OPERATOR,
+            department=Department.objects.create(name="Front desk 2", code="FD2_ITOPS"),
+        )
+        self.as_user(other)
+
+        self.assertEqual(
+            self.client.post(self.url, {"rating": 1}, format="json").status_code, 404
+        )
+
+    def test_it_cannot_rate_its_own_work_through_the_it_endpoints(self):
+        # The feedback fields are read-only on the IT side.
+        self.complete()
+        self.as_user(self.it_supervisor)
+
+        self.client.patch(
+            reverse("it_ops:department-request-detail", args=[self.request.pk]),
+            {"rating": 5, "feedback": "عالی بودم"},
+            format="json",
+        )
+
+        self.request.refresh_from_db()
+        self.assertIsNone(self.request.rating)
+        self.assertEqual(self.request.feedback, "")
+
+    def test_can_be_rated_tells_the_panel_when_to_offer_the_box(self):
+        self.as_user(self.hk_supervisor)
+        listed = self.client.get(reverse("it_ops:outgoing-request-list")).data["results"][0]
+        self.assertFalse(listed["can_be_rated"])
+
+        self.complete()
+        listed = self.client.get(reverse("it_ops:outgoing-request-list")).data["results"][0]
+        self.assertTrue(listed["can_be_rated"])
+
+    def test_it_staff_read_the_feedback_they_were_given(self):
+        self.complete()
+        self.as_user(self.hk_supervisor)
+        self.client.post(self.url, {"rating": 2, "feedback": "دیر شد"}, format="json")
+        self.as_user(self.it_operator)
+
+        detail = self.client.get(
+            reverse("it_ops:department-request-detail", args=[self.request.pk])
+        ).data
+
+        self.assertEqual(detail["rating"], 2)
+        self.assertEqual(detail["feedback"], "دیر شد")

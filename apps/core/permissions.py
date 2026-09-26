@@ -69,6 +69,29 @@ class IsAdminOnly(BasePermission):
         )
 
 
+class IsStaffReadAdminWrite(BasePermission):
+    """
+    Any member of staff may read; only admins may change.
+
+    Deliberately NOT IsAdminRole, which leaves reading open to every
+    authenticated user — and guests are authenticated users. Used for
+    the staff phone directory (apps/extensions), which carries staff
+    names, mobiles and locations: hotel staff look people up all day,
+    guests have no business reading it.
+    """
+
+    message = "Only hotel staff may read this, and only admins may change it."
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+
+        is_admin = request.user.is_superuser or request.user.role == "ADMIN"
+        if request.method in SAFE_METHODS:
+            return is_admin or request.user.role == "OPERATOR"
+        return is_admin
+
+
 class IsSupervisor(BasePermission):
     """
     An OPERATOR marked as their department's supervisor (User.is_supervisor).

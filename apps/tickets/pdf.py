@@ -13,7 +13,7 @@ letter forms. Two extra libraries fix that:
 
 Word-wrapping has to happen on the *unshaped* text (wrapping shaped text
 would put word-joining glyphs in the wrong place at line breaks), so
-`_wrap_and_shape` measures/wraps first and only shapes each finished
+`_wrap_lines` measures/wraps first and only shapes each finished
 line right before drawing it.
 """
 
@@ -38,7 +38,7 @@ FONT_BOLD = "Vazirmatn-Bold"
 _fonts_registered = False
 
 
-def _register_fonts():
+def register_fonts():
     global _fonts_registered
     if _fonts_registered:
         return
@@ -47,21 +47,11 @@ def _register_fonts():
     _fonts_registered = True
 
 
-_PERSIAN_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
-
-_STATUS_LABELS_FA = {
-    "OPEN": "باز",
-    "IN_PROGRESS": "در حال انجام",
-    "RESOLVED": "حل‌شده",
-    "CANCELLED": "لغوشده",
-}
-
-_PRIORITY_LABELS_FA = {
-    "LOW": "کم",
-    "NORMAL": "عادی",
-    "HIGH": "بالا",
-    "URGENT": "فوری",
-}
+# Shared with the in-room TV page so the two server-rendered surfaces
+# can't drift apart — see apps/tickets/labels.py.
+from .labels import PERSIAN_DIGITS as _PERSIAN_DIGITS  # noqa: E402
+from .labels import PRIORITY_LABELS_FA as _PRIORITY_LABELS_FA  # noqa: E402
+from .labels import STATUS_LABELS_FA as _STATUS_LABELS_FA  # noqa: E402
 
 jdatetime.set_locale("fa_IR")
 
@@ -81,23 +71,27 @@ def _format_jalali(dt) -> str:
     return _fa_digits(jd.strftime("%d %B %Y ساعت %H:%M"))
 
 
-def _shape(text: str) -> str:
+def shape(text: str) -> str:
     """Reshape + bidi-reorder one already line-wrapped chunk of text so
-    it draws correctly with reportlab's plain drawString/drawRightString."""
+    it draws correctly with reportlab's plain drawString/drawRightString.
+
+    Public, along with register_fonts() and the FONT_* names, because the
+    staff directory report (apps/extensions/pdf.py) needs exactly the
+    same fonts and the same shaping — one implementation, not two."""
     return get_display(arabic_reshaper.reshape(text))
 
 
 def _wrap_lines(canvas_obj: pdf_canvas.Canvas, text: str, font: str, size: int, max_width: float):
     """Greedy word-wrap on *unshaped* text, respecting explicit newlines
     in the source text. Returns a list of unshaped lines ready for
-    `_shape` + drawRightString."""
+    `shape` + drawRightString."""
     lines: list[str] = []
     for paragraph in text.splitlines() or [""]:
         words = paragraph.split(" ")
         current = ""
         for word in words:
             candidate = f"{current} {word}".strip()
-            if canvas_obj.stringWidth(_shape(candidate), font, size) <= max_width or not current:
+            if canvas_obj.stringWidth(shape(candidate), font, size) <= max_width or not current:
                 current = candidate
             else:
                 lines.append(current)
@@ -113,7 +107,7 @@ CONTENT_WIDTH = PAGE_WIDTH - 2 * MARGIN
 
 def generate_ticket_pdf(ticket) -> bytes:
     """Renders a one-ticket summary report and returns it as PDF bytes."""
-    _register_fonts()
+    register_fonts()
 
     buffer = BytesIO()
     c = pdf_canvas.Canvas(buffer, pagesize=A4)
@@ -124,7 +118,7 @@ def generate_ticket_pdf(ticket) -> bytes:
         nonlocal y
         c.setFont(font, size)
         c.setFillColor(color)
-        c.drawRightString(right_edge, y, _shape(text))
+        c.drawRightString(right_edge, y, shape(text))
         y -= gap
 
     def rule():
@@ -143,7 +137,7 @@ def generate_ticket_pdf(ticket) -> bytes:
                 c.showPage()
                 y = PAGE_HEIGHT - MARGIN
                 c.setFont(font, size)
-            c.drawRightString(right_edge, y, _shape(line))
+            c.drawRightString(right_edge, y, shape(line))
             y -= line_gap
 
     # --- Header ---------------------------------------------------------
@@ -174,11 +168,11 @@ def generate_ticket_pdf(ticket) -> bytes:
     for label, value in meta_rows:
         c.setFont(FONT_BOLD, 10.5)
         c.setFillColor(colors.HexColor("#3d413c"))
-        c.drawRightString(right_edge, y, _shape(f"{label}:"))
+        c.drawRightString(right_edge, y, shape(f"{label}:"))
         c.setFont(FONT_REGULAR, 10.5)
         c.setFillColor(colors.black)
-        label_width = c.stringWidth(_shape(f"{label}: "), FONT_BOLD, 10.5)
-        c.drawRightString(right_edge - label_width, y, _shape(str(value)))
+        label_width = c.stringWidth(shape(f"{label}: "), FONT_BOLD, 10.5)
+        c.drawRightString(right_edge - label_width, y, shape(str(value)))
         y -= 7 * mm
 
     rule()
@@ -208,7 +202,7 @@ def generate_ticket_pdf(ticket) -> bytes:
     c.drawCentredString(
         PAGE_WIDTH / 2,
         MARGIN / 2,
-        _shape(f"تاریخ تولید گزارش: {generated_at}"),
+        shape(f"تاریخ تولید گزارش: {generated_at}"),
     )
 
     c.showPage()

@@ -2,9 +2,14 @@ import calendar
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.validators import FileExtensionValidator, MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import Case, IntegerField, Value, When
 from django.utils import timezone
+
+# One size limit for every upload in the platform: declared once in
+# apps.tickets and reused here (apps.tickets does not import this app).
+from apps.tickets.models import validate_attachment_size
 
 
 class Priority(models.TextChoices):
@@ -259,6 +264,19 @@ class DepartmentRequest(TimeStampedModel):
     )
     resolved_at = models.DateTimeField(null=True, blank=True)
 
+    # --- What the asking department thought of the work ----------------
+    # The same idea as a guest rating a resolved ticket, pointed inwards:
+    # it tells IT whether the department was actually helped, which is
+    # the feedback an internal team otherwise never gets.
+    rating = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(1), MaxValueValidator(5)],
+        help_text="1-5, set once by the requesting department after the work is COMPLETED.",
+    )
+    feedback = models.TextField(blank=True, default="")
+    rated_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         ordering = ["created_at"]
 
@@ -273,6 +291,94 @@ class DepartmentRequest(TimeStampedModel):
         else:
             self.resolved_at = None
         super().save(*args, **kwargs)
+
+    @property
+    def can_be_rated(self):
+        """
+        Completed work only, and only once — a rejected request is IT
+        saying no, which is a conversation, not a service to score.
+        """
+        return self.status == self.Status.COMPLETED and self.rating is None
+
+
+def it_request_attachment_upload_path(instance, filename):
+    return f"it_request_attachments/{instance.request_id}/{filename}"
+
+
+class DepartmentRequestAttachment(models.Model):
+    """
+    A photo on a request to IT — the broken socket, the error on screen,
+    the model number on the back of a printer. The same idea as a guest
+    photographing a problem (apps.tickets.TicketAttachment), down to the
+    shared size limit.
+    """
+
+    request = models.ForeignKey(
+        DepartmentRequest,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    image = models.ImageField(
+        upload_to=it_request_attachment_upload_path,
+        validators=[
+            FileExtensionValidator(allowed_extensions=["jpg", "jpeg", "png", "webp", "gif"]),
+            validate_attachment_size,
+        ],
+        help_text="Image only (jpg/jpeg/png/webp/gif), max MAX_ATTACHMENT_SIZE_MB.",
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="it_request_attachments",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self):
+        return f"Attachment #{self.pk} on IT request #{self.request_id}"
+
+
+class ITRequestTemplate(models.Model):
+    """
+    A one-click shortcut on the "ask IT for something" form — «پرینتر کار
+    نمی‌کند», «دسترسی به سامانه», «کامپیوتر کند است». Picking one fills in
+    the title, the description and the urgency; the operator can still
+    change all three before sending.
+
+    The staff-side twin of tickets.QuickRequestTemplate, managed the same
+    way: Django Admin only, read-only over the API. What it fills differs
+    because the form differs — there is no category here, and the urgency
+    is worth suggesting (a dead till at reception is not a slow PC).
+    """
+
+    title = models.CharField(max_length=120)
+    description = models.TextField(
+        blank=True,
+        help_text="Pre-filled into the description box; the operator edits it before sending.",
+    )
+    icon = models.CharField(
+        max_length=50,
+        default="Wrench",
+        help_text=(
+            "A lucide-react icon name (e.g. 'Printer', 'Wifi', 'Monitor'). "
+            "Not validated here: an unknown name falls back to a generic icon."
+        ),
+    )
+    priority = models.CharField(max_length=10, choices=Priority.choices, default=Priority.MEDIUM)
+    is_active = models.BooleanField(default=True)
+    order = models.PositiveIntegerField(default=0, help_text="Lower numbers show first.")
+
+    class Meta:
+        ordering = ["order", "title"]
+        verbose_name = "IT request template"
+        verbose_name_plural = "IT request templates"
+
+    def __str__(self):
+        return self.title
 
 
 class Goal(TimeStampedModel):

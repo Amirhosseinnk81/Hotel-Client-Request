@@ -170,6 +170,13 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
           <Link href="/operator/summary" className={navClass(pathname === "/operator/summary")}>
             خلاصه
           </Link>
+          {/* The phone directory is for every member of staff, admins included. */}
+          <Link
+            href="/operator/extensions"
+            className={navClass(pathname === "/operator/extensions")}
+          >
+            داخلی‌ها
+          </Link>
           {isITStaff(getITViewer()) && (
             <Link href="/operator/it" className={navClass(pathname === "/operator/it")}>
               IT

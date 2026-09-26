@@ -14,7 +14,7 @@ Access (apps.core.permissions.IsITStaff + CanWorkOnITItem):
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from drf_spectacular.utils import extend_schema
-from rest_framework import mixins, viewsets
+from rest_framework import generics, mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
@@ -38,6 +38,7 @@ from .filters import (
 )
 from .models import (
     DepartmentRequest,
+    ITRequestTemplate,
     Goal,
     Process,
     Project,
@@ -48,6 +49,9 @@ from .models import (
 from .serializers import (
     DepartmentRequestSerializer,
     GoalSerializer,
+    ITRequestAttachmentSerializer,
+    ITRequestRateSerializer,
+    ITRequestTemplateSerializer,
     ITStaffMemberSerializer,
     OutgoingITRequestSerializer,
     ProcessSerializer,
@@ -156,6 +160,7 @@ class OutgoingITRequestViewSet(
         return (
             DepartmentRequest.objects.filter(requesting_department=self.request.user.department)
             .select_related("requesting_department", "requested_by", "assigned_to")
+            .prefetch_related("attachments")
             .order_by("-created_at")
         )
 
@@ -166,6 +171,68 @@ class OutgoingITRequestViewSet(
             requested_by=user,
             requested_by_name=user.get_full_name() or user.username,
         )
+
+    @extend_schema(
+        request=ITRequestAttachmentSerializer,
+        responses={201: ITRequestAttachmentSerializer},
+    )
+    @action(detail=True, methods=["post"], url_path="attachments")
+    def attachments(self, request, pk=None):
+        """
+        POST /it-ops/outgoing-requests/{id}/attachments/ — a photo of the
+        problem, multipart. Scoped by get_queryset(), so a department can
+        only add photos to its own requests.
+
+        No status restriction, for the same reason as the guest side: a
+        second photo may well be what finally explains the problem.
+        """
+        it_request = self.get_object()
+        serializer = ITRequestAttachmentSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(request=it_request, uploaded_by=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @extend_schema(request=ITRequestRateSerializer, responses={200: OutgoingITRequestSerializer})
+    @action(detail=True, methods=["post"], url_path="rate")
+    def rate(self, request, pk=None):
+        """
+        POST /it-ops/outgoing-requests/{id}/rate/ — how the work went, 1-5
+        plus an optional comment. Completed requests only, once each; the
+        rule lives on the model (`can_be_rated`) so the panel and this
+        endpoint can't disagree about when the box is offered.
+        """
+        it_request = self.get_object()
+        if it_request.status != DepartmentRequest.Status.COMPLETED:
+            return Response(
+                {"detail": "Only a completed request can be rated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if it_request.rating is not None:
+            return Response(
+                {"detail": "This request has already been rated."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = ITRequestRateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        it_request.rating = serializer.validated_data["rating"]
+        it_request.feedback = serializer.validated_data.get("feedback", "")
+        it_request.rated_at = timezone.now()
+        it_request.save(update_fields=["rating", "feedback", "rated_at", "updated_at"])
+        return Response(OutgoingITRequestSerializer(it_request).data)
+
+
+class ITRequestTemplateListView(generics.ListAPIView):
+    """
+    GET /it-ops/request-templates/ — the one-click shortcuts on the "ask
+    IT" form. Any operator with a department may read them (they are the
+    people who file requests); Django Admin owns the list itself.
+    """
+
+    serializer_class = ITRequestTemplateSerializer
+    permission_classes = [IsOperatorWithDepartment]
+    pagination_class = None
+    queryset = ITRequestTemplate.objects.filter(is_active=True)
 
 
 class ITStaffListView(APIView):

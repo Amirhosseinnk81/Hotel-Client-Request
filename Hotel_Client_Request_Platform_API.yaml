@@ -464,6 +464,312 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/extensions/:
+    get:
+      operationId: api_v1_extensions_list
+      description: |-
+        GET: the directory, searchable with `q` or per column.
+        POST: a new number (admins only).
+      parameters:
+      - in: query
+        name: department
+        schema:
+          type: integer
+      - in: query
+        name: ext
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: query
+        name: location_q
+        schema:
+          type: string
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - in: query
+        name: person
+        schema:
+          type: string
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Search number, title, person, location or department
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+          enum:
+          - active
+          - inactive
+        description: |-
+          * `active` - Active
+          * `inactive` - Inactive
+      - in: query
+        name: title_q
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedExtensionList'
+          description: ''
+    post:
+      operationId: api_v1_extensions_create
+      description: |-
+        GET: the directory, searchable with `q` or per column.
+        POST: a new number (admins only).
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtensionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExtensionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExtensionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extension'
+          description: ''
+  /api/v1/extensions/{id}/:
+    get:
+      operationId: api_v1_extensions_retrieve
+      description: |-
+        DELETE is a soft delete: the row goes to the trash, where Django
+        Admin can restore it. A phone directory is exactly the sort of list
+        somebody clears by accident.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extension'
+          description: ''
+    put:
+      operationId: api_v1_extensions_update
+      description: |-
+        DELETE is a soft delete: the row goes to the trash, where Django
+        Admin can restore it. A phone directory is exactly the sort of list
+        somebody clears by accident.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtensionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExtensionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExtensionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extension'
+          description: ''
+    patch:
+      operationId: api_v1_extensions_partial_update
+      description: |-
+        DELETE is a soft delete: the row goes to the trash, where Django
+        Admin can restore it. A phone directory is exactly the sort of list
+        somebody clears by accident.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedExtensionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedExtensionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedExtensionRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extension'
+          description: ''
+    delete:
+      operationId: api_v1_extensions_destroy
+      description: |-
+        DELETE is a soft delete: the row goes to the trash, where Django
+        Admin can restore it. A phone directory is exactly the sort of list
+        somebody clears by accident.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/extensions/{id}/restore/:
+    post:
+      operationId: api_v1_extensions_restore_create
+      description: Bring one number back from the trash (admins only).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtensionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ExtensionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ExtensionRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extension'
+          description: ''
+  /api/v1/extensions/export/csv/:
+    get:
+      operationId: api_v1_extensions_export_csv_retrieve
+      description: 'Shared plumbing: same permission, same filters as the list.'
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/extensions/export/excel/:
+    get:
+      operationId: api_v1_extensions_export_excel_retrieve
+      description: |-
+        The same columns the importer reads, so an export can be edited and
+        imported straight back.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+          description: ''
+  /api/v1/extensions/export/pdf/:
+    get:
+      operationId: api_v1_extensions_export_pdf_retrieve
+      description: |-
+        The printed phone list: landscape A4, two columns, grouped by
+        department — `application/pdf`, not JSON.
+      parameters:
+      - in: query
+        name: q
+        schema:
+          type: string
+        description: Same search as the list endpoint.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+          description: ''
   /api/v1/guest/hotel-info/:
     get:
       operationId: api_v1_guest_hotel_info_list
@@ -539,6 +845,31 @@ paths:
                 required:
                 - success
                 - status
+          description: ''
+  /api/v1/iptv/rooms/{room_number}/:
+    get:
+      operationId: iptv_room_screen
+      description: |-
+        What room <room_number>'s television shows: the guest's open
+        requests and the hotel's information.
+
+        Authenticated with the `X-IPTV-Key` header, not a user's JWT — see
+        apps/iptv/auth.py. An empty, unknown or idle room all answer the
+        same shape, so this can't be used to find out which rooms are sold.
+      parameters:
+      - in: path
+        name: room_number
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IptvRoomScreen'
           description: ''
   /api/v1/it-ops/department-requests/:
     get:
@@ -1036,6 +1367,84 @@ paths:
               schema:
                 $ref: '#/components/schemas/OutgoingITRequest'
           description: ''
+  /api/v1/it-ops/outgoing-requests/{id}/attachments/:
+    post:
+      operationId: api_v1_it_ops_outgoing_requests_attachments_create
+      description: |-
+        POST /it-ops/outgoing-requests/{id}/attachments/ — a photo of the
+        problem, multipart. Scoped by get_queryset(), so a department can
+        only add photos to its own requests.
+
+        No status restriction, for the same reason as the guest side: a
+        second photo may well be what finally explains the problem.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this department request.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ITRequestAttachmentRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ITRequestAttachmentRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ITRequestAttachmentRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ITRequestAttachment'
+          description: ''
+  /api/v1/it-ops/outgoing-requests/{id}/rate/:
+    post:
+      operationId: api_v1_it_ops_outgoing_requests_rate_create
+      description: |-
+        POST /it-ops/outgoing-requests/{id}/rate/ — how the work went, 1-5
+        plus an optional comment. Completed requests only, once each; the
+        rule lives on the model (`can_be_rated`) so the panel and this
+        endpoint can't disagree about when the box is offered.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this department request.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ITRequestRateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ITRequestRateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ITRequestRateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OutgoingITRequest'
+          description: ''
   /api/v1/it-ops/processes/:
     get:
       operationId: api_v1_it_ops_processes_list
@@ -1483,6 +1892,39 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/it-ops/request-templates/:
+    get:
+      operationId: api_v1_it_ops_request_templates_list
+      description: |-
+        GET /it-ops/request-templates/ — the one-click shortcuts on the "ask
+        IT" form. Any operator with a department may read them (they are the
+        people who file requests); Django Admin owns the list itself.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ITRequestTemplate'
+          description: ''
   /api/v1/it-ops/room-stats/:
     get:
       operationId: api_v1_it_ops_room_stats_list
@@ -2390,6 +2832,53 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperatorOverdueCount'
+          description: ''
+  /api/v1/pms/events/:
+    post:
+      operationId: api_v1_pms_events_create
+      description: |-
+        POST /api/v1/pms/events/ — the hotel's PMS tells us a guest checked in,
+        checked out, changed room, extended their stay, or had their details
+        corrected. Authenticated with a shared key (and optionally an HMAC
+        signature), never a user's JWT — see apps/pms/auth.py.
+
+        Always answers 200 once the caller is authenticated, even for a payload
+        we can't apply: the event is stored with its reason in PmsEvent, and a
+        PMS must not be made to retry forever over its own bad data. The body
+        says what happened, so the integration can be watched from their side.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PmsEventPayloadRequest'
+            examples:
+              Check-in:
+                value:
+                  event: check_in
+                  event_id: HRS-99123
+                  room_number: '305'
+                  reservation_id: RSV-5512
+                  occurred_at: '2026-09-24T12:05:00Z'
+                  expected_check_out: '2026-09-27'
+                  guest:
+                    full_name: سارا احمدی
+                    national_id: '0011122233'
+                    phone: 09121112233
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PmsEventPayloadRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PmsEventPayloadRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PmsEventResult'
           description: ''
   /api/v1/quick-templates/:
     get:
@@ -3301,6 +3790,122 @@ components:
       - resolution_window_days
       - response_overdue_count
       - response_sla_met_percent
+    Extension:
+      type: object
+      description: |-
+        Read and write in one serializer: staff read the directory, admins
+        change it (see IsStaffReadAdminWrite).
+
+        `department` is the real department's id; its name and working hours
+        come back alongside, because the directory is read far more often
+        than it is edited and the caller shouldn't have to join two lists to
+        show one row.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        extension:
+          type: string
+          description: 'The internal number itself. Unique: importing the same number
+            again updates that row.'
+          maxLength: 20
+        title:
+          type: string
+          description: What this number is, e.g. «پذیرش».
+          maxLength: 150
+        person_name:
+          type: string
+          maxLength: 150
+        department:
+          type: integer
+          nullable: true
+        department_name:
+          type: string
+          readOnly: true
+          default: ''
+        department_working_hours:
+          type: string
+          readOnly: true
+          default: ''
+        location:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 150
+        mobile:
+          type: string
+          maxLength: 30
+        notes:
+          type: string
+        is_active:
+          type: boolean
+          description: Off for a number that exists but is out of use; it stays in
+            the directory, marked inactive.
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - department_name
+      - department_working_hours
+      - extension
+      - id
+      - title
+      - updated_at
+    ExtensionRequest:
+      type: object
+      description: |-
+        Read and write in one serializer: staff read the directory, admins
+        change it (see IsStaffReadAdminWrite).
+
+        `department` is the real department's id; its name and working hours
+        come back alongside, because the directory is read far more often
+        than it is edited and the caller shouldn't have to join two lists to
+        show one row.
+      properties:
+        extension:
+          type: string
+          minLength: 1
+          description: 'The internal number itself. Unique: importing the same number
+            again updates that row.'
+          maxLength: 20
+        title:
+          type: string
+          minLength: 1
+          description: What this number is, e.g. «پذیرش».
+          maxLength: 150
+        person_name:
+          type: string
+          maxLength: 150
+        department:
+          type: integer
+          nullable: true
+        location:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 150
+        mobile:
+          type: string
+          maxLength: 30
+        notes:
+          type: string
+        is_active:
+          type: boolean
+          description: Off for a number that exists but is out of use; it stays in
+            the directory, marked inactive.
+      required:
+      - extension
+      - title
     FrequencyEnum:
       enum:
       - NONE
@@ -3496,6 +4101,25 @@ components:
           maxLength: 255
         description:
           type: string
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ITRequestAttachment'
+          readOnly: true
+        rating:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: 1-5, set once by the requesting department after the work is
+            COMPLETED.
+        feedback:
+          type: string
+          readOnly: true
+        rated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
         requesting_department:
           type: integer
         requesting_department_name:
@@ -3545,9 +4169,13 @@ components:
           readOnly: true
       required:
       - assigned_to_username
+      - attachments
       - created_at
+      - feedback
       - id
       - priority_display
+      - rated_at
+      - rating
       - requested_by
       - requested_by_username
       - requesting_department
@@ -3629,6 +4257,60 @@ components:
         * `ON_HOLD` - On Hold
         * `DONE` - Done
         * `CANCELLED` - Cancelled
+    ITRequestAttachment:
+      type: object
+      description: |-
+        One photo on a request to IT. `image` is the only writable field: the
+        upload endpoint sets the request and the uploader itself, so neither
+        ever comes from the body.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        image:
+          type: string
+          format: uri
+          description: Image only (jpg/jpeg/png/webp/gif), max MAX_ATTACHMENT_SIZE_MB.
+          pattern: (?:jpg|jpeg|png|webp|gif)$
+        uploaded_by_username:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - image
+      - uploaded_by_username
+    ITRequestAttachmentRequest:
+      type: object
+      description: |-
+        One photo on a request to IT. `image` is the only writable field: the
+        upload endpoint sets the request and the uploader itself, so neither
+        ever comes from the body.
+      properties:
+        image:
+          type: string
+          format: binary
+          description: Image only (jpg/jpeg/png/webp/gif), max MAX_ATTACHMENT_SIZE_MB.
+          pattern: (?:jpg|jpeg|png|webp|gif)$
+      required:
+      - image
+    ITRequestRateRequest:
+      type: object
+      description: What the asking department sends back once the work is done.
+      properties:
+        rating:
+          type: integer
+          maximum: 5
+          minimum: 1
+        feedback:
+          type: string
+          default: ''
+      required:
+      - rating
     ITRequestStatusEnum:
       enum:
       - PENDING
@@ -3641,6 +4323,42 @@ components:
         * `IN_PROGRESS` - In Progress
         * `COMPLETED` - Completed
         * `REJECTED` - Rejected
+    ITRequestTemplate:
+      type: object
+      description: 'The one-click shortcuts on the "ask IT" form. Read-only: Django
+        Admin owns them.'
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+          description: Pre-filled into the description box; the operator edits it
+            before sending.
+        icon:
+          type: string
+          readOnly: true
+          description: 'A lucide-react icon name (e.g. ''Printer'', ''Wifi'', ''Monitor'').
+            Not validated here: an unknown name falls back to a generic icon.'
+        priority:
+          allOf:
+          - $ref: '#/components/schemas/ITPriorityEnum'
+          readOnly: true
+        order:
+          type: integer
+          readOnly: true
+          description: Lower numbers show first.
+      required:
+      - description
+      - icon
+      - id
+      - order
+      - priority
+      - title
     ITStaffMember:
       type: object
       description: One IT operator, for the assignee dropdowns of the IT forms.
@@ -3667,6 +4385,81 @@ components:
         * `IN_PROGRESS` - In Progress
         * `DONE` - Done
         * `BLOCKED` - Blocked
+    IptvHotelInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        icon:
+          type: string
+          readOnly: true
+          description: A lucide-react icon name, e.g. Wifi, Coffee, Clock, Phone.
+      required:
+      - body
+      - icon
+      - id
+      - title
+    IptvRoomScreen:
+      type: object
+      properties:
+        room_number:
+          type: string
+        has_active_stay:
+          type: boolean
+        requests:
+          type: array
+          items:
+            $ref: '#/components/schemas/IptvTicket'
+        hotel_info:
+          type: array
+          items:
+            $ref: '#/components/schemas/IptvHotelInfo'
+      required:
+      - has_active_stay
+      - hotel_info
+      - requests
+      - room_number
+    IptvTicket:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        status:
+          allOf:
+          - $ref: '#/components/schemas/TicketStatusEnum'
+          readOnly: true
+        status_label:
+          type: string
+          readOnly: true
+        category:
+          type: string
+          default: ''
+        department:
+          type: string
+          default: ''
+        estimated_minutes:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - status
+      - status_label
+      - title
     OperatorAvailability:
       type: object
       description: |-
@@ -3908,6 +4701,28 @@ components:
         assigned_to_username:
           type: string
           readOnly: true
+        attachments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ITRequestAttachment'
+          readOnly: true
+        rating:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: 1-5, set once by the requesting department after the work is
+            COMPLETED.
+        feedback:
+          type: string
+          readOnly: true
+        rated_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        can_be_rated:
+          type: boolean
+          readOnly: true
         resolved_at:
           type: string
           format: date-time
@@ -3923,8 +4738,13 @@ components:
           readOnly: true
       required:
       - assigned_to_username
+      - attachments
+      - can_be_rated
       - created_at
+      - feedback
       - id
+      - rated_at
+      - rating
       - requested_by_username
       - requesting_department_name
       - resolved_at
@@ -3994,6 +4814,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Department'
+    PaginatedExtensionList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Extension'
     PaginatedGoalList:
       type: object
       required:
@@ -4266,6 +5109,50 @@ components:
           maxLength: 50
         is_active:
           type: boolean
+    PatchedExtensionRequest:
+      type: object
+      description: |-
+        Read and write in one serializer: staff read the directory, admins
+        change it (see IsStaffReadAdminWrite).
+
+        `department` is the real department's id; its name and working hours
+        come back alongside, because the directory is read far more often
+        than it is edited and the caller shouldn't have to join two lists to
+        show one row.
+      properties:
+        extension:
+          type: string
+          minLength: 1
+          description: 'The internal number itself. Unique: importing the same number
+            again updates that row.'
+          maxLength: 20
+        title:
+          type: string
+          minLength: 1
+          description: What this number is, e.g. «پذیرش».
+          maxLength: 150
+        person_name:
+          type: string
+          maxLength: 150
+        department:
+          type: integer
+          nullable: true
+        location:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          maxLength: 150
+        mobile:
+          type: string
+          maxLength: 30
+        notes:
+          type: string
+        is_active:
+          type: boolean
+          description: Off for a number that exists but is out of use; it stays in
+            the directory, marked inactive.
     PatchedGoalRequest:
       type: object
       properties:
@@ -4446,6 +5333,59 @@ components:
           type: integer
         category:
           type: integer
+    PmsEventGuestRequest:
+      type: object
+      properties:
+        full_name:
+          type: string
+          minLength: 1
+        national_id:
+          type: string
+          minLength: 1
+        phone:
+          type: string
+          minLength: 1
+    PmsEventPayloadRequest:
+      type: object
+      properties:
+        event:
+          type: string
+          minLength: 1
+        event_id:
+          type: string
+          minLength: 1
+        room_number:
+          type: string
+          minLength: 1
+        new_room_number:
+          type: string
+          minLength: 1
+        reservation_id:
+          type: string
+          minLength: 1
+        occurred_at:
+          type: string
+          format: date-time
+        expected_check_out:
+          type: string
+          format: date
+        guest:
+          $ref: '#/components/schemas/PmsEventGuestRequest'
+      required:
+      - event
+    PmsEventResult:
+      type: object
+      properties:
+        event_id:
+          type: integer
+        status:
+          type: string
+        detail:
+          type: string
+      required:
+      - detail
+      - event_id
+      - status
     Process:
       type: object
       properties:

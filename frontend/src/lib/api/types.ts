@@ -410,6 +410,29 @@ export interface ITStaffMember {
  * /it-ops/outgoing-requests/ — a department's own request to IT, as that
  * department sees it. Only title/description/priority are writable.
  */
+/** A photo on a request to IT — the socket, the error on screen, a model number. */
+export interface ITRequestAttachment {
+  id: number;
+  /** Absolute URL of the uploaded image. */
+  image: string;
+  uploaded_by_username: string | null;
+  created_at: string;
+}
+
+/**
+ * GET /it-ops/request-templates/ — a one-click shortcut on the "ask IT"
+ * form. Picking one fills the title, the description and the urgency.
+ */
+export interface ITRequestTemplate {
+  id: number;
+  title: string;
+  description: string;
+  /** lucide-react icon name; an unknown one falls back to a generic icon. */
+  icon: string;
+  priority: ITPriority;
+  order: number;
+}
+
 export interface OutgoingITRequest {
   id: number;
   title: string;
@@ -419,6 +442,13 @@ export interface OutgoingITRequest {
   requesting_department_name: string | null;
   requested_by_username: string | null;
   assigned_to_username: string | null;
+  attachments: ITRequestAttachment[];
+  /** 1-5, given once by the asking department after the work is completed. */
+  rating: number | null;
+  feedback: string;
+  rated_at: string | null;
+  /** Whether the "how did it go?" box should be offered — decided by the server. */
+  can_be_rated: boolean;
   resolved_at: string | null;
   created_at: string;
   updated_at: string;
@@ -458,4 +488,29 @@ export interface HotelInfo {
   body_en: string;
   /** lucide-react icon name. */
   icon: string;
+}
+
+/**
+ * GET /extensions/ — one line of the hotel's internal phone directory
+ * (apps/extensions, ported from the separate Flask app). Staff read it;
+ * only admins change it, in Django Admin.
+ */
+export interface Extension {
+  id: number;
+  extension: string;
+  title: string;
+  person_name: string;
+  /** The real department's id, or null for a number that belongs to none. */
+  department: number | null;
+  department_name: string;
+  /** Free text, e.g. «۰۸:۰۰ تا ۲۰:۰۰» — so the caller knows if anyone is there. */
+  department_working_hours: string;
+  location: string;
+  email: string;
+  mobile: string;
+  notes: string;
+  /** False for a number that exists but is out of use. */
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }

@@ -30,6 +30,11 @@ urlpatterns = [
     path("api/v1/", include("apps.tickets.urls")),
     path("api/v1/it-ops/", include("apps.it_ops.urls")),
     path("api/v1/", include("apps.notifications.urls")),
+    path("api/v1/", include("apps.pms.urls")),
+    path("api/v1/", include("apps.iptv.urls")),
+    path("api/v1/", include("apps.extensions.urls")),
+    # Not under /api/v1/: a page a television opens, not an API call.
+    path("tv/", include("apps.iptv.page_urls")),
     path("api/schema/",SpectacularAPIView.as_view(),name="schema",),
     path("api/docs/",SpectacularSwaggerView.as_view(url_name="schema"),name="swagger-ui",),
     path("api/redoc/",SpectacularRedocView.as_view(url_name="schema"),name="redoc",),

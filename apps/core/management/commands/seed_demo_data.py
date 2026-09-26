@@ -3,21 +3,48 @@ from django.db import transaction
 
 from apps.accounts.models import User
 from apps.departments.models import Department
+from apps.extensions.models import Extension
 from apps.guests.models import Guest, HotelInfo
-from apps.it_ops.models import Process
+from apps.it_ops.models import ITRequestTemplate, Process
 from apps.rooms.models import Room
 from apps.tickets.models import Category, QuickRequestTemplate
 
 DEPARTMENTS = [
-    {"name": "خانه‌داری", "code": "HOUSEKEEPING"},
-    {"name": "پذیرش", "code": "FRONT_DESK"},
-    {"name": "فنی و تعمیرات", "code": "MAINTENANCE"},
-    {"name": "خدمات اتاق و رستوران", "code": "ROOM_SERVICE"},
-    {"name": "کنسیرژ", "code": "CONCIERGE"},
+    {"name": "خانه‌داری", "code": "HOUSEKEEPING", "working_hours": "۰۷:۰۰ تا ۲۳:۰۰"},
+    {"name": "پذیرش", "code": "FRONT_DESK", "working_hours": "۲۴ ساعته"},
+    {"name": "فنی و تعمیرات", "code": "MAINTENANCE", "working_hours": "۰۸:۰۰ تا ۲۰:۰۰"},
+    {"name": "خدمات اتاق و رستوران", "code": "ROOM_SERVICE", "working_hours": "۰۶:۰۰ تا ۲۴:۰۰"},
+    {"name": "کنسیرژ", "code": "CONCIERGE", "working_hours": "۰۸:۰۰ تا ۲۲:۰۰"},
     # A normal department (guests can send it tech problems like any other),
     # and its operators are also the IT staff of the IT Ops module
     # (settings.IT_DEPARTMENT_CODE).
-    {"name": "فناوری اطلاعات", "code": "IT"},
+    {"name": "فناوری اطلاعات", "code": "IT", "working_hours": "۰۸:۰۰ تا ۱۸:۰۰"},
+]
+
+# (title, icon, priority, description) — the one-click shortcuts on the
+# "ask IT for something" form, the staff-side twin of the guest's quick
+# requests.
+IT_REQUEST_TEMPLATES = [
+    ("پرینتر کار نمی‌کند", "Printer", "HIGH", "پرینتر واحد روشن است ولی چاپ نمی‌کند."),
+    ("مشکل اینترنت/شبکه", "Wifi", "HIGH", "اتصال شبکه قطع و وصل می‌شود."),
+    ("کامپیوتر کند است", "Monitor", "MEDIUM", "سیستم خیلی کند شده و کارها معطل می‌ماند."),
+    ("درخواست دسترسی به سامانه", "KeyRound", "MEDIUM", "برای همکار تازه، دسترسی لازم است."),
+    ("نصب نرم‌افزار", "Download", "LOW", "نصب یا به‌روزرسانی نرم‌افزار روی سیستم واحد."),
+    ("مشکل تلفن داخلی", "Phone", "MEDIUM", "تلفن داخلی بوق نمی‌زند یا صدا قطع می‌شود."),
+]
+
+# (extension, title, person_name, department_code, location) for the staff
+# phone directory — enough to see the «داخلی‌ها» page working. The hotel's
+# real list arrives with `manage.py import_extensions`.
+EXTENSIONS = [
+    ("100", "پذیرش", "رضا مرادی", "FRONT_DESK", "لابی"),
+    ("101", "پذیرش — شیفت شب", "", "FRONT_DESK", "لابی"),
+    ("210", "سرپرست خانه‌داری", "سمیرا کاظمی", "HOUSEKEEPING", "طبقه دوم"),
+    ("211", "لباسشویی", "", "HOUSEKEEPING", "طبقه منفی یک"),
+    ("300", "تعمیرات", "بهنام رستمی", "MAINTENANCE", "موتورخانه"),
+    ("400", "رستوران", "", "ROOM_SERVICE", "طبقه همکف"),
+    ("500", "کنسیرژ", "", "CONCIERGE", "لابی"),
+    ("600", "پشتیبانی IT", "آرش نیکو", "IT", "طبقه اول"),
 ]
 
 # (name, code, sla_minutes, department_code) — department_code is only used
@@ -146,6 +173,8 @@ class Command(BaseCommand):
         self._seed_quick_templates(departments, categories)
         self._seed_it_processes()
         self._seed_hotel_info()
+        self._seed_extensions(departments)
+        self._seed_it_request_templates()
 
         self.stdout.write(self.style.SUCCESS("Demo data seeded."))
 
@@ -157,7 +186,12 @@ class Command(BaseCommand):
             # Auto-assignment on in the demo, so a new guest ticket goes
             # straight to whichever demo operator has the panel open.
             dept, created = Department.objects.get_or_create(
-                code=entry["code"], defaults={"name": entry["name"], "auto_assign": True}
+                code=entry["code"],
+                defaults={
+                    "name": entry["name"],
+                    "auto_assign": True,
+                    "working_hours": entry.get("working_hours", ""),
+                },
             )
             departments[entry["code"]] = dept
             self._log(created, "Department", dept.name)
@@ -319,6 +353,36 @@ class Command(BaseCommand):
                 defaults={"order": order, "icon": icon, "body": body, "title_en": title_en, "body_en": body_en},
             )
             self._log(created, "Hotel info", info.title)
+
+    # -- IT request templates ------------------------------------------
+
+    def _seed_it_request_templates(self):
+        for order, (title, icon, priority, description) in enumerate(IT_REQUEST_TEMPLATES):
+            template, created = ITRequestTemplate.objects.get_or_create(
+                title=title,
+                defaults={
+                    "icon": icon,
+                    "priority": priority,
+                    "description": description,
+                    "order": order,
+                },
+            )
+            self._log(created, "IT request template", template.title)
+
+    # -- phone directory -----------------------------------------------
+
+    def _seed_extensions(self, departments):
+        for number, title, person, department_code, location in EXTENSIONS:
+            item, created = Extension.objects.get_or_create(
+                extension=number,
+                defaults={
+                    "title": title,
+                    "person_name": person,
+                    "department": departments.get(department_code),
+                    "location": location,
+                },
+            )
+            self._log(created, "Extension", f"{item.extension} — {item.title}")
 
     # -- helpers -------------------------------------------------------------
 

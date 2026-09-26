@@ -8,10 +8,13 @@ import type {
   CreateTicketPayload,
   Department,
   DepartmentStatsSummary,
+  Extension,
   GuestProfile,
   HotelInfo,
   CreateOutgoingITRequestPayload,
   ITProcess,
+  ITRequestAttachment,
+  ITRequestTemplate,
   ITResource,
   ITResourceMap,
   ITStaffMember,
@@ -663,6 +666,36 @@ export async function createOutgoingItRequest(
   });
 }
 
+/** The one-click shortcuts on the "ask IT" form. Django Admin owns the list. */
+export async function getItRequestTemplates(): Promise<ITRequestTemplate[]> {
+  return apiFetch<ITRequestTemplate[]>("/it-ops/request-templates/");
+}
+
+/** A photo of the problem, on the caller's own department's request. */
+export async function addItRequestAttachment(
+  requestId: number | string,
+  file: File
+): Promise<ITRequestAttachment> {
+  const formData = new FormData();
+  formData.append("image", file);
+  return apiFetch<ITRequestAttachment>(`/it-ops/outgoing-requests/${requestId}/attachments/`, {
+    method: "POST",
+    body: formData,
+  });
+}
+
+/** How the work went: 1-5 plus an optional comment, once, after it's completed. */
+export async function rateItRequest(
+  requestId: number | string,
+  rating: number,
+  feedback: string
+): Promise<OutgoingITRequest> {
+  return apiFetch<OutgoingITRequest>(`/it-ops/outgoing-requests/${requestId}/rate/`, {
+    method: "POST",
+    body: JSON.stringify({ rating, feedback }),
+  });
+}
+
 /**
  * Stage 2.7 — PDF export. Doesn't go through apiFetch since that always
  * parses the response as JSON; this mirrors apiFetch's auth-header +
@@ -670,7 +703,7 @@ export async function createOutgoingItRequest(
  * instead. Works for guests (own ticket), operators (own department),
  * and admins — the backend enforces exactly who's allowed.
  */
-export async function exportTicketPdf(ticketId: number | string): Promise<Blob> {
+async function fetchBlob(path: string): Promise<Blob> {
   let token = currentAccessToken;
   if (token && isTokenExpired(token)) {
     try {
@@ -684,13 +717,13 @@ export async function exportTicketPdf(ticketId: number | string): Promise<Blob> 
   const headers = new Headers();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  let response = await fetch(`${API_URL}/tickets/${ticketId}/export/pdf/`, { headers });
+  let response = await fetch(`${API_URL}${path}`, { headers });
 
   if (response.status === 401 && token) {
     try {
       const refreshed = await refreshAccessToken();
       headers.set("Authorization", `Bearer ${refreshed}`);
-      response = await fetch(`${API_URL}/tickets/${ticketId}/export/pdf/`, { headers });
+      response = await fetch(`${API_URL}${path}`, { headers });
     } catch {
       setAccessToken(null);
     }
@@ -702,4 +735,38 @@ export async function exportTicketPdf(ticketId: number | string): Promise<Blob> 
   }
 
   return response.blob();
+}
+
+export async function exportTicketPdf(ticketId: number | string): Promise<Blob> {
+  return fetchBlob(`/tickets/${ticketId}/export/pdf/`);
+}
+
+// ---------------------------------------------------------------------------
+// Staff phone directory (apps/extensions) — read-only here; admins manage it
+// in Django Admin, like rooms, departments and categories.
+// ---------------------------------------------------------------------------
+
+/** Drops empty values so blank filter inputs don't reach the backend. */
+function toQuery(params: Record<string, string | number | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    const text = value === undefined ? "" : String(value).trim();
+    if (text) search.set(key, text);
+  }
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
+export async function getExtensions(
+  params: Record<string, string | number | undefined> = {}
+): Promise<Extension[]> {
+  return getAllPages<Extension>(`/extensions/${toQuery(params)}`);
+}
+
+/** The printed list, the Excel file, or the CSV — filtered exactly like the screen. */
+export async function exportExtensions(
+  kind: "pdf" | "excel" | "csv",
+  params: Record<string, string | number | undefined> = {}
+): Promise<Blob> {
+  return fetchBlob(`/extensions/export/${kind}/${toQuery(params)}`);
 }

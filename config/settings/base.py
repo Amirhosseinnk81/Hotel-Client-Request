@@ -50,6 +50,9 @@ LOCAL_APPS = [
     "apps.tickets",
     "apps.it_ops",
     "apps.notifications",
+    "apps.pms",
+    "apps.iptv",
+    "apps.extensions",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -157,6 +160,10 @@ REST_FRAMEWORK = {
         # Guest login has no password, so this is the only real brake on
         # repeated national_id/room_number guessing. Tunable via env.
         "guest_login": config("GUEST_LOGIN_THROTTLE_RATE", default="10/min"),
+        # The IPTV screens are read by set-top boxes, not people: a
+        # sane ceiling costs the televisions nothing and limits how
+        # fast anyone who got the key could sweep room numbers.
+        "iptv": config("IPTV_THROTTLE_RATE", default="60/min"),
     },
 }
 
@@ -166,6 +173,55 @@ REST_FRAMEWORK = {
 # IT staff are the OPERATORs of the department with this code (and the IT
 # supervisor is the one with is_supervisor) — see apps/core/permissions.py.
 IT_DEPARTMENT_CODE = config("IT_DEPARTMENT_CODE", default="IT")
+
+# ---------------------------------------------------------------------------
+# In-room television (Stage 3.4) — see apps/iptv
+# ---------------------------------------------------------------------------
+# Read-only: a guest can see their open requests and the hotel's
+# information on the TV, but files nothing from a remote control.
+#
+# The API (/api/v1/iptv/rooms/<room>/) is called by the IPTV middleware's
+# server and proves itself with X-IPTV-Key; empty key = refused, so an
+# unconfigured integration is never left open.
+IPTV_SHARED_KEY = config("IPTV_SHARED_KEY", default="")
+# The page (/tv/<room>/) is opened by the television itself, which can't
+# send headers. It is protected by where the request comes from and/or a
+# signature in the URL; with neither set the page is refused. Both set =
+# both must pass. Behind a proxy, REMOTE_ADDR must be the real client
+# address (nginx real_ip) — X-Forwarded-For is not trusted.
+IPTV_ALLOWED_NETWORKS = config("IPTV_ALLOWED_NETWORKS", default="")
+IPTV_PAGE_SECRET = config("IPTV_PAGE_SECRET", default="")
+IPTV_PAGE_REFRESH_SECONDS = config("IPTV_PAGE_REFRESH_SECONDS", default=30, cast=int)
+IPTV_BASE_URL = config("IPTV_BASE_URL", default="")
+
+# ---------------------------------------------------------------------------
+# PMS integration (Stage 3.3) — see apps/pms
+# ---------------------------------------------------------------------------
+# The hotel runs Harris (هریس), which has no public API documentation: the
+# endpoint, the credential and the exact field names come from Harris
+# support. Everything below is settings so that adapting to them doesn't
+# need a code change.
+#
+# Inbound (the PMS calls us at POST /api/v1/pms/events/): with no
+# PMS_SHARED_KEY the endpoint refuses everything, so an unconfigured
+# integration is never left open. PMS_HMAC_SECRET is optional; setting it
+# makes a valid signature mandatory.
+PMS_SHARED_KEY = config("PMS_SHARED_KEY", default="")
+PMS_HMAC_SECRET = config("PMS_HMAC_SECRET", default="")
+# Outbound (we ask the PMS, `manage.py pull_pms`). The default client reads
+# a JSON file, so the whole flow works before Harris grants API access.
+PMS_CLIENT = config("PMS_CLIENT", default="apps.pms.client.FilePmsClient")
+PMS_EVENTS_FILE = config("PMS_EVENTS_FILE", default="")
+PMS_BASE_URL = config("PMS_BASE_URL", default="")
+PMS_EVENTS_PATH = config("PMS_EVENTS_PATH", default="/events")
+PMS_API_KEY = config("PMS_API_KEY", default="")
+PMS_AUTH_HEADER = config("PMS_AUTH_HEADER", default="Authorization: Bearer {key}")
+PMS_SINCE_PARAM = config("PMS_SINCE_PARAM", default="since")
+PMS_ITEMS_PATH = config("PMS_ITEMS_PATH", default="")
+# Their JSON field names -> ours, when they differ (dotted paths), and their
+# event names -> ours. Defaults in apps/pms/services.py.
+PMS_FIELD_MAP = {}
+PMS_EVENT_MAP = {}
 
 # ---------------------------------------------------------------------------
 # Operator presence, auto-assignment and live notifications (Stage 3.2)

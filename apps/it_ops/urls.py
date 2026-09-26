@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from .views import (
     DepartmentRequestViewSet,
     GoalViewSet,
+    ITRequestTemplateListView,
     ITStaffListView,
     OutgoingITRequestViewSet,
     ProcessViewSet,
@@ -33,4 +34,5 @@ router.register("room-stats", RoomDailyStatViewSet, basename="room-stat")
 urlpatterns = [
     path("today/", TodayDashboardView.as_view(), name="today-dashboard"),
     path("staff/", ITStaffListView.as_view(), name="staff"),
+    path("request-templates/", ITRequestTemplateListView.as_view(), name="request-templates"),
 ] + router.urls

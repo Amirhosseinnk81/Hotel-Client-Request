@@ -5,7 +5,9 @@ from apps.core.permissions import is_it_operator, is_it_staff
 
 from .models import (
     DepartmentRequest,
+    DepartmentRequestAttachment,
     Goal,
+    ITRequestTemplate,
     Process,
     Project,
     RoomDailyStat,
@@ -115,6 +117,39 @@ class ProjectSerializer(serializers.ModelSerializer):
 
 # Named explicitly: with COMPONENT_SPLIT_REQUEST the departments app's
 # DepartmentSerializer already produces a "DepartmentRequest" component.
+class ITRequestAttachmentSerializer(serializers.ModelSerializer):
+    """
+    One photo on a request to IT. `image` is the only writable field: the
+    upload endpoint sets the request and the uploader itself, so neither
+    ever comes from the body.
+    """
+
+    uploaded_by_username = serializers.CharField(
+        source="uploaded_by.username", read_only=True, default=None
+    )
+
+    class Meta:
+        model = DepartmentRequestAttachment
+        fields = ["id", "image", "uploaded_by_username", "created_at"]
+        read_only_fields = ["id", "uploaded_by_username", "created_at"]
+
+
+class ITRequestTemplateSerializer(serializers.ModelSerializer):
+    """The one-click shortcuts on the "ask IT" form. Read-only: Django Admin owns them."""
+
+    class Meta:
+        model = ITRequestTemplate
+        fields = ["id", "title", "description", "icon", "priority", "order"]
+        read_only_fields = fields
+
+
+class ITRequestRateSerializer(serializers.Serializer):
+    """What the asking department sends back once the work is done."""
+
+    rating = serializers.IntegerField(min_value=1, max_value=5)
+    feedback = serializers.CharField(required=False, allow_blank=True, default="")
+
+
 @extend_schema_serializer(component_name="ITDepartmentRequest")
 class DepartmentRequestSerializer(serializers.ModelSerializer):
     requesting_department_name = serializers.CharField(
@@ -130,6 +165,9 @@ class DepartmentRequestSerializer(serializers.ModelSerializer):
     requested_by_username = serializers.CharField(
         source="requested_by.username", read_only=True, default=None
     )
+    # What the asking department attached and, once the work is done, what
+    # they thought of it. Read-only: IT sees the feedback, never writes it.
+    attachments = ITRequestAttachmentSerializer(many=True, read_only=True)
 
     class Meta:
         model = DepartmentRequest
@@ -137,6 +175,10 @@ class DepartmentRequestSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "description",
+            "attachments",
+            "rating",
+            "feedback",
+            "rated_at",
             "requesting_department",
             "requesting_department_name",
             "requested_by",
@@ -154,7 +196,17 @@ class DepartmentRequestSerializer(serializers.ModelSerializer):
         ]
         # resolved_at follows the status (DepartmentRequest.save());
         # requested_by is only ever set by OutgoingITRequestViewSet.
-        read_only_fields = ["id", "requested_by", "resolved_at", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "requested_by",
+            "attachments",
+            "rating",
+            "feedback",
+            "rated_at",
+            "resolved_at",
+            "created_at",
+            "updated_at",
+        ]
         extra_kwargs = {
             # Nullable in the DB only for legacy rows; new requests need one.
             "requesting_department": {"required": True, "allow_null": False},
@@ -180,6 +232,10 @@ class OutgoingITRequestSerializer(serializers.ModelSerializer):
     assigned_to_username = serializers.CharField(
         source="assigned_to.username", read_only=True, default=None
     )
+    attachments = ITRequestAttachmentSerializer(many=True, read_only=True)
+    # Whether the "how did it go?" box should be offered — computed on the
+    # model so the panel can't disagree with what the endpoint will accept.
+    can_be_rated = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = DepartmentRequest
@@ -192,6 +248,11 @@ class OutgoingITRequestSerializer(serializers.ModelSerializer):
             "requesting_department_name",
             "requested_by_username",
             "assigned_to_username",
+            "attachments",
+            "rating",
+            "feedback",
+            "rated_at",
+            "can_be_rated",
             "resolved_at",
             "created_at",
             "updated_at",
@@ -202,6 +263,12 @@ class OutgoingITRequestSerializer(serializers.ModelSerializer):
             "requesting_department_name",
             "requested_by_username",
             "assigned_to_username",
+            "attachments",
+            # Set through the dedicated rate endpoint, never by PATCHing.
+            "rating",
+            "feedback",
+            "rated_at",
+            "can_be_rated",
             "resolved_at",
             "created_at",
             "updated_at",

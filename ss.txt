@@ -1,0 +1,91 @@
+# Copy this file to .env and fill in real values.
+# Never commit the real .env file.
+
+# --- Core -------------------------------------------------------------
+DEBUG=True
+SECRET_KEY=#(_%7#7qbt^619!+qfy^2@(#s1udojtd#5(tsv43+5*8$lohdy
+ALLOWED_HOSTS=localhost,127.0.0.1
+
+# --- Database (PostgreSQL 16, local install) ---------------------------
+DB_NAME=hotel_client_request
+DB_USER=hotel_app
+DB_PASSWORD=Amirnk81
+DB_HOST=localhost
+DB_PORT=5432
+
+
+# --- JWT ----------------------------------------------------------------
+JWT_ACCESS_TOKEN_LIFETIME=15
+JWT_REFRESH_TOKEN_LIFETIME=7
+# The refresh token is issued as an httpOnly cookie (see apps/core/jwt_cookies.py).
+# Secure=True by default (required in any real environment — browsers won't
+# store a Secure cookie over plain HTTP anyway). Only set this to False for
+# local development if you're running the backend over http:// instead of
+# https://; never set it to False anywhere real.
+JWT_COOKIE_SECURE=False
+
+# --- CORS (comma-separated origins allowed to call the API) -------------
+# Must be an explicit list (never "*") — CORS_ALLOW_CREDENTIALS=True (set in
+# code, not here) requires it, since that's what lets the browser send/store
+# the httpOnly refresh cookie on cross-origin requests to this list.
+CORS_ALLOWED_ORIGINS=http://localhost:3000
+
+# --- IT Ops ---------------------------------------------------------------
+# Code of the Department whose operators are IT staff (seed_demo_data creates "IT").
+IT_DEPARTMENT_CODE=IT
+
+# --- In-room television (Stage 3.4) -----------------------------------------
+# For an IPTV system that calls our API from its own server:
+IPTV_SHARED_KEY=
+# For one that just opens a page on the television. Set at least one of
+# these two, or /tv/<room>/ is refused. Both set = both must be satisfied.
+IPTV_ALLOWED_NETWORKS=
+IPTV_PAGE_SECRET=
+# How often the TV page reloads itself, and how the televisions reach this
+# server (used by: python manage.py iptv_urls).
+IPTV_PAGE_REFRESH_SECONDS=30
+IPTV_BASE_URL=
+IPTV_THROTTLE_RATE=60/min
+
+# --- PMS integration (Stage 3.3, Harris) ------------------------------------
+# Inbound: the key the PMS must send as the X-PMS-Key header. Empty = the
+# webhook refuses everything. Generate a long random value, e.g.
+#   python -c "import secrets; print(secrets.token_urlsafe(32))"
+PMS_SHARED_KEY=
+# Optional: when set, the PMS must also sign the body (X-PMS-Signature).
+PMS_HMAC_SECRET=
+# Outbound (`manage.py pull_pms`, run every few minutes from Task Scheduler).
+# Default reads events from a JSON file; switch to Harris once they give you
+# the endpoint and credential.
+PMS_CLIENT=apps.pms.client.FilePmsClient
+PMS_EVENTS_FILE=
+# PMS_CLIENT=apps.pms.client.HarrisPmsClient
+PMS_BASE_URL=
+PMS_EVENTS_PATH=/events
+PMS_API_KEY=
+PMS_AUTH_HEADER=Authorization: Bearer {key}
+PMS_SINCE_PARAM=since
+PMS_ITEMS_PATH=
+
+# --- Presence, auto-assignment and live notifications (Stage 3.2) -----------
+# Seconds an operator counts as "on shift" after their panel was last seen.
+OPERATOR_PRESENCE_SECONDS=120
+# Live stream timing (seconds). Each open stream holds one server thread.
+SSE_POLL_SECONDS=2
+SSE_HEARTBEAT_SECONDS=25
+SSE_MAX_SECONDS=300
+
+# --- SMS (Stage 3.1) ---------------------------------------------------------
+# Queued in the DB, sent by `python manage.py send_pending_sms` (run it every
+# minute from Windows Task Scheduler). The console backend sends nothing and
+# only logs; for real SMS switch to Kavenegar and fill in the key and line.
+SMS_ENABLED=True
+SMS_BACKEND=apps.notifications.backends.ConsoleSmsBackend
+# SMS_BACKEND=apps.notifications.backends.KavenegarSmsBackend
+SMS_API_KEY=
+SMS_SENDER=
+SMS_HOTEL_NAME=هتل
+SMS_MAX_ATTEMPTS=5
+
+# --- Logging --------------------------------------------------------------
+DJANGO_LOG_LEVEL=INFO

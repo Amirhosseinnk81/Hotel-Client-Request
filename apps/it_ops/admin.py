@@ -1,6 +1,15 @@
 from django.contrib import admin, messages
 
-from .models import DepartmentRequest, Goal, Process, Project, RoomDailyStat, Task
+from .models import (
+    DepartmentRequest,
+    DepartmentRequestAttachment,
+    Goal,
+    ITRequestTemplate,
+    Process,
+    Project,
+    RoomDailyStat,
+    Task,
+)
 from .services import mark_process_done, snapshot_room_stats
 
 
@@ -110,3 +119,25 @@ class RoomDailyStatAdmin(admin.ModelAdmin):
         for stat in queryset:
             snapshot_room_stats(stat.date)
         self.message_user(request, f"{queryset.count()} day(s) recomputed.", messages.SUCCESS)
+
+
+@admin.register(ITRequestTemplate)
+class ITRequestTemplateAdmin(admin.ModelAdmin):
+    """
+    The one-click shortcuts on the "ask IT" form. Managed only here, the
+    same as the guest form's quick templates.
+    """
+
+    list_display = ("order", "title", "priority", "icon", "is_active")
+    list_editable = ("title", "priority", "icon", "is_active")
+    list_filter = ("is_active", "priority")
+    search_fields = ("title", "description")
+
+
+@admin.register(DepartmentRequestAttachment)
+class DepartmentRequestAttachmentAdmin(admin.ModelAdmin):
+    """Photos attached to requests; uploaded from the panel, not here."""
+
+    list_display = ("request", "uploaded_by", "created_at")
+    list_filter = ("created_at",)
+    readonly_fields = ("created_at",)

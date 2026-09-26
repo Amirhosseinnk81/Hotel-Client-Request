@@ -1,0 +1,96 @@
+{% comment %}
+The in-room television screen (Stage 3.4).
+
+Deliberately plain: no JavaScript, no web fonts, no build step. Hotel
+set-top boxes run old, slow browsers, and a screen that fails to render
+is worse than one that looks ordinary. It reloads itself with a meta
+refresh rather than polling.
+
+Sized for a television seen from a bed, not a phone held at arm's
+length: large type, high contrast, wide margins for overscan. The
+palette is the project's own (globals.css) — dark surface, bronze
+accent — but written out here, because this page must not depend on the
+Next.js build.
+{% endcomment %}<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="refresh" content="{{ refresh_seconds }}">
+<title>اتاق {{ room_number }}</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #141617; color: #ecebe8; }
+  body {
+    font-family: Vazirmatn, Tahoma, "Iranian Sans", sans-serif;
+    /* Televisions crop the edges (overscan), so nothing sits near them. */
+    padding: 4vh 6vw;
+    font-size: 2.1vh;
+    line-height: 1.7;
+  }
+  header { border-bottom: 1px solid #3a3733; padding-bottom: 2.2vh; margin-bottom: 3.5vh; }
+  h1 { font-size: 4.6vh; font-weight: 400; letter-spacing: -0.02em; margin: 0; }
+  .room { color: #c59d72; }
+  h2 { font-size: 2.8vh; font-weight: 400; margin: 0 0 2vh; color: #c9c5be; }
+  .card {
+    border: 1px solid #3a3733;
+    padding: 2.2vh 2.4vw;
+    margin-bottom: 1.8vh;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 2vw;
+  }
+  .card .title { font-size: 2.9vh; margin-bottom: 0.7vh; }
+  .meta { color: #9a948b; font-size: 1.9vh; }
+  .status { font-size: 2.3vh; white-space: nowrap; padding-top: 0.4vh; }
+  .OPEN { color: #e0b877; }
+  .IN_PROGRESS { color: #7fb5d8; }
+  .empty { color: #9a948b; font-size: 2.6vh; padding: 2vh 0 4vh; }
+  .info { columns: 2; column-gap: 4vw; }
+  .info div { break-inside: avoid; margin-bottom: 2.4vh; }
+  .info .title { color: #c59d72; font-size: 2.4vh; }
+  footer { margin-top: 4vh; color: #6f6a63; font-size: 1.7vh; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>درخواست‌های اتاق <span class="room">{{ room_number }}</span></h1>
+</header>
+
+{% if requests %}
+  <h2>در حال پیگیری</h2>
+  {# 'ticket', not 'request': `request` is the HttpRequest in this context. #}
+  {% for ticket in requests %}
+    <div class="card">
+      <div>
+        <div class="title">{{ ticket.title }}</div>
+        <div class="meta">
+          {% if ticket.category %}{{ ticket.category }} — {% endif %}{{ ticket.since }}
+          {% if ticket.estimated %} — {{ ticket.estimated }}{% endif %}
+        </div>
+      </div>
+      <div class="status {{ ticket.status }}">{{ ticket.status_label }}</div>
+    </div>
+  {% endfor %}
+{% elif has_active_stay %}
+  <p class="empty">در حال حاضر درخواست بازی ندارید. برای ثبت درخواست با پذیرش تماس بگیرید.</p>
+{% else %}
+  <p class="empty">به هتل خوش آمدید.</p>
+{% endif %}
+
+{% if hotel_info %}
+  <h2>راهنمای هتل</h2>
+  <div class="info">
+    {% for item in hotel_info %}
+      <div>
+        <div class="title">{{ item.title }}</div>
+        <div>{{ item.body|linebreaksbr }}</div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<footer>این صفحه هر چند لحظه یک‌بار به‌روز می‌شود.</footer>
+
+</body>
+</html>

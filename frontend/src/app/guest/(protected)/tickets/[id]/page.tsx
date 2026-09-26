@@ -2,7 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, Loader2, RotateCcw, Star } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, RotateCcw } from "lucide-react";
 
 import {
   Card,
@@ -31,58 +31,12 @@ import { TicketPdfExportButton } from "@/components/ticket-pdf-export-button";
 import { toast } from "@/hooks/use-toast";
 import { useLocale } from "@/contexts/locale-context";
 import { priorityMessageKey, statusMessageKey } from "@/lib/i18n";
+import { StarDisplay, StarPicker } from "@/components/star-rating";
 import { getTicketDetail, rateTicket, reopenTicket, ApiError } from "@/lib/api/client";
 import type { Ticket } from "@/lib/api/types";
 import { statusBadgeVariant, priorityBadgeVariant, priorityIcons } from "@/lib/ticket-labels";
 
 /** Interactive 1-5 star picker, used before a rating has been submitted. */
-function StarPicker({
-  value,
-  onChange,
-}: {
-  value: number;
-  onChange: (n: number) => void;
-}) {
-  const { t } = useLocale();
-  return (
-    <div className="flex gap-1" dir="ltr">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button
-          key={n}
-          type="button"
-          onClick={() => onChange(n)}
-          className="rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label={t("detail.star", { n })}
-        >
-          <Star
-            className={
-              n <= value
-                ? "size-6 fill-warning text-warning"
-                : "size-6 text-muted-foreground"
-            }
-          />
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Read-only star display, used once a rating already exists. */
-function StarDisplay({ value }: { value: number }) {
-  return (
-    <div className="flex gap-1" dir="ltr">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Star
-          key={n}
-          className={
-            n <= value ? "size-5 fill-warning text-warning" : "size-5 text-muted-foreground"
-          }
-        />
-      ))}
-    </div>
-  );
-}
-
 export default function GuestTicketDetailPage({
   params,
 }: {

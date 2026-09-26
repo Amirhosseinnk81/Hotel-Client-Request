@@ -25,6 +25,17 @@ class Department(models.Model):
         ),
     )
 
+    working_hours = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text=(
+            "Free text, e.g. «۰۸:۰۰ تا ۲۰:۰۰». Shown beside this "
+            "department's numbers in the staff phone directory "
+            "(apps/extensions), so whoever is about to ring knows "
+            "whether anybody is there."
+        ),
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )

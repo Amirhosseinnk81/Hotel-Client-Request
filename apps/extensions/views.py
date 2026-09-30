@@ -14,18 +14,20 @@ Both exports run the list's own filters, so «خروجی» always matches what
 the person is looking at.
 """
 
+from django.db.models import Max
 from django.http import HttpResponse
-from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import generics, status
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import generics, serializers, status
 from rest_framework.response import Response
 
 from apps.core.permissions import IsStaffReadAdminWrite
 
 from .exports import to_csv, to_xlsx
 from .filters import ExtensionFilter
-from .models import Extension
+from .models import Extension, ExtensionActivity
 from .pdf import build_extensions_pdf
 from .serializers import ExtensionSerializer
+from .services import label_for, log_activity
 
 
 def _base_queryset():
@@ -46,6 +48,10 @@ class ExtensionListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         return _base_queryset()
 
+    def perform_create(self, serializer):
+        item = serializer.save()
+        log_activity(self.request.user, ExtensionActivity.Action.CREATED, label_for(item))
+
 
 class ExtensionDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
@@ -61,8 +67,18 @@ class ExtensionDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return _base_queryset()
 
+    def perform_update(self, serializer):
+        item = serializer.save()
+        log_activity(
+            self.request.user,
+            ExtensionActivity.Action.UPDATED,
+            label_for(item),
+            details=", ".join(sorted(serializer.validated_data)),
+        )
+
     def perform_destroy(self, instance):
         instance.soft_delete()
+        log_activity(self.request.user, ExtensionActivity.Action.TRASHED, label_for(instance))
 
 
 class _ExportView(generics.GenericAPIView):
@@ -139,4 +155,30 @@ class ExtensionRestoreView(generics.GenericAPIView):
         # POST, so IsStaffReadAdminWrite requires an admin.
         item = self.get_object()
         item.restore()
+        log_activity(request.user, ExtensionActivity.Action.RESTORED, label_for(item))
         return Response(self.get_serializer(item).data, status=status.HTTP_200_OK)
+
+
+class ExtensionVersionView(generics.GenericAPIView):
+    """
+    GET /extensions/version/ — a cheap marker that changes whenever the
+    directory does, so an open panel can notice an edit someone else
+    made without re-downloading the whole list on a timer.
+
+    The Flask app polled /api/version for the same reason. Count plus
+    latest `updated_at` covers every change that matters: adding,
+    editing, trashing and restoring all move one or the other.
+    """
+
+    serializer_class = ExtensionSerializer
+    permission_classes = [IsStaffReadAdminWrite]
+    queryset = _base_queryset()
+
+    @extend_schema(
+        responses=inline_serializer("ExtensionsVersion", {"version": serializers.CharField()}),
+        operation_id="extensions_version",
+    )
+    def get(self, request, *args, **kwargs):
+        state = _base_queryset().aggregate(count=Max("id"), latest=Max("updated_at"))
+        total = _base_queryset().count()
+        return Response({"version": f"{total}:{state['count'] or 0}:{state['latest'] or ''}"})

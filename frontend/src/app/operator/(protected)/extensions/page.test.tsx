@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -7,8 +7,10 @@ import type { Extension } from "@/lib/api/types";
 const getExtensionsMock = vi.fn();
 const exportExtensionsMock = vi.fn();
 const getDepartmentsMock = vi.fn();
+const getVersionMock = vi.fn();
 const downloadMock = vi.fn();
 const toastMock = vi.fn();
+const writeTextMock = vi.fn();
 
 // Only the network and the browser download are stubbed; ApiError stays
 // the real class, because `instanceof ApiError` is what decides between
@@ -18,6 +20,7 @@ vi.mock("@/lib/api/client", async (importOriginal) => ({
   getExtensions: (...args: unknown[]) => getExtensionsMock(...args),
   exportExtensions: (...args: unknown[]) => exportExtensionsMock(...args),
   getDepartments: (...args: unknown[]) => getDepartmentsMock(...args),
+  getExtensionsVersion: (...args: unknown[]) => getVersionMock(...args),
 }));
 
 vi.mock("@/lib/utils", async (importOriginal) => ({
@@ -57,8 +60,12 @@ describe("ExtensionsPage", () => {
     getExtensionsMock.mockReset().mockResolvedValue([row()]);
     exportExtensionsMock.mockReset().mockResolvedValue(new Blob(["%PDF-1.4"]));
     getDepartmentsMock.mockReset().mockResolvedValue([]);
+    getVersionMock.mockReset().mockResolvedValue("1:1:x");
     downloadMock.mockReset();
     toastMock.mockReset();
+    writeTextMock.mockReset().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText: writeTextMock } });
+    window.localStorage.clear();
   });
 
   it("shows a number with its department's working hours", async () => {
@@ -124,5 +131,84 @@ describe("ExtensionsPage", () => {
     render(<ExtensionsPage />);
 
     expect(await screen.findByText("خطای سرور.")).toBeInTheDocument();
+  });
+
+  it("remembers a starred number and can show only those", async () => {
+    getExtensionsMock.mockResolvedValue([row(), row({ id: 2, extension: "210", title: "لباسشویی" })]);
+
+    const { unmount } = render(<ExtensionsPage />);
+    await screen.findByText("۱۰۰");
+    await userEvent.click(screen.getAllByRole("button", { name: "افزودن به علاقه‌مندی‌ها" })[0]);
+    await userEvent.click(screen.getByRole("button", { name: /فقط علاقه‌مندی‌ها/ }));
+
+    expect(screen.getByText("۱۰۰")).toBeInTheDocument();
+    expect(screen.queryByText("۲۱۰")).not.toBeInTheDocument();
+
+    // …and it survives coming back to the page.
+    unmount();
+    render(<ExtensionsPage />);
+    await userEvent.click(await screen.findByRole("button", { name: /فقط علاقه‌مندی‌ها/ }));
+    expect(screen.queryByText("۲۱۰")).not.toBeInTheDocument();
+  });
+
+  it("says so when nothing is starred yet", async () => {
+    render(<ExtensionsPage />);
+    await screen.findByText("۱۰۰");
+
+    await userEvent.click(screen.getByRole("button", { name: /فقط علاقه‌مندی‌ها/ }));
+
+    expect(screen.getByText(/هنوز داخلی‌ای را نشان نکرده‌اید/)).toBeInTheDocument();
+  });
+
+  it("copies the number itself, not the row", async () => {
+    render(<ExtensionsPage />);
+    await screen.findByText("۱۰۰");
+
+    await userEvent.click(screen.getByRole("button", { name: "کپی داخلی 100" }));
+
+    expect(writeTextMock).toHaveBeenCalledWith("100");
+  });
+
+  it("opens the details box on a row, without starring it", async () => {
+    render(<ExtensionsPage />);
+    await userEvent.click(await screen.findByText("رضا مرادی"));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("لابی")).toBeInTheDocument();
+    expect(within(dialog).getByText("۲۴ ساعته")).toBeInTheDocument();
+  });
+
+  it("switches to cards and remembers it", async () => {
+    const { unmount } = render(<ExtensionsPage />);
+    await screen.findByText("۱۰۰");
+
+    await userEvent.click(screen.getByRole("button", { name: "نمای کارت" }));
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+
+    unmount();
+    render(<ExtensionsPage />);
+    await screen.findByText("۱۰۰");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("re-reads the list only when the version marker moves", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(<ExtensionsPage />);
+      await vi.advanceTimersByTimeAsync(300);
+      const afterFirstLoad = getExtensionsMock.mock.calls.length;
+
+      // Same marker twice: nothing to re-read.
+      await vi.advanceTimersByTimeAsync(30_000);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(getExtensionsMock.mock.calls.length).toBe(afterFirstLoad);
+
+      // Someone else edited the directory.
+      getVersionMock.mockResolvedValue("2:2:y");
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(getExtensionsMock.mock.calls.length).toBeGreaterThan(afterFirstLoad);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

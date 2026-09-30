@@ -83,3 +83,40 @@ class Extension(models.Model):
         self.is_deleted = False
         self.deleted_at = None
         self.save(update_fields=["is_deleted", "deleted_at", "updated_at"])
+
+
+class ExtensionActivity(models.Model):
+    """
+    Who changed the directory, and what they did — the Flask app's
+    activity log, kept because a shared list that several people edit
+    needs an answer to "who took that number out?".
+
+    Written from the few places that change extensions (the API views,
+    Django Admin, the importer) rather than from a signal, so the actor
+    is actually known: a signal sees the row, not the person. Never
+    edited or deleted; `actor` is the username as text so the log
+    survives the user being removed.
+    """
+
+    class Action(models.TextChoices):
+        CREATED = "CREATED", "Created"
+        UPDATED = "UPDATED", "Updated"
+        TRASHED = "TRASHED", "Moved to the trash"
+        RESTORED = "RESTORED", "Restored"
+        DELETED = "DELETED", "Deleted permanently"
+        IMPORTED = "IMPORTED", "Imported"
+        BACKED_UP = "BACKED_UP", "Backed up"
+
+    actor = models.CharField(max_length=150, blank=True, help_text="Username, or empty for the system.")
+    action = models.CharField(max_length=20, choices=Action.choices, db_index=True)
+    label = models.CharField(max_length=200, help_text="What it happened to, e.g. «۲۱۰ — لباسشویی».")
+    details = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Extension activity"
+        verbose_name_plural = "Extension activity"
+
+    def __str__(self):
+        return f"{self.actor or 'system'} {self.action} {self.label}"

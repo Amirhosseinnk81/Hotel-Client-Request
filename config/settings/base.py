@@ -175,6 +175,14 @@ REST_FRAMEWORK = {
 IT_DEPARTMENT_CODE = config("IT_DEPARTMENT_CODE", default="IT")
 
 # ---------------------------------------------------------------------------
+# Staff phone directory (apps/extensions)
+# ---------------------------------------------------------------------------
+# Where the "take a backup" button writes its dated .xlsx. Point it at
+# whatever actually gets copied off this machine; empty keeps it beside
+# the code, so a backup is never silently lost because nobody set this.
+EXTENSIONS_BACKUP_DIR = config("EXTENSIONS_BACKUP_DIR", default="")
+
+# ---------------------------------------------------------------------------
 # In-room television (Stage 3.4) — see apps/iptv
 # ---------------------------------------------------------------------------
 # Read-only: a guest can see their open requests and the hotel's

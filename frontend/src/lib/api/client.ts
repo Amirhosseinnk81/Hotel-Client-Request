@@ -763,6 +763,16 @@ export async function getExtensions(
   return getAllPages<Extension>(`/extensions/${toQuery(params)}`);
 }
 
+/**
+ * A cheap marker that changes whenever the directory does. The page
+ * polls it so an edit someone else made shows up, without pulling the
+ * whole list down on a timer.
+ */
+export async function getExtensionsVersion(): Promise<string> {
+  const data = await apiFetch<{ version: string }>("/extensions/version/");
+  return data.version;
+}
+
 /** The printed list, the Excel file, or the CSV — filtered exactly like the screen. */
 export async function exportExtensions(
   kind: "pdf" | "excel" | "csv",

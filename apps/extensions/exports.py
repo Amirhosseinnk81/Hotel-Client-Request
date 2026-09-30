@@ -65,7 +65,14 @@ def to_csv(extensions) -> bytes:
 
 
 def to_xlsx(extensions) -> bytes:
-    from openpyxl import Workbook
+    try:
+        from openpyxl import Workbook
+    except ImportError as exc:  # pragma: no cover - dependency is declared
+        # Same message read_rows gives: a bare ModuleNotFoundError in the
+        # middle of an export tells nobody what to do about it.
+        raise ValueError(
+            "Writing .xlsx needs openpyxl (pip install -r requirements.txt)."
+        ) from exc
 
     workbook = Workbook()
     sheet = workbook.active
@@ -109,13 +116,19 @@ def read_rows(path) -> list[dict]:
     except Exception as exc:  # noqa: BLE001 — openpyxl raises a zoo of errors
         raise ValueError(f"The Excel file could not be opened: {exc}") from exc
 
-    sheet = workbook.active
-    rows = sheet.iter_rows()
+    # read_only=True keeps the file open until close() — on Windows that
+    # means the caller can't delete or move it (WinError 32), which the
+    # admin's upload path and the backup round-trip both do.
     try:
-        header = [str(cell.value or "").strip() for cell in next(rows)]
-    except StopIteration:
-        return []
-    return [
-        dict(zip(header, ["" if cell.value is None else cell.value for cell in row]))
-        for row in rows
-    ]
+        sheet = workbook.active
+        rows = sheet.iter_rows()
+        try:
+            header = [str(cell.value or "").strip() for cell in next(rows)]
+        except StopIteration:
+            return []
+        return [
+            dict(zip(header, ["" if cell.value is None else cell.value for cell in row]))
+            for row in rows
+        ]
+    finally:
+        workbook.close()

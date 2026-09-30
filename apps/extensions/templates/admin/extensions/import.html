@@ -1,0 +1,50 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+Upload, see what it would do, then confirm. The preview runs the real
+importer with commit=False, so it cannot promise something the confirm
+step then does differently.
+{% endcomment %}
+
+{% block content %}
+<div dir="rtl">
+  <h1>ورود فهرست داخلی‌ها</h1>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <p class="help">
+      شمارهٔ داخلی کلید یکتاست: ردیفی که از قبل باشد به‌روزرسانی می‌شود، نه تکراری.
+      واحدی که در فایل باشد و در سامانه نباشد ساخته می‌شود.
+    </p>
+    <input type="submit" value="بررسی فایل" class="default">
+  </form>
+
+  {% if report %}
+    <h2>پیش‌نمایش — هنوز چیزی ذخیره نشده</h2>
+    <table style="margin-bottom:1rem">
+      <tr><th>ردیف‌های خوانده‌شده</th><td>{{ report.total }}</td></tr>
+      <tr><th>شمارهٔ تازه</th><td>{{ report.created }}</td></tr>
+      <tr><th>به‌روزرسانی</th><td>{{ report.updated }}</td></tr>
+      {% if report.restored %}<tr><th>بازگشته از سبد</th><td>{{ report.restored }}</td></tr>{% endif %}
+      {% if report.duplicates_in_file %}<tr><th>تکراری در خود فایل</th><td>{{ report.duplicates_in_file }}</td></tr>{% endif %}
+      {% if report.skipped %}<tr><th>کنارگذاشته‌شده</th><td>{{ report.skipped }}</td></tr>{% endif %}
+      {% if report.departments_created %}
+        <tr><th>واحدهایی که ساخته می‌شوند</th><td>{{ report.departments_created|join:"، " }}</td></tr>
+      {% endif %}
+    </table>
+
+    {% if report.problems %}
+      <ul class="errorlist">
+        {% for problem in report.problems|slice:":10" %}<li>{{ problem }}</li>{% endfor %}
+      </ul>
+    {% endif %}
+
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="confirm" value="1">
+      <input type="submit" value="تأیید و ذخیره" class="default">
+      <a href="{% url 'admin:extensions_extension_changelist' %}" class="button cancel-link">بی‌خیال</a>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

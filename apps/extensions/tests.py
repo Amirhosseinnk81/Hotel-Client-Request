@@ -5,9 +5,11 @@ import tempfile
 from io import StringIO
 from pathlib import Path
 
+from django.contrib.admin import site
 from django.core.management import CommandError, call_command
 from django.test import TestCase
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -17,9 +19,9 @@ from apps.guests.models import Guest
 from apps.rooms.models import Room
 
 from .exports import COLUMNS, read_rows, to_csv, to_xlsx
-from .models import Extension
+from .models import Extension, ExtensionActivity
 from .pdf import build_extensions_pdf
-from .services import ascii_digits, import_rows
+from .services import ascii_digits, backup_extensions, import_rows
 
 
 class ExtensionTestData:
@@ -372,3 +374,150 @@ class ImportCommandTests(ExtensionTestData, TestCase):
     def test_a_missing_file_is_an_error_not_a_traceback(self):
         with self.assertRaises(CommandError):
             call_command("import_extensions", "nope.xlsx", stdout=StringIO())
+
+class ExtensionActivityTests(ExtensionTestData, APITestCase):
+    """Who changed the directory — the Flask app's activity log."""
+
+    def test_adding_a_number_is_recorded_with_the_person_who_did_it(self):
+        self.client.force_authenticate(self.admin)
+
+        self.client.post(reverse("extensions:list"), {"extension": "300", "title": "انبار"})
+
+        entry = ExtensionActivity.objects.latest("created_at")
+        self.assertEqual(entry.actor, "admin_x")
+        self.assertEqual(entry.action, ExtensionActivity.Action.CREATED)
+        self.assertIn("300", entry.label)
+
+    def test_editing_records_which_fields_moved(self):
+        self.client.force_authenticate(self.admin)
+
+        self.client.patch(
+            reverse("extensions:detail", args=[self.laundry.pk]), {"location": "طبقه همکف"}
+        )
+
+        entry = ExtensionActivity.objects.latest("created_at")
+        self.assertEqual(entry.action, ExtensionActivity.Action.UPDATED)
+        self.assertIn("location", entry.details)
+
+    def test_trashing_and_restoring_are_both_recorded(self):
+        self.client.force_authenticate(self.admin)
+
+        self.client.delete(reverse("extensions:detail", args=[self.laundry.pk]))
+        self.client.post(reverse("extensions:restore", args=[self.laundry.pk]))
+
+        actions = list(
+            ExtensionActivity.objects.order_by("created_at", "id").values_list("action", flat=True)
+        )
+        self.assertEqual(actions[-2:], ["TRASHED", "RESTORED"])
+
+    def test_an_import_is_one_line_not_one_per_row(self):
+        # Otherwise loading the hotel's whole spreadsheet buries the log.
+        rows = [
+            {"extension": "901", "title": "الف"},
+            {"extension": "902", "title": "ب"},
+        ]
+
+        import_rows(rows, commit=True, actor=self.admin)
+
+        entries = ExtensionActivity.objects.filter(action=ExtensionActivity.Action.IMPORTED)
+        self.assertEqual(entries.count(), 1)
+        self.assertIn("2", entries.first().label)
+
+    def test_a_preview_leaves_no_trace(self):
+        import_rows([{"extension": "903", "title": "پ"}], commit=False, actor=self.admin)
+
+        self.assertFalse(ExtensionActivity.objects.exists())
+
+    def test_the_log_is_read_only_in_the_admin(self):
+        admin_class = site._registry[ExtensionActivity]
+
+        self.assertFalse(admin_class.has_add_permission(None))
+        self.assertFalse(admin_class.has_change_permission(None))
+        self.assertFalse(admin_class.has_delete_permission(None))
+
+
+class ExtensionBackupTests(ExtensionTestData, TestCase):
+    """The dated backup behind the admin button and the command."""
+
+    def test_it_writes_a_dated_file_that_can_be_imported_back(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.settings(EXTENSIONS_BACKUP_DIR=directory):
+                path = backup_extensions(actor=self.admin)
+
+                self.assertTrue(path.exists())
+                self.assertTrue(path.name.startswith("extensions-"))
+                self.assertTrue(path.name.endswith(".xlsx"))
+                # The date is in the name, which is the whole point.
+                self.assertIn(timezone.localtime().strftime("%Y-%m-%d"), path.name)
+
+                Extension.objects.all().delete()
+                report = import_rows(read_rows(path), commit=True)
+                self.assertEqual(report.created, 3)
+
+    def test_trashed_numbers_are_in_the_backup_too(self):
+        # A backup that quietly drops the bin is not a backup.
+        self.laundry.soft_delete()
+
+        with tempfile.TemporaryDirectory() as directory:
+            with self.settings(EXTENSIONS_BACKUP_DIR=directory):
+                path = backup_extensions()
+                numbers = [str(row["extension"]) for row in read_rows(path)]
+
+        self.assertIn("210", numbers)
+        self.assertEqual(len(numbers), 3)
+
+    def test_it_is_recorded_in_the_activity_log(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with self.settings(EXTENSIONS_BACKUP_DIR=directory):
+                backup_extensions(actor=self.admin)
+
+        entry = ExtensionActivity.objects.latest("created_at")
+        self.assertEqual(entry.action, ExtensionActivity.Action.BACKED_UP)
+        self.assertEqual(entry.actor, "admin_x")
+
+    def test_the_command_writes_one_too(self):
+        out = StringIO()
+        with tempfile.TemporaryDirectory() as directory:
+            with self.settings(EXTENSIONS_BACKUP_DIR=directory):
+                call_command("backup_extensions", stdout=out)
+                written = list(Path(directory).glob("extensions-*.xlsx"))
+
+        self.assertEqual(len(written), 1)
+        self.assertIn("Backup written", out.getvalue())
+
+
+class ExtensionVersionTests(ExtensionTestData, APITestCase):
+    """The marker the panel polls so someone else's edit shows up."""
+
+    url = reverse("extensions:version")
+
+    def test_it_changes_when_the_directory_changes(self):
+        self.client.force_authenticate(self.operator)
+        before = self.client.get(self.url).data["version"]
+
+        Extension.objects.create(extension="777", title="تازه")
+        after = self.client.get(self.url).data["version"]
+
+        self.assertNotEqual(before, after)
+
+    def test_it_stays_put_when_nothing_changes(self):
+        self.client.force_authenticate(self.operator)
+
+        first = self.client.get(self.url).data["version"]
+        second = self.client.get(self.url).data["version"]
+
+        self.assertEqual(first, second)
+
+    def test_an_edit_moves_it_even_though_the_count_is_the_same(self):
+        self.client.force_authenticate(self.operator)
+        before = self.client.get(self.url).data["version"]
+
+        self.laundry.title = "لباسشویی مرکزی"
+        self.laundry.save()
+
+        self.assertNotEqual(self.client.get(self.url).data["version"], before)
+
+    def test_a_guest_cannot_poll_it_either(self):
+        self.client.force_authenticate(self.guest_user)
+
+        self.assertEqual(self.client.get(self.url).status_code, 403)

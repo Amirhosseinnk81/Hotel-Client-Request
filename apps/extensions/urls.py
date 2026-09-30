@@ -7,6 +7,7 @@ from .views import (
     ExtensionListCreateView,
     ExtensionPdfExportView,
     ExtensionRestoreView,
+    ExtensionVersionView,
 )
 
 app_name = "extensions"
@@ -17,6 +18,7 @@ urlpatterns = [
     path("extensions/export/pdf/", ExtensionPdfExportView.as_view(), name="export-pdf"),
     path("extensions/export/excel/", ExtensionExcelExportView.as_view(), name="export-excel"),
     path("extensions/export/csv/", ExtensionCsvExportView.as_view(), name="export-csv"),
+    path("extensions/version/", ExtensionVersionView.as_view(), name="version"),
     path("extensions/<int:pk>/", ExtensionDetailView.as_view(), name="detail"),
     path("extensions/<int:pk>/restore/", ExtensionRestoreView.as_view(), name="restore"),
 ]

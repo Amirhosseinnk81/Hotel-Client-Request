@@ -24,8 +24,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Frontend | **Next.js 16.3.2** (App Router) + React 19.2 + TypeScript + Tailwind v4 |
 | UI Kit | shadcn/ui **دستی‌ساز** (بدون CLI) در `frontend/src/components/ui/` روی Radix |
 | فونت | `@fontsource-variable/vazirmatn` در UI؛ TTF کامل Vazirmatn برای PDF |
-| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۳۹۸ تست** |
-| تست فرانت | Vitest + React Testing Library — **۱۲۳ تست** |
+| تست بک‌اند | Django `TestCase`/`APITestCase` روی PostgreSQL واقعی — **۴۱۲ تست** |
+| تست فرانت | Vitest + React Testing Library — **۱۲۹ تست** |
 | Deployment | مستقیم روی هاست ویندوز، بدون Docker/Redis/Celery؛ کار زمان‌بندی‌شده با Windows Task Scheduler (`send_pending_sms` هر دقیقه، `pull_pms` هر چند دقیقه، `snapshot_room_stats` هر شب). هر جریان زندهٔ اپراتور یک thread سرور نگه می‌دارد — بخش «اعلان لحظه‌ای» |
 
 ## دستورهای رایج
@@ -36,7 +36,7 @@ python manage.py migrate
 python manage.py runserver localhost:8000      # localhost، نه 127.0.0.1 — بخش «دو تلهٔ همیشگی»
 python manage.py seed_demo_data                # دادهٔ دموی فارسی: واحدها، دسته‌ها، اتاق، اپراتور، سرپرست، مهمان
 python manage.py seed_demo_data --reset-passwords
-python manage.py test                          # کل ۳۹۸ تست
+python manage.py test                          # کل ۴۱۲ تست
 python manage.py test apps.tickets             # فقط یک اپ
 python manage.py spectacular --file Hotel_Client_Request_Platform_API.yaml
 ```
@@ -223,6 +223,12 @@ SLA دو مرحله دارد، هر دو به ازای هر دسته و قابل
 - **ستون‌های فایل عمداً همان ستون‌های فلسک‌اند** (`exports.COLUMNS`) تا فایل اکسل موجود هتل بدون دست‌خوردن وارد شود و خروجی دوباره قابل ورود باشد. `status` کلمهٔ فارسی است نه بولین؛ `INACTIVE_VALUES` همان قاعدهٔ قبلی را نگه می‌دارد.
 - **PDF:** طرح دو ستونه و بلوک‌های ادغام‌شدهٔ نسخهٔ فلسک حفظ شده (برای کم‌کردن کاغذ)، ولی با platypus و فونت وزیرمتن. **پلامبینگ فارسی PDF مشترک شد:** `register_fonts()`، `shape()` و نام‌های `FONT_*` در `apps/tickets/pdf.py` از حالت private درآمدند و `apps/extensions/pdf.py` همان‌ها را import می‌کند — یک پیاده‌سازی shaping، نه دو تا. (قواعد فونت و wrap در بخش «خروجی PDF تیکت» همان‌جا سر جایش است.)
 - **وابستگی تازه: `openpyxl`** — تنها راه خواندن و نوشتن xlsx؛ در `requirements/base.txt` اضافه شد. CSV با کتابخانهٔ استاندارد است و با `utf-8-sig` نوشته می‌شود، وگرنه اکسل ویندوز فارسی را خراب نشان می‌دهد.
+- **راحتی‌های سمت مرورگر، همان‌طور که در فلسک بودند:** ستاره‌کردن شماره‌ها و فیلتر «فقط علاقه‌مندی‌ها»، دکمهٔ کپی، پنجرهٔ جزئیات، و نمای جدول/کارت. ستاره‌ها و نمای انتخابی در `localStorage` هر مرورگر می‌مانند (`extensions-favourites` و `extensions-view`) و **هرگز سمت سرور نمی‌روند** — سلیقهٔ یک نفر است نه دادهٔ هتل. خواندن و نوشتنشان در try/catch است، چون پنجرهٔ ناشناس و site data بسته هر دو همان‌جا می‌افتند.
+- **به‌روزرسانی خودکار با یک نشانگر، نه با کشیدن دوبارهٔ فهرست:** `GET /extensions/version/` رشتهٔ «تعداد:بیشترین id:آخرین updated_at» می‌دهد و صفحه هر ۳۰ ثانیه فقط همین را می‌پرسد؛ عوض شد، آن‌وقت لیست را دوباره می‌خواند. همان کاری که نسخهٔ فلسک با `/api/version` می‌کرد. ویرایش یک ردیف هم تکانش می‌دهد (چون `updated_at` در آن هست)، نه فقط اضافه/حذف.
+- **`ExtensionActivity` تاریخچه است، نه جدول کاری:** از سه مسیری که واقعاً چیزی را عوض می‌کنند نوشته می‌شود (ویوهای API، Django Admin، ایمپورت) و **عمداً از signal نه** — signal ردیف را می‌بیند ولی آدم را نه، و کل ارزش این لاگ همان «چه کسی» است. `actor` متن است نه FK، تا حذف کاربر تاریخچه را نبرد. ایمپورت **یک خط** می‌نویسد نه یکی به ازای هر ردیف، وگرنه بارگذاری فهرست هتل کل لاگ را دفن می‌کند؛ و پیش‌نمایش (`commit=False`) هیچ خطی نمی‌نویسد.
+- **بکاپ خروجی اکسل است، نه دامپ دیتابیس:** `services.backup_extensions` کل فهرست — با ردیف‌های سبد — را با تاریخ در نام فایل در `EXTENSIONS_BACKUP_DIR` می‌نویسد. ستون‌هایش همان ستون‌های ایمپورت‌اند، پس بکاپ **قابل بازگرداندن** است. نسخهٔ فلسک فایل SQLite خودش را می‌داد؛ اینجا دیتابیس مال کل پلتفرم است و بکاپ‌گیری از آن کار استقرار است نه یک دکمه در یک صفحه. دستور `backup_extensions` هم هست تا در Task Scheduler شبانه اجرا شود.
+- **فرم ایمپورت در Django Admin** (`admin/extensions/import.html` + `get_urls`): آپلود ← پیش‌نمایش ← تأیید. ردیف‌های پارس‌شده بین دو مرحله در **session** می‌مانند نه فایل موقت (نسخهٔ فلسک با توکن و پوشهٔ tmp این کار را می‌کرد و باید تمیزکاری می‌کرد). پیش‌نمایش همان `import_rows(commit=False)` است، پس نمی‌تواند چیزی را وعده دهد که تأیید جور دیگری انجام دهد.
+- **`read_rows` حتماً باید `workbook.close()` بزند.** openpyxl با `read_only=True` فایل را باز نگه می‌دارد و روی ویندوز تا بسته نشود نه پاک می‌شود نه جابه‌جا — `WinError 32`. هم فایل موقتِ آپلود ادمین و هم رفت‌وبرگشت بکاپ به همین گیر کردند؛ تست `test_trashed_numbers_are_in_the_backup_too` نگهبانش است.
 - `seed_demo_data` هشت داخلی نمونه و ساعت کاری واحدها را هم می‌سازد.
 
 **مخزن قدیمی:** `Hotel-extensions` بازنشسته می‌شود. یک نکتهٔ امنیتی آن‌جا: فایل `.secret_key` در `.gitignore` هست ولی از قبل tracked بوده و در مخزن عمومی مانده — کلید امضای session فلسک عمومی است. اگر آن اپ هنوز جایی بالاست: `git rm --cached .secret_key`، بعد کلید را دور بیندازید.

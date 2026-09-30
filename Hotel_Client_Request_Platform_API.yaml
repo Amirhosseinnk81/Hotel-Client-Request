@@ -770,6 +770,28 @@ paths:
                 type: string
                 format: binary
           description: ''
+  /api/v1/extensions/version/:
+    get:
+      operationId: extensions_version
+      description: |-
+        GET /extensions/version/ — a cheap marker that changes whenever the
+        directory does, so an open panel can notice an edit someone else
+        made without re-downloading the whole list on a timer.
+
+        The Flask app polled /api/version for the same reason. Count plus
+        latest `updated_at` covers every change that matters: adding,
+        editing, trashing and restoring all move one or the other.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExtensionsVersion'
+          description: ''
   /api/v1/guest/hotel-info/:
     get:
       operationId: api_v1_guest_hotel_info_list
@@ -3906,6 +3928,13 @@ components:
       required:
       - extension
       - title
+    ExtensionsVersion:
+      type: object
+      properties:
+        version:
+          type: string
+      required:
+      - version
     FrequencyEnum:
       enum:
       - NONE

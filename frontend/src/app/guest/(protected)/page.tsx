@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { BedDouble, FilePlus2, IdCard, Info, ListChecks, Phone, User } from "lucide-react";
+import { BedDouble, FilePlus2, IdCard, Info, ListChecks, Megaphone, MessagesSquare, Phone, User } from "lucide-react";
 
 import {
   Card,
@@ -133,6 +133,28 @@ export default function GuestDashboardPage() {
             <Link href="/guest/info">
               <Info className="size-4" />
               {t("home.hotelInfo")}
+            </Link>
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/*
+        Live chat and the hotel's news. Separate from the request tiles
+        above: neither of these files a ticket, and mixing them in would
+        make the row of actions read as four ways to ask for something.
+      */}
+      <Card>
+        <CardContent className="flex flex-col gap-3 pt-6 sm:flex-row">
+          <Button asChild variant="outline" className="flex-1 gap-2">
+            <Link href="/guest/chat">
+              <MessagesSquare className="size-4" />
+              {t("chat.link")}
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="flex-1 gap-2">
+            <Link href="/guest/news">
+              <Megaphone className="size-4" />
+              {t("news.link")}
             </Link>
           </Button>
         </CardContent>

@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Bell, LogOut, Volume2, VolumeX } from "lucide-react";
+import {
+  Bell,
+  BellOff,
+  BellRing,
+  LogOut,
+  MessagesSquare,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,13 +20,19 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useAuth } from "@/contexts/auth-context";
 import { toast } from "@/hooks/use-toast";
 import { useRequireRole } from "@/hooks/use-require-role";
-import { getAccessToken, getMyOperatorStatus } from "@/lib/api/client";
+import { getAccessToken, getChatUnreadCount, getMyOperatorStatus } from "@/lib/api/client";
 import { decodeAccessToken } from "@/lib/api/tokens";
 import type { OperatorAvailability } from "@/lib/api/types";
 import { formatNumber } from "@/lib/format";
 import { getITViewer, isITStaff } from "@/lib/it-ops";
 import { isChimeMuted, playChime, setChimeMuted, unlockChime } from "@/lib/chime";
-import { runOperatorEventStream, TICKET_EVENT, type OperatorEvent } from "@/lib/realtime";
+import * as desktop from "@/lib/desktop-notify";
+import {
+  announceChatMessage,
+  runOperatorEventStream,
+  TICKET_EVENT,
+  type OperatorEvent,
+} from "@/lib/realtime";
 
 export default function OperatorLayout({ children }: { children: React.ReactNode }) {
   const canRender = useRequireRole(["OPERATOR", "ADMIN"], "/operator/login");
@@ -27,6 +41,8 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
   const [myStatus, setMyStatus] = useState<OperatorAvailability | null>(null);
   const [newCount, setNewCount] = useState(0);
   const [muted, setMuted] = useState(false);
+  const [chatUnread, setChatUnread] = useState(0);
+  const [alerts, setAlerts] = useState(false);
 
   const payload = decodeAccessToken(getAccessToken() ?? "");
   const role = payload?.role ?? null;
@@ -81,6 +97,13 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
             title: "درخواست جدید",
             description: `«${event.title}» — اتاق ${event.room_number} · ${event.category_name}`,
           });
+          // A Windows toast, so a new request is noticed even when the
+          // panel is behind another window — lib/desktop-notify.ts.
+          desktop.notify(
+            "درخواست جدید",
+            `${event.title} — اتاق ${event.room_number}`,
+            `ticket-${event.id}`
+          );
           announce();
           break;
         case "ticket.assigned":
@@ -92,11 +115,30 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
               : `«${event.title}» — خودکار، بر اساس بار کاری`,
             variant: "success",
           });
+          desktop.notify("درخواستی به شما سپرده شد", event.title, `assigned-${event.id}`);
           announce();
           // Now busy — don't wait for the next heartbeat to say so.
           getMyOperatorStatus()
             .then(setMyStatus)
             .catch(() => {});
+          break;
+        case "chat.message":
+          // The open thread appends it from this same window event; the
+          // header only needs to know something arrived.
+          announceChatMessage(event);
+          if (!pathname.startsWith("/operator/chat")) {
+            setChatUnread((count) => count + 1);
+            playChime();
+            toast({
+              title: `پیام از ${event.sender_label}`,
+              description: event.body.slice(0, 90),
+            });
+            desktop.notify(
+              `پیام از ${event.sender_label}`,
+              event.body.slice(0, 120),
+              `chat-${event.conversation}`
+            );
+          }
           break;
         case "heartbeat":
           setMyStatus({ is_available: event.is_available, active_tickets: event.active_tickets });
@@ -106,7 +148,28 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
 
     void runOperatorEventStream(onEvent, controller.signal);
     return () => controller.abort();
+    // pathname is read inside onEvent but must not restart the stream on
+    // every navigation — a reconnect per click would be worse than a
+    // slightly stale check of "am I on the chat page".
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canRender, role]);
+
+  // The chat badge: its starting value, and a fresh one on every
+  // navigation (opening a thread marks it read on the server).
+  useEffect(() => {
+    if (!canRender) return;
+    let cancelled = false;
+    getChatUnreadCount()
+      .then((count) => {
+        if (!cancelled) setChatUnread(count);
+      })
+      .catch(() => {
+        // Non-critical: the badge keeps its last known value.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [canRender, pathname]);
 
   // Browsers only allow sound after the user has interacted with the page.
   useEffect(() => {
@@ -118,6 +181,36 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
       window.removeEventListener("keydown", unlockChime);
     };
   }, []);
+
+  useEffect(() => {
+    // Read after mount: both of these touch window/localStorage.
+    queueMicrotask(() => setAlerts(desktop.isEnabled() && desktop.isGranted()));
+  }, []);
+
+  const alertSupport = desktop.support();
+
+  const toggleAlerts = async () => {
+    if (alerts) {
+      desktop.setEnabled(false);
+      setAlerts(false);
+      return;
+    }
+    // Permission has to be asked for from a real click — browsers ignore
+    // (Chrome permanently denies) a prompt that fires on page load.
+    const granted = await desktop.requestPermission();
+    if (!granted) {
+      toast({
+        title: "اعلان ویندوز فعال نشد",
+        description:
+          "مرورگر اجازه نداد. از تنظیمات سایت در مرورگر، اجازهٔ «Notifications» را بدهید.",
+        variant: "destructive",
+      });
+      return;
+    }
+    desktop.setEnabled(true);
+    setAlerts(true);
+    desktop.notify("اعلان ویندوز فعال شد", "از این پس درخواست‌ها و پیام‌های تازه را اینجا می‌بینید.");
+  };
 
   const toggleSound = () => {
     setChimeMuted(!muted);
@@ -190,6 +283,13 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
               درخواست از IT
             </Link>
           )}
+          {/* Chat and news are for every member of staff, admins included. */}
+          <Link href="/operator/chat" className={navClass(pathname.startsWith("/operator/chat"))}>
+            گفت‌وگو
+          </Link>
+          <Link href="/operator/news" className={navClass(pathname === "/operator/news")}>
+            اخبار
+          </Link>
         </nav>
 
         <div className="flex items-center gap-2">
@@ -237,6 +337,47 @@ export default function OperatorLayout({ children }: { children: React.ReactNode
               </Link>
             </Button>
           )}
+
+          <Button variant="ghost" size="sm" className="relative gap-1.5" asChild>
+            <Link href="/operator/chat" onClick={() => setChatUnread(0)} aria-label="گفت‌وگو">
+              <MessagesSquare className="size-3.5" />
+              {chatUnread > 0 && (
+                <Badge
+                  variant="destructive"
+                  className="absolute -end-1 -top-1 h-4 min-w-4 justify-center rounded-full p-0 text-[10px]"
+                >
+                  {chatUnread > 9 ? "۹+" : formatNumber(chatUnread)}
+                </Badge>
+              )}
+            </Link>
+          </Button>
+
+          {/*
+            Windows desktop alerts. Shown as a disabled button with the
+            reason when the browser can't do it — http on the hotel LAN
+            has no Notification API at all, and a switch that silently
+            does nothing is worse than an explanation.
+          */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => void toggleAlerts()}
+            disabled={!alertSupport.ok}
+            aria-label={alerts ? "خاموش‌کردن اعلان ویندوز" : "روشن‌کردن اعلان ویندوز"}
+            title={
+              alertSupport.ok
+                ? alerts
+                  ? "اعلان ویندوز روشن است"
+                  : "اعلان ویندوز خاموش است — برای روشن‌کردن کلیک کنید"
+                : alertSupport.reason === "insecure"
+                  ? "اعلان ویندوز به HTTPS نیاز دارد (روی http فقط localhost کار می‌کند)."
+                  : alertSupport.reason === "denied"
+                    ? "اجازهٔ اعلان در مرورگر رد شده است؛ از تنظیمات سایت آن را عوض کنید."
+                    : "مرورگر شما اعلان دسکتاپ را پشتیبانی نمی‌کند."
+            }
+          >
+            {alerts ? <BellRing className="size-3.5" /> : <BellOff className="size-3.5" />}
+          </Button>
 
           <ThemeToggle />
 

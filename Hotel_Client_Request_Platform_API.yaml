@@ -288,6 +288,223 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/chat/config/:
+    get:
+      operationId: api_v1_chat_config_retrieve
+      description: |-
+        GET /chat/config/ — which transport is live.
+
+        The panel asks instead of being built for one, so moving the hotel
+        from SSE to WebSockets is a settings change at deployment and not a
+        frontend release.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatConfig'
+          description: ''
+  /api/v1/chat/conversations/:
+    get:
+      operationId: api_v1_chat_conversations_list
+      description: GET /chat/conversations/ — my inbox, newest activity first.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Conversation'
+          description: ''
+  /api/v1/chat/conversations/{id}/messages/:
+    get:
+      operationId: api_v1_chat_conversations_messages_list
+      description: |-
+        GET  /chat/conversations/{id}/messages/ — the thread, oldest first.
+        POST the same path — say something.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Message'
+          description: ''
+    post:
+      operationId: api_v1_chat_conversations_messages_create
+      description: |-
+        GET  /chat/conversations/{id}/messages/ — the thread, oldest first.
+        POST the same path — say something.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MessageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MessageRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+          description: ''
+  /api/v1/chat/conversations/{id}/read/:
+    post:
+      operationId: api_v1_chat_conversations_read_create
+      description: POST /chat/conversations/{id}/read/ — clear my unread count.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        required: true
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatRead'
+          description: ''
+  /api/v1/chat/conversations/start/:
+    post:
+      operationId: api_v1_chat_conversations_start_create
+      description: |-
+        POST /chat/conversations/ — open (or reuse) a thread.
+
+        A guest names the department they want; staff name the people. Both
+        reuse an existing open thread rather than piling up empty ones.
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartStaffConversationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StartStaffConversationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StartStaffConversationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+          description: ''
+  /api/v1/chat/socket-ticket/:
+    post:
+      operationId: api_v1_chat_socket_ticket_create
+      description: |-
+        POST /chat/socket-ticket/ — a short-lived, single-use ticket for
+        opening the WebSocket.
+
+        A browser cannot put an Authorization header on a WebSocket, and the
+        access token must not travel in a URL or a readable cookie (the
+        security rules in CLAUDE.md). So the panel spends its token here,
+        over an ordinary authenticated request, and connects with a ticket
+        that is worth nothing afterwards.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatSocketTicket'
+          description: ''
+  /api/v1/chat/unread/:
+    get:
+      operationId: api_v1_chat_unread_retrieve
+      description: GET /chat/unread/ — one number for the badge in the header.
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatUnread'
+          description: ''
   /api/v1/departments/:
     get:
       operationId: api_v1_departments_list
@@ -792,6 +1009,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExtensionsVersion'
           description: ''
+  /api/v1/guest/events/:
+    get:
+      operationId: api_v1_guest_events_retrieve
+      description: |-
+        GET /api/v1/guest/events/ — the guest's live chat.
+
+        The same machinery as the operator stream, carrying chat only: a
+        guest has nothing else to be told about in real time, and giving
+        them the operator stream would hand them their department's tickets.
+      parameters:
+      - in: query
+        name: after_chat
+        schema:
+          type: integer
+        description: Resume cursor from the last event.
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - sse
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            text/event-stream:
+              schema:
+                type: string
+          description: ''
   /api/v1/guest/hotel-info/:
     get:
       operationId: api_v1_guest_hotel_info_list
@@ -824,6 +1074,36 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/HotelInfo'
+          description: ''
+  /api/v1/guest/news/:
+    get:
+      operationId: api_v1_guest_news_list
+      description: GET /api/v1/guest/news/ — what the hotel is telling its guests.
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NewsItem'
           description: ''
   /api/v1/guest/profile/:
     get:
@@ -2373,6 +2653,11 @@ paths:
         with a department only; admins have no department and get no stream.
       parameters:
       - in: query
+        name: after_chat
+        schema:
+          type: integer
+        description: Resume cursor from the last event.
+      - in: query
         name: after_history
         schema:
           type: integer
@@ -2421,6 +2706,43 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperatorAvailability'
+          description: ''
+  /api/v1/operator/news/:
+    get:
+      operationId: api_v1_operator_news_list
+      description: |-
+        GET /api/v1/operator/news/ — staff announcements, hotel-wide plus my
+        own department's.
+
+        IsStaffReadAdminWrite, not IsOperator: an admin is a panel user too
+        and a shift briefing is theirs to read. It is also the permission
+        that keeps guests out, which IsAdminRole would not — a guest is an
+        authenticated user (see apps/extensions).
+      parameters:
+      - name: ordering
+        required: false
+        in: query
+        description: Which field to use when ordering the results.
+        schema:
+          type: string
+      - name: search
+        required: false
+        in: query
+        description: A search term.
+        schema:
+          type: string
+      tags:
+      - api
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/NewsItem'
           description: ''
   /api/v1/operator/stats/summary/:
     get:
@@ -3658,6 +3980,124 @@ components:
       required:
       - code
       - name
+    ChatConfig:
+      type: object
+      properties:
+        transport:
+          type: string
+        websocket_path:
+          type: string
+        poll_seconds:
+          type: integer
+      required:
+      - poll_seconds
+      - transport
+      - websocket_path
+    ChatKindEnum:
+      enum:
+      - GUEST
+      - STAFF
+      type: string
+      description: |-
+        * `GUEST` - Guest support
+        * `STAFF` - Staff to staff
+    ChatRead:
+      type: object
+      properties:
+        unread:
+          type: integer
+      required:
+      - unread
+    ChatSocketTicket:
+      type: object
+      properties:
+        ticket:
+          type: string
+        expires_in:
+          type: integer
+      required:
+      - expires_in
+      - ticket
+    ChatUnread:
+      type: object
+      properties:
+        unread:
+          type: integer
+      required:
+      - unread
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/ChatKindEnum'
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        subject:
+          type: string
+          readOnly: true
+          description: Staff threads only.
+        guest_name:
+          type: string
+          readOnly: true
+          default: ''
+        room_number:
+          type: string
+          readOnly: true
+          default: ''
+        department:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Which department answers a guest thread — the same scoping
+            as tickets, so an operator only ever sees their own department's guests.
+            Optional on a staff thread.
+        department_name:
+          type: string
+          readOnly: true
+          default: ''
+        participant_labels:
+          type: array
+          items: {}
+          readOnly: true
+        unread:
+          type: integer
+          readOnly: true
+        last_message:
+          type: string
+          readOnly: true
+        last_message_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        is_closed:
+          type: boolean
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - department
+      - department_name
+      - guest_name
+      - id
+      - is_closed
+      - kind
+      - last_message
+      - last_message_at
+      - participant_labels
+      - room_number
+      - subject
+      - title
+      - unread
     Department:
       type: object
       properties:
@@ -4435,6 +4875,44 @@ components:
       - icon
       - id
       - title
+    IptvNews:
+      type: object
+      description: Only what a screen in a public room should carry.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/NewsKindEnum'
+          readOnly: true
+        event_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: 'For an event: when it takes place.'
+        location:
+          type: string
+          readOnly: true
+        icon:
+          type: string
+          readOnly: true
+          description: A lucide-react icon name, e.g. Megaphone, Music, Waves, Utensils.
+      required:
+      - body
+      - event_at
+      - icon
+      - id
+      - kind
+      - location
+      - title
     IptvRoomScreen:
       type: object
       properties:
@@ -4450,9 +4928,14 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/IptvHotelInfo'
+        news:
+          type: array
+          items:
+            $ref: '#/components/schemas/IptvNews'
       required:
       - has_active_stay
       - hotel_info
+      - news
       - requests
       - room_number
     IptvTicket:
@@ -4489,6 +4972,160 @@ components:
       - status
       - status_label
       - title
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        conversation:
+          type: integer
+          readOnly: true
+        body:
+          type: string
+        sender:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: Empty means the system wrote it (e.g. «گفت‌وگو بسته شد»).
+        sender_name:
+          type: string
+          readOnly: true
+        sender_role:
+          type: string
+          nullable: true
+          readOnly: true
+        sender_label:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - body
+      - conversation
+      - created_at
+      - id
+      - sender
+      - sender_label
+      - sender_name
+      - sender_role
+    MessageRequest:
+      type: object
+      properties:
+        body:
+          type: string
+          minLength: 1
+      required:
+      - body
+    NewsAudienceEnum:
+      enum:
+      - GUEST
+      - STAFF
+      - BOTH
+      type: string
+      description: |-
+        * `GUEST` - Guests
+        * `STAFF` - Staff
+        * `BOTH` - Guests and staff
+    NewsItem:
+      type: object
+      description: |-
+        Read-only on the API — news is written in Django Admin, exactly like
+        rooms, departments and hotel info.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        body:
+          type: string
+          readOnly: true
+        title_en:
+          type: string
+          readOnly: true
+        body_en:
+          type: string
+          readOnly: true
+        kind:
+          allOf:
+          - $ref: '#/components/schemas/NewsKindEnum'
+          readOnly: true
+        audience:
+          allOf:
+          - $ref: '#/components/schemas/NewsAudienceEnum'
+          readOnly: true
+          description: |-
+            Who this is for. Guest items also appear on the room TV.
+
+            * `GUEST` - Guests
+            * `STAFF` - Staff
+            * `BOTH` - Guests and staff
+        department:
+          type: integer
+          readOnly: true
+          nullable: true
+          description: 'Staff items only: leave empty for the whole hotel, or pick
+            a department to show it to that team alone.'
+        department_name:
+          type: string
+          readOnly: true
+          default: ''
+        event_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: 'For an event: when it takes place.'
+        location:
+          type: string
+          readOnly: true
+        is_pinned:
+          type: boolean
+          readOnly: true
+          description: Keep at the top regardless of date.
+        publish_at:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Not shown before this moment.
+        expires_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+          description: Empty means it stays up.
+        icon:
+          type: string
+          readOnly: true
+          description: A lucide-react icon name, e.g. Megaphone, Music, Waves, Utensils.
+      required:
+      - audience
+      - body
+      - body_en
+      - department
+      - department_name
+      - event_at
+      - expires_at
+      - icon
+      - id
+      - is_pinned
+      - kind
+      - location
+      - publish_at
+      - title
+      - title_en
+    NewsKindEnum:
+      enum:
+      - NEWS
+      - EVENT
+      type: string
+      description: |-
+        * `NEWS` - News
+        * `EVENT` - Event
     OperatorAvailability:
       type: object
       description: |-
@@ -5821,6 +6458,19 @@ components:
       - new_status
       - previous_status
       - room
+    StartStaffConversationRequest:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            type: integer
+        subject:
+          type: string
+          default: ''
+          maxLength: 150
+      required:
+      - users
     Task:
       type: object
       properties:

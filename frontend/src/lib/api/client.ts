@@ -5,6 +5,9 @@ import type {
   AuthTokens,
   CannedResponse,
   Category,
+  ChatConfig,
+  ChatMessage,
+  Conversation,
   CreateTicketPayload,
   Department,
   DepartmentStatsSummary,
@@ -20,6 +23,7 @@ import type {
   ITStaffMember,
   ITTodayDashboard,
   OutgoingITRequest,
+  NewsItem,
   OperatorAvailability,
   OperatorColleague,
   QuickRequestTemplate,
@@ -779,4 +783,84 @@ export async function exportExtensions(
   params: Record<string, string | number | undefined> = {}
 ): Promise<Blob> {
   return fetchBlob(`/extensions/export/${kind}/${toQuery(params)}`);
+}
+// ---------------------------------------------------------------------------
+// Hotel news and events (apps/news) — two endpoints, one per audience, so
+// a staff briefing can never be widened onto a guest's phone.
+// ---------------------------------------------------------------------------
+
+export async function getGuestNews(): Promise<NewsItem[]> {
+  return apiFetch<NewsItem[]>("/guest/news/");
+}
+
+export async function getOperatorNews(): Promise<NewsItem[]> {
+  return apiFetch<NewsItem[]>("/operator/news/");
+}
+
+// ---------------------------------------------------------------------------
+// Live chat (apps/chat). Sending and reading are ordinary REST calls; only
+// the arrival of somebody else's message is live — see lib/chat.ts.
+// ---------------------------------------------------------------------------
+
+export async function getChatConfig(): Promise<ChatConfig> {
+  return apiFetch<ChatConfig>("/chat/config/");
+}
+
+export async function getConversations(): Promise<Conversation[]> {
+  return apiFetch<Conversation[]>("/chat/conversations/");
+}
+
+/** A guest opens (or reuses) their thread with a department. */
+export async function startGuestConversation(department: number): Promise<Conversation> {
+  return apiFetch<Conversation>("/chat/conversations/start/", {
+    method: "POST",
+    body: JSON.stringify({ department }),
+  });
+}
+
+/** Staff open (or reuse) a thread with colleagues. */
+export async function startStaffConversation(
+  users: number[],
+  subject = ""
+): Promise<Conversation> {
+  return apiFetch<Conversation>("/chat/conversations/start/", {
+    method: "POST",
+    body: JSON.stringify({ users, subject }),
+  });
+}
+
+export async function getChatMessages(conversation: number): Promise<ChatMessage[]> {
+  return apiFetch<ChatMessage[]>(`/chat/conversations/${conversation}/messages/`);
+}
+
+export async function sendChatMessage(
+  conversation: number,
+  body: string
+): Promise<ChatMessage> {
+  return apiFetch<ChatMessage>(`/chat/conversations/${conversation}/messages/`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+export async function markConversationRead(conversation: number): Promise<void> {
+  await apiFetch<{ unread: number }>(`/chat/conversations/${conversation}/read/`, {
+    method: "POST",
+  });
+}
+
+export async function getChatUnreadCount(): Promise<number> {
+  const { unread } = await apiFetch<{ unread: number }>("/chat/unread/");
+  return unread;
+}
+
+/**
+ * Trade the in-memory access token for a short-lived, single-use ticket.
+ * Only needed on the WebSocket transport: a handshake can't carry an
+ * Authorization header, and the token must never travel in a URL.
+ */
+export async function getChatSocketTicket(): Promise<{ ticket: string; expires_in: number }> {
+  return apiFetch<{ ticket: string; expires_in: number }>("/chat/socket-ticket/", {
+    method: "POST",
+  });
 }

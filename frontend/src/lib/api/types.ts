@@ -514,3 +514,76 @@ export interface Extension {
   created_at: string;
   updated_at: string;
 }
+
+/**
+ * GET /guest/news/ and /operator/news/ — a hotel announcement or event
+ * (apps/news). Written in Django Admin; read-only here. The English
+ * fields are optional and fall back to the Persian ones, like HotelInfo.
+ */
+export interface NewsItem {
+  id: number;
+  title: string;
+  body: string;
+  title_en: string;
+  body_en: string;
+  kind: "NEWS" | "EVENT";
+  audience: "GUEST" | "STAFF" | "BOTH";
+  /** Staff items only: null means the whole hotel. */
+  department: number | null;
+  department_name: string;
+  /** When the event happens — separate from the publish window. */
+  event_at: string | null;
+  location: string;
+  is_pinned: boolean;
+  publish_at: string;
+  expires_at: string | null;
+  /** lucide-react icon name. */
+  icon: string;
+}
+
+/** GET /chat/conversations/ — one thread in my chat inbox (apps/chat). */
+export interface Conversation {
+  id: number;
+  kind: "GUEST" | "STAFF";
+  title: string;
+  subject: string;
+  guest_name: string;
+  room_number: string;
+  department: number | null;
+  department_name: string;
+  /** «اپراتور رضا» for everyone in the thread. */
+  participant_labels: string[];
+  unread: number;
+  last_message: string;
+  last_message_at: string | null;
+  is_closed: boolean;
+  created_at: string;
+}
+
+/**
+ * One chat message. `sender_label` is always «اپراتور رضا» / «مهمان …» /
+ * «سیستم» — a guest must never see an anonymous bubble and wonder
+ * whether there is a person on the other end.
+ */
+export interface ChatMessage {
+  id: number;
+  conversation: number;
+  body: string;
+  sender: number | null;
+  sender_name: string;
+  sender_role: "GUEST" | "OPERATOR" | "ADMIN" | null;
+  sender_label: string;
+  created_at: string;
+}
+
+/**
+ * GET /chat/config/ — which transport is live. The panel asks rather
+ * than being built for one, so switching the hotel from the SSE stream
+ * to real WebSockets is a server setting, not a frontend release.
+ */
+export interface ChatConfig {
+  transport: "sse" | "websocket";
+  /** Empty on SSE. */
+  websocket_path: string;
+  poll_seconds: number;
+}

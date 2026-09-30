@@ -148,7 +148,7 @@ class OperatorEventStreamTests(StreamTestData, TestCase):
 
         name, data = events[-1]
         self.assertEqual(name, "reconnect")
-        self.assertEqual(set(data["cursor"]), {"ticket", "history"})
+        self.assertEqual(set(data["cursor"]), {"ticket", "history", "chat"})
 
     def test_resuming_from_a_cursor_delivers_what_happened_in_between(self):
         # The client was disconnected when this arrived...

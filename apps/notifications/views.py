@@ -4,9 +4,9 @@ from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.views import APIView
 
-from apps.core.permissions import IsOperatorWithDepartment
+from apps.core.permissions import IsGuest, IsOperatorWithDepartment
 
-from .stream import operator_event_stream
+from .stream import guest_event_stream, operator_event_stream
 
 
 class EventStreamRenderer(BaseRenderer):
@@ -43,6 +43,7 @@ class OperatorEventStreamView(APIView):
         parameters=[
             OpenApiParameter("after_ticket", OpenApiTypes.INT, description="Resume cursor from the last event."),
             OpenApiParameter("after_history", OpenApiTypes.INT, description="Resume cursor from the last event."),
+            OpenApiParameter("after_chat", OpenApiTypes.INT, description="Resume cursor from the last event."),
         ],
         responses={(200, "text/event-stream"): OpenApiTypes.STR},
     )
@@ -51,9 +52,37 @@ class OperatorEventStreamView(APIView):
             request.user,
             after_ticket=_cursor_param(request, "after_ticket"),
             after_history=_cursor_param(request, "after_history"),
+            after_chat=_cursor_param(request, "after_chat"),
         )
-        response = StreamingHttpResponse(stream, content_type="text/event-stream; charset=utf-8")
-        response["Cache-Control"] = "no-cache"
-        # Tells nginx (if it ever fronts this) not to buffer the stream.
-        response["X-Accel-Buffering"] = "no"
-        return response
+        return _stream_response(stream)
+
+
+class GuestEventStreamView(APIView):
+    """
+    GET /api/v1/guest/events/ — the guest's live chat.
+
+    The same machinery as the operator stream, carrying chat only: a
+    guest has nothing else to be told about in real time, and giving
+    them the operator stream would hand them their department's tickets.
+    """
+
+    permission_classes = [IsGuest]
+    renderer_classes = [JSONRenderer, EventStreamRenderer]
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("after_chat", OpenApiTypes.INT, description="Resume cursor from the last event."),
+        ],
+        responses={(200, "text/event-stream"): OpenApiTypes.STR},
+    )
+    def get(self, request):
+        stream = guest_event_stream(request.user, after_chat=_cursor_param(request, "after_chat"))
+        return _stream_response(stream)
+
+
+def _stream_response(stream):
+    response = StreamingHttpResponse(stream, content_type="text/event-stream; charset=utf-8")
+    response["Cache-Control"] = "no-cache"
+    # Tells nginx (if it ever fronts this) not to buffer the stream.
+    response["X-Accel-Buffering"] = "no"
+    return response

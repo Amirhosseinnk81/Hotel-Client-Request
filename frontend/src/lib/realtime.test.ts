@@ -8,7 +8,7 @@ vi.mock("@/lib/api/client", () => ({
 const { parseEventStream, reconnectDelay, runOperatorEventStream } = await import("./realtime");
 const { getFreshAccessToken } = await import("@/lib/api/client");
 
-const cursor = { ticket: 5, history: 9 };
+const cursor = { ticket: 5, history: 9, chat: 3 };
 const block = (event: string, data: object) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
 describe("parseEventStream", () => {
@@ -89,7 +89,9 @@ describe("runOperatorEventStream", () => {
     expect(headers[0].get("Authorization")).toBe("Bearer token-1");
     expect(urls[0]).toBe("http://api.test/api/v1/operator/events/");
     // The token never goes in the URL; the cursor does, on reconnect.
-    expect(urls[1]).toBe("http://api.test/api/v1/operator/events/?after_ticket=5&after_history=9");
+    expect(urls[1]).toBe(
+      "http://api.test/api/v1/operator/events/?after_ticket=5&after_history=9&after_chat=3"
+    );
   });
 
   it("stops for good when the caller isn't an operator (403)", async () => {

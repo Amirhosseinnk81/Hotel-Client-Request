@@ -33,6 +33,8 @@ urlpatterns = [
     path("api/v1/", include("apps.pms.urls")),
     path("api/v1/", include("apps.iptv.urls")),
     path("api/v1/", include("apps.extensions.urls")),
+    path("api/v1/", include("apps.chat.urls")),
+    path("api/v1/", include("apps.news.urls")),
     # Not under /api/v1/: a page a television opens, not an API call.
     path("tv/", include("apps.iptv.page_urls")),
     path("api/schema/",SpectacularAPIView.as_view(),name="schema",),

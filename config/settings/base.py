@@ -5,6 +5,7 @@ Environment-specific values (DEBUG, ALLOWED_HOSTS, DATABASE_URL, etc.)
 are read from environment variables / a .env file — never hardcoded here.
 """
 
+import importlib.util
 from datetime import timedelta
 from pathlib import Path
 
@@ -53,6 +54,8 @@ LOCAL_APPS = [
     "apps.pms",
     "apps.iptv",
     "apps.extensions",
+    "apps.chat",
+    "apps.news",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -173,6 +176,49 @@ REST_FRAMEWORK = {
 # IT staff are the OPERATORs of the department with this code (and the IT
 # supervisor is the one with is_supervisor) — see apps/core/permissions.py.
 IT_DEPARTMENT_CODE = config("IT_DEPARTMENT_CODE", default="IT")
+
+# ---------------------------------------------------------------------------
+# Live chat (apps/chat)
+# ---------------------------------------------------------------------------
+# How a chat message reaches the other side. "sse" (the default) needs
+# nothing new: the Stage 3.2 stream already polls by cursor and carries
+# chat as well as ticket events, on this WSGI server, with no Redis.
+#
+# "websocket" is written and tested but off until the hotel's server runs
+# as ASGI — it adds "channels" to INSTALLED_APPS below and points
+# ASGI_APPLICATION at config.asgi. See apps/chat/consumers.py for the
+# four things switching it on needs.
+CHAT_TRANSPORT = config("CHAT_TRANSPORT", default="sse")
+
+# A WebSocket handshake can't carry an Authorization header and the access
+# token must never ride in a URL, so the panel trades its token for a
+# short-lived single-use ticket (apps/chat/tickets.py).
+CHAT_TICKET_SECONDS = config("CHAT_TICKET_SECONDS", default=30, cast=int)
+
+if CHAT_TRANSPORT == "websocket":
+    INSTALLED_APPS = [*INSTALLED_APPS, "channels"]
+    # daphne is the ASGI server, not the framework: listing it puts
+    # `runserver` on ASGI in development. It is a deployment install, so
+    # a missing daphne must not stop the app booting in websocket mode.
+    if importlib.util.find_spec("daphne"):
+        INSTALLED_APPS = ["daphne", *INSTALLED_APPS]
+    ASGI_APPLICATION = "config.asgi.application"
+    # In-memory works for a single process only; more than one worker
+    # needs Redis (channels_redis), which is a deployment decision.
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": config(
+                "CHANNEL_LAYER_BACKEND",
+                default="channels.layers.InMemoryChannelLayer",
+            ),
+        }
+    }
+    redis_url = config("CHANNEL_LAYER_REDIS_URL", default="")
+    if redis_url:
+        CHANNEL_LAYERS["default"] = {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {"hosts": [redis_url]},
+        }
 
 # ---------------------------------------------------------------------------
 # Staff phone directory (apps/extensions)
@@ -297,6 +343,11 @@ SPECTACULAR_SETTINGS = {
         "ITRequestStatusEnum": "apps.it_ops.models.DepartmentRequest.Status",
         "ITGoalStatusEnum": "apps.it_ops.models.Goal.Status",
         "ITTaskStatusEnum": "apps.it_ops.models.Task.Status",
+        # Chat threads and news items both have a "kind"; name both, or
+        # spectacular resolves the collision with a hashed name.
+        "ChatKindEnum": "apps.chat.models.Conversation.Kind",
+        "NewsKindEnum": "apps.news.models.NewsItem.Kind",
+        "NewsAudienceEnum": "apps.news.models.NewsItem.Audience",
     },
 }
 

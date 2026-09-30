@@ -12,6 +12,7 @@ information.
 """
 
 from apps.guests.models import Guest, HotelInfo
+from apps.news.services import guest_news
 from apps.rooms.models import Room
 from apps.tickets.models import Ticket
 
@@ -62,4 +63,10 @@ def room_screen(room_number):
         "has_active_stay": guest is not None,
         "requests": tickets,
         "hotel_info": HotelInfo.objects.filter(is_active=True),
+        # Straight from apps/news, through the same helper the guest
+        # portal uses — so tonight's event is never on the portal and
+        # missing from the television, or still up on one after the
+        # publish window closed. Guest-audience only; a staff briefing
+        # must not reach a room.
+        "news": guest_news(),
     }

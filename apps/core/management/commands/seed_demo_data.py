@@ -1,11 +1,15 @@
+from datetime import timedelta
+
 from django.core.management.base import BaseCommand
 from django.db import transaction
+from django.utils import timezone
 
 from apps.accounts.models import User
 from apps.departments.models import Department
 from apps.extensions.models import Extension
 from apps.guests.models import Guest, HotelInfo
 from apps.it_ops.models import ITRequestTemplate, Process
+from apps.news.models import NewsItem
 from apps.rooms.models import Room
 from apps.tickets.models import Category, QuickRequestTemplate
 
@@ -143,12 +147,51 @@ GUESTS = [
 ]
 
 
+# Hotel news and events (apps/news). One of each audience, so the guest
+# portal, the operator panel and the room television all have something on
+# them after a seed. (kind, audience, icon, title, body, hours from now)
+NEWS = [
+    (
+        NewsItem.Kind.EVENT,
+        NewsItem.Audience.GUEST,
+        "Music",
+        "موسیقی زنده در لابی",
+        "هر شب از ساعت ۲۱ تا ۲۳، با پذیرایی چای و شیرینی.",
+        4,
+    ),
+    (
+        NewsItem.Kind.NEWS,
+        NewsItem.Audience.GUEST,
+        "Waves",
+        "شست‌وشوی استخر",
+        "استخر فردا از ساعت ۱۰ تا ۱۳ برای شست‌وشو بسته است.",
+        None,
+    ),
+    (
+        NewsItem.Kind.NEWS,
+        NewsItem.Audience.BOTH,
+        "Utensils",
+        "تغییر ساعت صبحانه",
+        "از این هفته صبحانه تا ساعت ۱۰:۳۰ سرو می‌شود.",
+        None,
+    ),
+    (
+        NewsItem.Kind.EVENT,
+        NewsItem.Audience.STAFF,
+        "Users",
+        "بریفینگ شیفت شب",
+        "امشب ساعت ۲۳ در دفتر پذیرش — حضور سرپرست‌ها لازم است.",
+        8,
+    ),
+]
+
+
 class Command(BaseCommand):
     help = (
         "Seeds demo data for local/staging use: departments, categories "
         "(with SLA minutes), rooms, one admin + one operator and one "
         "supervisor per department (including IT), sample guests, "
-        "quick-request templates and sample IT Ops processes. Safe to "
+        "quick-request templates, sample IT Ops processes and a few "
         "run more than once — every record is get_or_create'd, so re-runs "
         "only fill in whatever's still missing."
     )
@@ -175,6 +218,7 @@ class Command(BaseCommand):
         self._seed_hotel_info()
         self._seed_extensions(departments)
         self._seed_it_request_templates()
+        self._seed_news()
 
         self.stdout.write(self.style.SUCCESS("Demo data seeded."))
 
@@ -383,6 +427,25 @@ class Command(BaseCommand):
                 },
             )
             self._log(created, "Extension", f"{item.extension} — {item.title}")
+
+    # -- news and events -----------------------------------------------
+
+    def _seed_news(self):
+        for kind, audience, icon, title, body, hours in NEWS:
+            item, created = NewsItem.objects.get_or_create(
+                title=title,
+                defaults={
+                    "body": body,
+                    "kind": kind,
+                    "audience": audience,
+                    "icon": icon,
+                    "location": "لابی" if audience == NewsItem.Audience.GUEST else "",
+                    "event_at": (
+                        timezone.now() + timedelta(hours=hours) if hours is not None else None
+                    ),
+                },
+            )
+            self._log(created, "News", item.title)
 
     # -- helpers -------------------------------------------------------------
 

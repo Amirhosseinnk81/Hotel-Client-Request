@@ -11,6 +11,7 @@ from rest_framework.test import APITestCase
 from apps.accounts.models import User
 from apps.departments.models import Department
 from apps.guests.models import Guest, HotelInfo
+from apps.news.models import NewsItem
 from apps.rooms.models import Room
 from apps.tickets.models import Category, Ticket
 
@@ -30,6 +31,18 @@ class IptvTestData:
         cls.neighbour = cls.make_guest("0044455566", cls.other_room, "علی رضایی")
         HotelInfo.objects.create(title="صبحانه", body="۷ تا ۱۰ صبح", order=1)
         HotelInfo.objects.create(title="وای‌فای", body="رمز: guest2026", order=2, is_active=False)
+        NewsItem.objects.create(
+            title="موسیقی زنده در لابی",
+            body="امشب از ساعت ۲۱",
+            audience=NewsItem.Audience.GUEST,
+            kind=NewsItem.Kind.EVENT,
+            location="لابی",
+        )
+        NewsItem.objects.create(
+            title="بریفینگ شیفت شب",
+            body="ساعت ۲۳ در دفتر",
+            audience=NewsItem.Audience.STAFF,
+        )
 
     @classmethod
     def make_guest(cls, national_id, room, name):
@@ -162,6 +175,9 @@ class TvPageTests(IptvTestData, TestCase):
         body = response.content.decode()
         self.assertIn("حوله اضافه", body)
         self.assertIn("صبحانه", body)  # the hotel's information
+        self.assertIn("موسیقی زنده در لابی", body)  # guest news (apps/news)
+        # A staff briefing is not for a screen in a guest's room.
+        self.assertNotIn("بریفینگ شیفت شب", body)
         self.assertIn("۳۰۵", body)  # the room number, in Persian digits
         self.assertNotIn("0011122233", body)
 

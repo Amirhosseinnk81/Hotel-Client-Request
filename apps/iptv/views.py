@@ -12,6 +12,7 @@ step: hotel set-top boxes run old browsers, and a screen that fails to
 render is worse than a plain one. It refreshes itself with a meta tag.
 """
 
+import jdatetime
 from django.conf import settings
 from django.http import HttpResponseForbidden
 from django.shortcuts import render
@@ -62,6 +63,20 @@ def _since(created_at):
     return f"{fa_digits(hours // 24)} روز پیش"
 
 
+def _event_when(event_at):
+    """'امروز ۲۱:۳۰' — a time a guest can act on, not a full date."""
+    if event_at is None:
+        return ""
+    local = timezone.localtime(event_at)
+    clock = fa_digits(local.strftime("%H:%M"))
+    today = timezone.localdate()
+    if local.date() == today:
+        return f"امروز {clock}"
+    if (local.date() - today).days == 1:
+        return f"فردا {clock}"
+    return f"{fa_digits(jdatetime.date.fromgregorian(date=local.date()).strftime('%Y/%m/%d'))} {clock}"
+
+
 class TvRoomPageView(View):
     """
     The page a television opens. Refused rather than shown when the
@@ -96,6 +111,15 @@ class TvRoomPageView(View):
                 "has_active_stay": screen["has_active_stay"],
                 "requests": requests,
                 "hotel_info": screen["hotel_info"],
+                "news": [
+                    {
+                        "title": item.title,
+                        "body": item.body,
+                        "when": _event_when(item.event_at),
+                        "location": item.location,
+                    }
+                    for item in screen["news"]
+                ],
                 "refresh_seconds": getattr(settings, "IPTV_PAGE_REFRESH_SECONDS", 30),
             },
         )

@@ -45,6 +45,8 @@ Next.js build.
   .OPEN { color: #e0b877; }
   .IN_PROGRESS { color: #7fb5d8; }
   .empty { color: #9a948b; font-size: 2.6vh; padding: 2vh 0 4vh; }
+  .news .title { color: #c59d72; }
+  .when { color: #e0b877; text-align: end; }
   .info { columns: 2; column-gap: 4vw; }
   .info div { break-inside: avoid; margin-bottom: 2.4vh; }
   .info .title { color: #c59d72; font-size: 2.4vh; }
@@ -76,6 +78,23 @@ Next.js build.
   <p class="empty">در حال حاضر درخواست بازی ندارید. برای ثبت درخواست با پذیرش تماس بگیرید.</p>
 {% else %}
   <p class="empty">به هتل خوش آمدید.</p>
+{% endif %}
+
+{% if news %}
+  <h2>اخبار و رویدادهای هتل</h2>
+  {% for item in news %}
+    <div class="card news">
+      <div>
+        <div class="title">{{ item.title }}</div>
+        <div class="meta">{{ item.body|linebreaksbr }}</div>
+      </div>
+      {% if item.when or item.location %}
+        <div class="status when">
+          {{ item.when }}{% if item.location %}<div class="meta">{{ item.location }}</div>{% endif %}
+        </div>
+      {% endif %}
+    </div>
+  {% endfor %}
 {% endif %}
 
 {% if hotel_info %}
